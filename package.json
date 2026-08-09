@@ -12,11 +12,16 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check",
+    "db:seed:validate": "tsx src/server/db/seed/validate.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "next": "latest",
+    "pg": "^8.23.0",
     "react": "latest",
     "react-dom": "latest"
   },
@@ -27,14 +32,17 @@
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
     "@types/node": "latest",
+    "@types/pg": "^8.21.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "drizzle-kit": "^0.31.10",
     "eslint": "latest",
     "eslint-config-next": "latest",
     "jsdom": "latest",
     "postcss": "latest",
     "prettier": "latest",
     "tailwindcss": "latest",
+    "tsx": "^4.23.11",
     "typescript": "latest",
     "vitest": "latest"
   }
