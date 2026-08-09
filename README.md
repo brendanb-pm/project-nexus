@@ -12,6 +12,8 @@ V1 explicitly excludes vehicle patrol workflows, Executive Protection (EP) workf
 
 Next.js App Router, React, strict TypeScript, Tailwind CSS, ESLint, Prettier, Vitest, Testing Library, and Playwright. The PWA foundation includes a web manifest, install metadata, responsive application shell, and placeholder icon. Complex offline synchronization is deferred.
 
+Persistence uses Drizzle ORM with a PostgreSQL-compatible schema. Sprint 0B establishes models, migrations, deterministic fixtures, authorization, tenancy, audit, and revision foundations without adding feature UI.
+
 ## Local setup
 
 Requires Node.js 22+ and npm.
@@ -34,6 +36,8 @@ npm test             # unit tests
 npm run test:e2e     # Playwright (install browsers first)
 npm run build        # production build
 npm run format:check # formatting verification
+npm run db:check     # migration consistency
+npm run db:seed:validate # deterministic seed integrity
 ```
 
 ## Branching

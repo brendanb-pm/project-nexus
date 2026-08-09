@@ -1,13 +1,22 @@
 # Architecture
 
-Project Nexus uses the Next.js App Router, React, TypeScript, and Tailwind CSS. Route composition lives in `src/app`; reusable presentation in `src/components`; business boundaries in `src/features`; cross-cutting types in `src/shared`; and provider-facing code in `src/services`.
+Project Nexus uses the Next.js App Router, React, TypeScript, Tailwind CSS, Drizzle ORM, and PostgreSQL. Route composition lives in `src/app`; reusable presentation in `src/components`; business boundaries in `src/features`; canonical contracts in `src/domain`; server-only persistence in `src/server`; cross-cutting types in `src/shared`; and provider-facing code in `src/services`.
+
+## Layer boundaries
+
+- Persistence models describe relational storage and remain inside `src/server/db`.
+- Domain contracts and pure policy logic do not depend on React, transport, or a database connection.
+- API/transport code must authenticate the actor, load authoritative scope, invoke centralized authorization, and only then call repositories.
+- Presentation code receives already-authorized, boundary-specific contracts; it is never the security boundary.
+- Server Components are the default for future data access. Server-only persistence modules must not enter client bundles.
 
 ## Security boundaries
 
 - Authentication is a server-enforced boundary; no provider is selected in the bootstrap.
-- Authorization uses explicit roles and deny-by-default policies at server entry points.
+- Authorization uses explicit capabilities plus authoritative organization, branch, client, site, employee, and visibility scope at server entry points.
 - Every client-owned record must carry a tenant identifier, and service/repository APIs must require tenant context.
 - Security-relevant mutations will emit append-only audit events with actor, tenant, action, target, and timestamp.
+- Submitted operational records use immutable revision snapshots linked to audit events; corrections require a reason.
 - Secrets remain server-only and are never exposed through `NEXT_PUBLIC_*` variables.
 - V1 must not store HIPAA/medical data.
 
@@ -18,3 +27,7 @@ The web manifest, responsive shell, theme metadata, and placeholder vector icon 
 ## Planned boundaries
 
 V1 domains are scheduling, reporting, incidents, operations, clients, billing support, and assets. Executive Protection is a separately designed V2 module and must not share accidental workflow assumptions with V1.
+
+## Decisions
+
+Material decisions are recorded under [`docs/adr`](adr/README.md). See also the [domain model](domain-model.md), [authorization](authorization.md), [tenancy](tenancy.md), [audit model](audit-model.md), [classification](data-classification.md), and [database](database.md) guides.
