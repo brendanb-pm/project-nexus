@@ -55,6 +55,8 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
     ADMIN: new Set([
       "VIEW_ORGANIZATION_ANALYTICS",
       "VIEW_BILLING_DATA",
+      "MANAGE_ORGANIZATION",
+      "MANAGE_BRANCHES",
       "MANAGE_CLIENTS",
       "MANAGE_SITES",
       "MANAGE_POSTS",
@@ -94,11 +96,23 @@ const permittedVisibility: Readonly<
   ]),
 };
 
+export function resolveVisibility(
+  actor: AuthenticatedPrincipal,
+): ReadonlySet<VisibilityClassification> {
+  return new Set(actor.roles.flatMap((role) => [...permittedVisibility[role]]));
+}
+
 export function hasCapability(
   actor: AuthenticatedPrincipal,
   capability: Capability,
 ): boolean {
   return actor.roles.some((role) => roleCapabilities[role].has(capability));
+}
+
+export function resolveCapabilities(
+  actor: AuthenticatedPrincipal,
+): ReadonlySet<Capability> {
+  return new Set(actor.roles.flatMap((role) => [...roleCapabilities[role]]));
 }
 
 export function authorize(
@@ -121,12 +135,7 @@ export function authorize(
     actor.employeeId !== resource.employeeId
   )
     return { allowed: false, reason: "employee-self-scope" };
-  if (
-    resource.visibility &&
-    !actor.roles.some((role) =>
-      permittedVisibility[role].has(resource.visibility!),
-    )
-  )
+  if (resource.visibility && !resolveVisibility(actor).has(resource.visibility))
     return { allowed: false, reason: "visibility" };
   return { allowed: true };
 }

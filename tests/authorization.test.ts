@@ -108,4 +108,14 @@ describe("centralized authorization", () => {
     expect(hasCapability(guard, "CLOCK_OWN_SHIFT")).toBe(true);
     expect(hasCapability(guard, "MANAGE_ROLES")).toBe(false);
   });
+
+  it("keeps organization administration limited to explicit admin capabilities", () => {
+    expect(hasCapability(operationsManager, "MANAGE_ORGANIZATION")).toBe(false);
+    expect(
+      hasCapability(
+        { ...operationsManager, roles: ["ADMIN"] },
+        "MANAGE_BRANCHES",
+      ),
+    ).toBe(true);
+  });
 });

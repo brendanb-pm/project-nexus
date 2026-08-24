@@ -13,3 +13,5 @@ npm run db:seed:validate
 `db:generate` creates migrations from schema changes, `db:check` validates migration history consistency, and `db:seed:validate` verifies deterministic fictional fixtures and their relationships without requiring a running database. The fixture module is development/test input, not a production seeding policy.
 
 `DATABASE_URL` is server-only. The example value is local-only and contains no credential intended for deployment.
+
+Runtime access is centralized in `src/server/db/client.ts`. NX-1.1 organization/branch repositories select only boundary DTO fields, include the authoritative organization predicate, use stable name/ID cursor ordering, cap pages at 100 records, and write the business mutation plus audit event in one transaction. The existing branch organization index supports the tenant predicate; a composite sort index is deferred until representative measurements justify it.
