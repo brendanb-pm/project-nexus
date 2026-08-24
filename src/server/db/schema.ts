@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -12,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import {
   recordStatuses,
   roles,
@@ -154,23 +156,44 @@ export const clientContacts = pgTable(
     name: text("name").notNull(),
     email: text("email"),
     phone: text("phone"),
+    status: text("status").notNull().default("active"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("client_contacts_client_idx").on(t.clientId)],
+  (t) => [
+    index("client_contacts_client_idx").on(t.clientId),
+    check(
+      "client_contacts_status_check",
+      sql`${t.status} in ('active', 'inactive')`,
+    ),
+  ],
 );
-export const contracts = pgTable("contracts", {
-  id: id(),
-  clientId: uuid("client_id")
-    .notNull()
-    .references(() => clients.id),
-  name: text("name").notNull(),
-  startsOn: date("starts_on").notNull(),
-  endsOn: date("ends_on"),
-  status: text("status").notNull(),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const contracts = pgTable(
+  "contracts",
+  {
+    id: id(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    name: text("name").notNull(),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on"),
+    status: text("status").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("contracts_client_start_idx").on(t.clientId, t.startsOn),
+    check(
+      "contracts_status_check",
+      sql`${t.status} in ('draft', 'active', 'expired', 'terminated')`,
+    ),
+    check(
+      "contracts_date_order_check",
+      sql`${t.endsOn} is null or ${t.endsOn} >= ${t.startsOn}`,
+    ),
+  ],
+);
 export const sites = pgTable(
   "sites",
   {
@@ -188,7 +211,7 @@ export const sites = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("sites_client_idx").on(t.clientId)],
+  (t) => [index("sites_client_name_idx").on(t.clientId, t.name, t.id)],
 );
 export const posts = pgTable(
   "posts",
@@ -208,7 +231,7 @@ export const posts = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("posts_site_idx").on(t.siteId)],
+  (t) => [index("posts_site_name_idx").on(t.siteId, t.name, t.id)],
 );
 
 export const users = pgTable(

@@ -69,6 +69,28 @@ describe("authenticated request and data-access boundary", () => {
     ).toThrow(PermissionDeniedError);
   });
 
+  it("authorizes a resolved child hierarchy through authoritative branch scope only", async () => {
+    const context = await createAuthenticatedRequestContext(
+      resolver(admin),
+      "client.update",
+    );
+    const access = new AuthorizedDataAccess(context);
+    expect(() =>
+      access.requireHierarchical("MANAGE_CLIENTS", {
+        organizationId: "org-1",
+        branchId: "branch-1",
+        clientId: "resolved-client",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      access.requireHierarchical("MANAGE_CLIENTS", {
+        organizationId: "org-1",
+        branchId: "forged-branch",
+        clientId: "forged-client",
+      }),
+    ).toThrow(PermissionDeniedError);
+  });
+
   it("exposes immutable audit attribution from the authenticated context", async () => {
     const context = await createAuthenticatedRequestContext(
       resolver(admin),
