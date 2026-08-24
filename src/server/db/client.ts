@@ -2,6 +2,7 @@ import "server-only";
 
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { instrumentPgClient } from "@/server/performance/telemetry";
 import * as schema from "./schema";
 
 export type NexusDatabase = NodePgDatabase<typeof schema>;
@@ -18,6 +19,7 @@ export function getDatabase(): NexusDatabase {
   }
 
   pool = new Pool({ connectionString });
+  pool.on("connect", instrumentPgClient);
   database = drizzle(pool, { schema });
   return database;
 }

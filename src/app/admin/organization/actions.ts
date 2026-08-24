@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
 import { createOrganizationAdminService } from "@/features/organization-admin/server";
+import { measureServerAction } from "@/server/performance/telemetry";
 
 const ADMIN_PATH = "/admin/organization";
 
@@ -14,14 +15,19 @@ async function service(operation: string) {
 }
 
 export async function updateOrganization(formData: FormData): Promise<void> {
-  await (
-    await service("organization-admin.update-organization")
-  ).updateOrganization({
-    name: formData.get("name"),
-    status: formData.get("status"),
-    expectedUpdatedAt: formData.get("expectedUpdatedAt"),
-  });
-  revalidatePath(ADMIN_PATH);
+  return measureServerAction(
+    "organization-admin.update-organization",
+    async () => {
+      await (
+        await service("organization-admin.update-organization")
+      ).updateOrganization({
+        name: formData.get("name"),
+        status: formData.get("status"),
+        expectedUpdatedAt: formData.get("expectedUpdatedAt"),
+      });
+      revalidatePath(ADMIN_PATH);
+    },
+  );
 }
 
 export async function createBranch(formData: FormData): Promise<void> {
