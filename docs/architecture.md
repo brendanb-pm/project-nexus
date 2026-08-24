@@ -10,6 +10,12 @@ Project Nexus uses the Next.js App Router, React, TypeScript, Tailwind CSS, Driz
 - Presentation code receives already-authorized, boundary-specific contracts; it is never the security boundary.
 - Server Components are the default for future data access. Server-only persistence modules must not enter client bundles.
 
+## Authenticated request and data access
+
+`src/server/request` is the shared server boundary for feature reads and mutations. A provider-neutral principal resolver supplies the authenticated actor and session metadata; the boundary derives organization and narrower scopes, centralized capabilities, permitted visibility, correlation data, and immutable audit attribution. Feature services receive this trusted context and never accept a caller-selected tenant as authority.
+
+`src/server/db/client.ts` is the lazy server-only PostgreSQL/Drizzle connection boundary. Feature repositories must require authoritative organization scope in every query, return minimal DTOs, keep collection reads bounded, and transact material mutations with their audit event.
+
 ## Security boundaries
 
 - Authentication is a server-enforced boundary; no provider is selected in the bootstrap.
