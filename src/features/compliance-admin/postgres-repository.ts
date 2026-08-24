@@ -9,6 +9,7 @@ import {
 } from "@/server/db/schema";
 import type { NexusDatabase } from "@/server/db/client";
 import type { AuditContext } from "@/server/request/boundary";
+import { matchesUpdatedAt } from "@/server/db/optimistic-concurrency";
 import {
   ResourceNotFoundError,
   StaleUpdateError,
@@ -349,7 +350,7 @@ export class PostgresComplianceAdminRepository implements ComplianceAdminReposit
           .where(
             and(
               eq(credentials.id, recordId),
-              eq(credentials.updatedAt, new Date(expected)),
+              matchesUpdatedAt(credentials.updatedAt, expected),
             ),
           )
           .returning({
@@ -393,7 +394,7 @@ export class PostgresComplianceAdminRepository implements ComplianceAdminReposit
         .where(
           and(
             eq(certifications.id, recordId),
-            eq(certifications.updatedAt, new Date(expected)),
+            matchesUpdatedAt(certifications.updatedAt, expected),
           ),
         )
         .returning({
@@ -446,7 +447,7 @@ export class PostgresComplianceAdminRepository implements ComplianceAdminReposit
           .where(
             and(
               eq(credentials.id, recordId),
-              eq(credentials.updatedAt, new Date(expected)),
+              matchesUpdatedAt(credentials.updatedAt, expected),
             ),
           )
           .returning({
@@ -487,7 +488,7 @@ export class PostgresComplianceAdminRepository implements ComplianceAdminReposit
         .where(
           and(
             eq(certifications.id, recordId),
-            eq(certifications.updatedAt, new Date(expected)),
+            matchesUpdatedAt(certifications.updatedAt, expected),
           ),
         )
         .returning({

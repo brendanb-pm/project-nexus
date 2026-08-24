@@ -83,6 +83,11 @@ than machine-speed-sensitive unit tests. Unit tests should instead prove
 bounded results, constant query count, trusted tenant predicates, stable
 pagination, and safe telemetry behavior.
 
+The checked-in local runner is `npm run performance:run`. It requires a safe
+non-production `DATABASE_URL`, `NEXUS_PERFORMANCE_TELEMETRY=true`, and a
+`PERFORMANCE_OUTPUT` path. It applies no migrations, seeds only its synthetic
+fixture, and must run only after the checked-in migrations are applied.
+
 ## Acceptance checklist
 
 1. The interaction has immediate acknowledgement, meaningful-content, and

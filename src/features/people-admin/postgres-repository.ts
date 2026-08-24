@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { auditEvents, branches, employees, users } from "@/server/db/schema";
 import type { NexusDatabase } from "@/server/db/client";
 import type { AuditContext } from "@/server/request/boundary";
+import { matchesUpdatedAt } from "@/server/db/optimistic-concurrency";
 import {
   DuplicateResourceError,
   InvariantViolationError,
@@ -358,7 +359,7 @@ export class PostgresPeopleAdminRepository implements PeopleAdminRepository {
           and(
             eq(employees.id, id),
             eq(employees.organizationId, scope.organizationId),
-            eq(employees.updatedAt, new Date(expected)),
+            matchesUpdatedAt(employees.updatedAt, expected),
           ),
         )
         .returning({

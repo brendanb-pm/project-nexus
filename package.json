@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "performance:summarize": "tsx scripts/summarize-performance.ts",
+    "performance:run": "tsx --tsconfig scripts/tsconfig.performance.json scripts/measure-sprint-1.ts",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:seed:validate": "tsx src/server/db/seed/validate.ts",

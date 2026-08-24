@@ -19,6 +19,7 @@ export function getDatabase(): NexusDatabase {
   }
 
   pool = new Pool({ connectionString });
+  instrumentPgClient(pool, { delegatesQueries: true });
   pool.on("connect", instrumentPgClient);
   database = drizzle(pool, { schema });
   return database;

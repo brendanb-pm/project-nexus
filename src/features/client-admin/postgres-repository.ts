@@ -11,6 +11,7 @@ import {
 } from "@/server/db/schema";
 import type { NexusDatabase } from "@/server/db/client";
 import type { AuditContext } from "@/server/request/boundary";
+import { matchesUpdatedAt } from "@/server/db/optimistic-concurrency";
 import {
   DuplicateResourceError,
   InvariantViolationError,
@@ -334,7 +335,7 @@ export class PostgresClientAdminRepository implements ClientAdminRepository {
           and(
             eq(clients.id, clientId),
             eq(clients.organizationId, scope.organizationId),
-            eq(clients.updatedAt, new Date(expected)),
+            matchesUpdatedAt(clients.updatedAt, expected),
           ),
         )
         .returning({
@@ -431,7 +432,7 @@ export class PostgresClientAdminRepository implements ClientAdminRepository {
           and(
             eq(clientContacts.id, contactId),
             eq(clientContacts.clientId, input.clientId),
-            eq(clientContacts.updatedAt, new Date(expected)),
+            matchesUpdatedAt(clientContacts.updatedAt, expected),
           ),
         )
         .returning(contactProjection);
@@ -541,7 +542,7 @@ export class PostgresClientAdminRepository implements ClientAdminRepository {
           and(
             eq(contracts.id, contractId),
             eq(contracts.clientId, input.clientId),
-            eq(contracts.updatedAt, new Date(expected)),
+            matchesUpdatedAt(contracts.updatedAt, expected),
           ),
         )
         .returning(contractProjection);
