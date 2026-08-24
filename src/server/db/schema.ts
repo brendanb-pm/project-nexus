@@ -312,6 +312,7 @@ export const employees = pgTable(
       t.organizationId,
       t.employeeNumber,
     ),
+    uniqueIndex("employees_user_uidx").on(t.userId),
   ],
 );
 export const employeeRoles = pgTable(
@@ -329,34 +330,77 @@ export const employeeRoles = pgTable(
   },
   (t) => [index("employee_roles_employee_idx").on(t.employeeId)],
 );
-export const credentials = pgTable("credentials", {
-  id: id(),
-  employeeId: uuid("employee_id")
-    .notNull()
-    .references(() => employees.id),
-  type: text("type").notNull(),
-  issuingAuthority: text("issuing_authority").notNull(),
-  issuedOn: date("issued_on").notNull(),
-  expiresOn: date("expires_on"),
-  status: text("status").notNull(),
-  documentReference: text("document_reference"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
-export const certifications = pgTable("certifications", {
-  id: id(),
-  employeeId: uuid("employee_id")
-    .notNull()
-    .references(() => employees.id),
-  type: text("type").notNull(),
-  issuingAuthority: text("issuing_authority").notNull(),
-  issuedOn: date("issued_on").notNull(),
-  expiresOn: date("expires_on"),
-  status: text("status").notNull(),
-  documentReference: text("document_reference"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const credentials = pgTable(
+  "credentials",
+  {
+    id: id(),
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id),
+    type: text("type").notNull(),
+    identifier: text("identifier"),
+    issuingAuthority: text("issuing_authority").notNull(),
+    issuedOn: date("issued_on").notNull(),
+    expiresOn: date("expires_on"),
+    status: text("status").notNull(),
+    documentReference: text("document_reference"),
+    predecessorId: uuid("predecessor_id"),
+    verifiedByUserId: uuid("verified_by_user_id").references(() => users.id),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("credentials_employee_type_idx").on(
+      t.employeeId,
+      t.type,
+      t.expiresOn,
+    ),
+    check(
+      "credentials_status_check",
+      sql`${t.status} in ('active', 'expired', 'suspended', 'revoked', 'pending_verification')`,
+    ),
+    check(
+      "credentials_date_order_check",
+      sql`${t.expiresOn} is null or ${t.expiresOn} >= ${t.issuedOn}`,
+    ),
+  ],
+);
+export const certifications = pgTable(
+  "certifications",
+  {
+    id: id(),
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id),
+    type: text("type").notNull(),
+    issuingAuthority: text("issuing_authority").notNull(),
+    issuedOn: date("issued_on").notNull(),
+    expiresOn: date("expires_on"),
+    status: text("status").notNull(),
+    documentReference: text("document_reference"),
+    predecessorId: uuid("predecessor_id"),
+    verifiedByUserId: uuid("verified_by_user_id").references(() => users.id),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("certifications_employee_type_idx").on(
+      t.employeeId,
+      t.type,
+      t.expiresOn,
+    ),
+    check(
+      "certifications_status_check",
+      sql`${t.status} in ('active', 'expired', 'suspended', 'revoked', 'pending_verification')`,
+    ),
+    check(
+      "certifications_date_order_check",
+      sql`${t.expiresOn} is null or ${t.expiresOn} >= ${t.issuedOn}`,
+    ),
+  ],
+);
 export const availability = pgTable("availability", {
   id: id(),
   employeeId: uuid("employee_id")
