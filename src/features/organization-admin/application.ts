@@ -7,9 +7,11 @@ import type { OrganizationAdminPageState } from "./contracts";
 import type { OrganizationAdminService } from "./service";
 
 export async function loadOrganizationAdminPage(
-  service: OrganizationAdminService,
+  serviceOrPromise:
+    OrganizationAdminService | Promise<OrganizationAdminService>,
 ): Promise<OrganizationAdminPageState> {
   try {
+    const service = await serviceOrPromise;
     const [organization, branches] = await Promise.all([
       service.getOrganization(),
       service.listBranches(),

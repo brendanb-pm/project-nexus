@@ -1,5 +1,6 @@
 import type { OrganizationAdminPageState } from "@/features/organization-admin/contracts";
 import { SubmitButton } from "./submit-button";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 
 export type OrganizationAdminActions = {
   updateOrganization(formData: FormData): Promise<void>;
@@ -54,9 +55,12 @@ export function OrganizationBranchAdmin({
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-wider text-[var(--accent)]">
-          Administration
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm font-semibold uppercase tracking-wider text-[var(--accent)]">
+            Administration
+          </p>
+          <SignOutButton />
+        </div>
         <h1 className="mt-2 text-3xl font-semibold">Organization & branches</h1>
         <p className="mt-2 text-[var(--text-muted)]">
           Manage the provider profile and its operating branches.

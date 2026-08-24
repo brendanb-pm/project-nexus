@@ -12,7 +12,7 @@ V1 explicitly excludes vehicle patrol workflows, Executive Protection (EP) workf
 
 Next.js App Router, React, strict TypeScript, Tailwind CSS, ESLint, Prettier, Vitest, Testing Library, and Playwright. The PWA foundation includes a web manifest, install metadata, responsive application shell, and placeholder icon. Complex offline synchronization is deferred.
 
-Persistence uses Drizzle ORM with a PostgreSQL-compatible schema. Sprint 0B establishes models, migrations, deterministic fixtures, authorization, tenancy, audit, and revision foundations without adding feature UI.
+Persistence uses Drizzle ORM with a PostgreSQL-compatible schema. Better Auth provides generic OpenID Connect authentication and revocable database sessions; Nexus remains authoritative for membership, roles, scopes, and capabilities.
 
 ## Local setup
 
@@ -24,7 +24,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`. Never commit `.env.local` or credentials. Only browser-safe values may use the `NEXT_PUBLIC_` prefix; keep authentication, database, and provider secrets server-only.
+Open `http://localhost:3000`. Configure the OIDC callback as `http://localhost:3000/api/auth/callback/nexus-oidc`. Never commit `.env.local` or credentials. Only browser-safe values may use the `NEXT_PUBLIC_` prefix; keep authentication, database, and provider secrets server-only. See [authentication and membership](docs/authentication.md).
 
 ## Commands
 

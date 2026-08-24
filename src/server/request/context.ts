@@ -25,6 +25,7 @@ export type AuthenticatedRequestContext = {
   actor: AuthenticatedPrincipal;
   organizationId: string;
   scope: {
+    organizationWide: boolean;
     branchIds: readonly string[];
     clientIds: readonly string[];
     siteIds: readonly string[];
@@ -53,6 +54,7 @@ export async function createAuthenticatedRequestContext(
     actor,
     organizationId: actor.organizationId,
     scope: {
+      organizationWide: actor.organizationWide ?? false,
       branchIds: actor.branchIds,
       clientIds: actor.clientIds,
       siteIds: actor.siteIds,
