@@ -18,6 +18,8 @@ Project Nexus uses the Next.js App Router, React, TypeScript, Tailwind CSS, Driz
 
 Authentication uses a generic OpenID Connect adapter behind the Sprint 0B `PrincipalResolver`. Better Auth owns protocol validation and revocable session storage. Nexus resolves the verified issuer/subject to its own active user, membership, employee relationship, scoped role assignments, capabilities, and visibility on every new server request. Feature code receives only the provider-neutral authenticated request context.
 
+Sprint 1 administrative services reuse this boundary for Client, ClientContact, Contract, Site, and Post operations. Browser identifiers are lookup hints only: repositories load the authoritative parent hierarchy with organization/scope predicates, services authorize the resolved branch/client/site, and mutations retain the original parent where relationship changes are prohibited. Client users may read only authorized client context and have no administrative mutation capability. Post remains a first-class staffed-position entity below Site.
+
 ## Security boundaries
 
 - Authentication is a server-enforced, generic OIDC boundary; provider configuration remains isolated from application authorization.
