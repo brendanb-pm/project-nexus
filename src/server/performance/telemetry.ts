@@ -28,6 +28,7 @@ export type QueryableClient = {
 };
 
 const measurementStorage = new AsyncLocalStorage<ActiveMeasurement>();
+const poolDelegationStorage = new AsyncLocalStorage<boolean>();
 const instrumentedClient = Symbol("nexus.performance.instrumented-client");
 
 function telemetryEnabled(): boolean {
@@ -120,7 +121,10 @@ function recordQuery(result: unknown, startedAt: number): void {
   }
 }
 
-export function instrumentPgClient<T extends QueryableClient>(client: T): T {
+export function instrumentPgClient<T extends QueryableClient>(
+  client: T,
+  options: { delegatesQueries?: boolean } = {},
+): T {
   const target = client as T & { [instrumentedClient]?: boolean };
   if (target[instrumentedClient]) return client;
 
@@ -128,6 +132,13 @@ export function instrumentPgClient<T extends QueryableClient>(client: T): T {
   target[instrumentedClient] = true;
   client.query = function instrumentedQuery(...arguments_: unknown[]): unknown {
     const startedAt = performance.now();
+    const isDelegatedPoolQuery =
+      !options.delegatesQueries && poolDelegationStorage.getStore() === true;
+    const finish = (result: unknown) => {
+      if (!isDelegatedPoolQuery) {
+        recordQuery(result, startedAt);
+      }
+    };
     const callbackIndex = arguments_.findLastIndex(
       (argument) => typeof argument === "function",
     );
@@ -141,13 +152,16 @@ export function instrumentPgClient<T extends QueryableClient>(client: T): T {
         error: Error | null,
         result?: QueryResult,
       ) => {
-        recordQuery(result, startedAt);
+        finish(result);
         callback(error, result);
       };
     }
 
     try {
-      const result = originalQuery.apply(this, arguments_);
+      const invoke = () => originalQuery.apply(this, arguments_);
+      const result = options.delegatesQueries
+        ? poolDelegationStorage.run(true, invoke)
+        : invoke();
       if (
         callbackIndex < 0 &&
         result &&
@@ -155,18 +169,18 @@ export function instrumentPgClient<T extends QueryableClient>(client: T): T {
       ) {
         return (result as Promise<unknown>).then(
           (resolved) => {
-            recordQuery(resolved, startedAt);
+            finish(resolved);
             return resolved;
           },
           (error: unknown) => {
-            recordQuery(undefined, startedAt);
+            finish(undefined);
             throw error;
           },
         );
       }
       return result;
     } catch (error) {
-      recordQuery(undefined, startedAt);
+      finish(undefined);
       throw error;
     }
   };

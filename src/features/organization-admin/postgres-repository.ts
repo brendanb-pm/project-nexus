@@ -25,6 +25,7 @@ import {
   InvariantViolationError,
   StaleUpdateError,
 } from "@/server/request/errors";
+import { matchesUpdatedAt } from "@/server/db/optimistic-concurrency";
 
 const organizationProjection = {
   name: organizations.name,
@@ -104,7 +105,7 @@ export class PostgresOrganizationAdminRepository implements OrganizationAdminRep
         .where(
           and(
             eq(organizations.id, organizationId),
-            eq(organizations.updatedAt, new Date(expectedUpdatedAt)),
+            matchesUpdatedAt(organizations.updatedAt, expectedUpdatedAt),
           ),
         )
         .returning(organizationProjection);
@@ -280,7 +281,7 @@ export class PostgresOrganizationAdminRepository implements OrganizationAdminRep
           and(
             eq(branches.organizationId, organizationId),
             eq(branches.id, branchId),
-            eq(branches.updatedAt, new Date(expectedUpdatedAt)),
+            matchesUpdatedAt(branches.updatedAt, expectedUpdatedAt),
           ),
         )
         .returning(branchProjection);
