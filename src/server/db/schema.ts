@@ -33,6 +33,75 @@ export const visibilityEnum = pgEnum(
 export const serviceTypeEnum = pgEnum("service_type", serviceTypes);
 export const recordStatusEnum = pgEnum("record_status", recordStatuses);
 
+// Better Auth owns authentication/session state only. Nexus users and
+// memberships below remain the authorization source of truth.
+export const authUsers = pgTable("auth_users", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+export const authSessions = pgTable(
+  "auth_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("auth_sessions_user_idx").on(t.userId)],
+);
+export const authAccounts = pgTable(
+  "auth_accounts",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+      withTimezone: true,
+    }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("auth_accounts_issuer_subject_uidx").on(t.issuer, t.accountId),
+    index("auth_accounts_user_idx").on(t.userId),
+  ],
+);
+export const authVerifications = pgTable(
+  "auth_verifications",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("auth_verifications_identifier_idx").on(t.identifier)],
+);
+
 export const organizations = pgTable("organizations", {
   id: id(),
   name: text("name").notNull(),
@@ -155,6 +224,48 @@ export const users = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("users_org_email_uidx").on(t.organizationId, t.email)],
+);
+export const externalIdentities = pgTable(
+  "external_identities",
+  {
+    id: id(),
+    issuer: text("issuer").notNull(),
+    subject: text("subject").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("external_identities_issuer_subject_uidx").on(
+      t.issuer,
+      t.subject,
+    ),
+    index("external_identities_user_idx").on(t.userId),
+  ],
+);
+export const userMemberships = pgTable(
+  "user_memberships",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    status: text("status").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("user_memberships_user_org_uidx").on(
+      t.userId,
+      t.organizationId,
+    ),
+    index("user_memberships_org_idx").on(t.organizationId),
+  ],
 );
 export const employees = pgTable(
   "employees",

@@ -118,4 +118,27 @@ describe("centralized authorization", () => {
       ),
     ).toBe(true);
   });
+
+  it("allows an organization-wide assignment only inside its organization", () => {
+    const administrator: AuthenticatedPrincipal = {
+      ...operationsManager,
+      roles: ["ADMIN"],
+      organizationWide: true,
+      branchIds: [],
+      clientIds: [],
+      siteIds: [],
+    };
+    expect(
+      authorize(administrator, "MANAGE_CLIENTS", {
+        organizationId: "org-1",
+        branchId: "branch-authoritative",
+      }),
+    ).toEqual({ allowed: true });
+    expect(
+      authorize(administrator, "MANAGE_CLIENTS", {
+        organizationId: "org-2",
+        branchId: "branch-authoritative",
+      }),
+    ).toEqual({ allowed: false, reason: "organization-scope" });
+  });
 });

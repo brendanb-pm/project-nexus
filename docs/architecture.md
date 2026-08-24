@@ -16,9 +16,11 @@ Project Nexus uses the Next.js App Router, React, TypeScript, Tailwind CSS, Driz
 
 `src/server/db/client.ts` is the lazy server-only PostgreSQL/Drizzle connection boundary. Feature repositories must require authoritative organization scope in every query, return minimal DTOs, keep collection reads bounded, and transact material mutations with their audit event.
 
+Authentication uses a generic OpenID Connect adapter behind the Sprint 0B `PrincipalResolver`. Better Auth owns protocol validation and revocable session storage. Nexus resolves the verified issuer/subject to its own active user, membership, employee relationship, scoped role assignments, capabilities, and visibility on every new server request. Feature code receives only the provider-neutral authenticated request context.
+
 ## Security boundaries
 
-- Authentication is a server-enforced boundary; no provider is selected in the bootstrap.
+- Authentication is a server-enforced, generic OIDC boundary; provider configuration remains isolated from application authorization.
 - Authorization uses explicit capabilities plus authoritative organization, branch, client, site, employee, and visibility scope at server entry points.
 - Every client-owned record must carry a tenant identifier, and service/repository APIs must require tenant context.
 - Security-relevant mutations will emit append-only audit events with actor, tenant, action, target, and timestamp.

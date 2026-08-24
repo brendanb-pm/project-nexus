@@ -124,11 +124,23 @@ export function authorize(
     return { allowed: false, reason: "missing-capability" };
   if (actor.organizationId !== resource.organizationId)
     return { allowed: false, reason: "organization-scope" };
-  if (resource.branchId && !actor.branchIds.includes(resource.branchId))
+  if (
+    resource.branchId &&
+    !actor.organizationWide &&
+    !actor.branchIds.includes(resource.branchId)
+  )
     return { allowed: false, reason: "branch-scope" };
-  if (resource.clientId && !actor.clientIds.includes(resource.clientId))
+  if (
+    resource.clientId &&
+    !actor.organizationWide &&
+    !actor.clientIds.includes(resource.clientId)
+  )
     return { allowed: false, reason: "client-scope" };
-  if (resource.siteId && !actor.siteIds.includes(resource.siteId))
+  if (
+    resource.siteId &&
+    !actor.organizationWide &&
+    !actor.siteIds.includes(resource.siteId)
+  )
     return { allowed: false, reason: "site-scope" };
   if (
     capability === "VIEW_OWN_ASSIGNMENTS" &&

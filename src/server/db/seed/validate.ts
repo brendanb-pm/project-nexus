@@ -36,6 +36,17 @@ export function validateSeedData(data: SeedData): string[] {
       !branchIds.has(row.primaryBranchId)
     )
       errors.push(`employee ${row.id} has an invalid scope`);
+  for (const row of data.externalIdentities)
+    if (!userIds.has(row.userId))
+      errors.push(`external identity ${row.id} has no user`);
+  for (const row of data.userMemberships)
+    if (
+      !userIds.has(row.userId) ||
+      !organizationIds.has(row.organizationId) ||
+      data.users.find((user) => user.id === row.userId)?.organizationId !==
+        row.organizationId
+    )
+      errors.push(`membership ${row.id} has an invalid scope`);
   for (const row of data.employeeRoles)
     if (!employeeIds.has(row.employeeId))
       errors.push(`role has no employee ${row.employeeId}`);

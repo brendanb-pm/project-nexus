@@ -15,3 +15,5 @@ npm run db:seed:validate
 `DATABASE_URL` is server-only. The example value is local-only and contains no credential intended for deployment.
 
 Runtime access is centralized in `src/server/db/client.ts`. NX-1.1 organization/branch repositories select only boundary DTO fields, include the authoritative organization predicate, use stable name/ID cursor ordering, cap pages at 100 records, and write the business mutation plus audit event in one transaction. The existing branch organization index supports the tenant predicate; a composite sort index is deferred until representative measurements justify it.
+
+Authentication adds isolated `auth_*` protocol/session tables plus `external_identities` and `user_memberships`. The external binding is the verified OIDC issuer/subject pair; email is never a binding key. Authentication sessions use text IDs owned by Better Auth, while Nexus domain records retain UUIDs. The additive migration can be rolled back before production use by dropping the new foreign keys, indexes, and tables in reverse dependency order.

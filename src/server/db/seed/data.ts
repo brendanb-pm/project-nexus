@@ -83,26 +83,59 @@ export const seedData = {
       id: uuid(50),
       organizationId: uuid(1),
       email: "alex.guard@example.invalid",
+      status: "active",
     },
     {
       id: uuid(51),
       organizationId: uuid(1),
       email: "sam.guard@example.invalid",
+      status: "active",
     },
     {
       id: uuid(52),
       organizationId: uuid(1),
       email: "riley.ops@example.invalid",
+      status: "active",
     },
     {
       id: uuid(53),
       organizationId: uuid(1),
       email: "casey.client@example.invalid",
+      status: "active",
     },
     {
       id: uuid(54),
       organizationId: uuid(2),
       email: "jordan.guard@example.invalid",
+      status: "active",
+    },
+  ],
+  externalIdentities: [
+    {
+      id: uuid(55),
+      issuer: "https://identity.example.invalid",
+      subject: "fictional-alex-guard",
+      userId: uuid(50),
+    },
+    {
+      id: uuid(56),
+      issuer: "https://identity.example.invalid",
+      subject: "fictional-riley-ops",
+      userId: uuid(52),
+    },
+  ],
+  userMemberships: [
+    {
+      id: uuid(57),
+      userId: uuid(50),
+      organizationId: uuid(1),
+      status: "active",
+    },
+    {
+      id: uuid(58),
+      userId: uuid(52),
+      organizationId: uuid(1),
+      status: "active",
     },
   ],
   employees: [
