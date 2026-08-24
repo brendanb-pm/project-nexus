@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
 import { createClientAdminService } from "@/features/client-admin/server";
+import { measureServerAction } from "@/server/performance/telemetry";
 const PATH = "/admin/clients";
 async function service(operation: string) {
   return createClientAdminService(
@@ -20,16 +21,18 @@ export async function createClient(form: FormData) {
   revalidatePath(PATH);
 }
 export async function updateClient(form: FormData) {
-  await (
-    await service("client-admin.update-client")
-  ).updateClient({
-    clientId: form.get("clientId"),
-    branchId: form.get("branchId"),
-    name: form.get("name"),
-    status: form.get("status"),
-    expectedUpdatedAt: form.get("expectedUpdatedAt"),
+  return measureServerAction("client-admin.update-client", async () => {
+    await (
+      await service("client-admin.update-client")
+    ).updateClient({
+      clientId: form.get("clientId"),
+      branchId: form.get("branchId"),
+      name: form.get("name"),
+      status: form.get("status"),
+      expectedUpdatedAt: form.get("expectedUpdatedAt"),
+    });
+    revalidatePath(PATH);
   });
-  revalidatePath(PATH);
 }
 export async function createContact(form: FormData) {
   await (

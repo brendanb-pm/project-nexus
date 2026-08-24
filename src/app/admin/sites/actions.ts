@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
 import { createSiteAdminService } from "@/features/site-admin/server";
+import { measureServerAction } from "@/server/performance/telemetry";
 const PATH = "/admin/sites";
 async function service(operation: string) {
   return createSiteAdminService(
@@ -44,14 +45,16 @@ export async function createPost(form: FormData) {
   revalidatePath(PATH);
 }
 export async function updatePost(form: FormData) {
-  await (
-    await service("site-admin.update-post")
-  ).updatePost({
-    ...postInput(form),
-    postId: form.get("postId"),
-    expectedUpdatedAt: form.get("expectedUpdatedAt"),
+  return measureServerAction("site-admin.update-post", async () => {
+    await (
+      await service("site-admin.update-post")
+    ).updatePost({
+      ...postInput(form),
+      postId: form.get("postId"),
+      expectedUpdatedAt: form.get("expectedUpdatedAt"),
+    });
+    revalidatePath(PATH);
   });
-  revalidatePath(PATH);
 }
 function postInput(form: FormData) {
   return {

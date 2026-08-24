@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
 import { createComplianceAdminService } from "@/features/compliance-admin/server";
+import { measureServerAction } from "@/server/performance/telemetry";
 const PATH = "/admin/compliance";
 async function service(operation: string) {
   return createComplianceAdminService(
@@ -54,14 +55,16 @@ export async function updateCertification(form: FormData) {
   revalidatePath(PATH);
 }
 export async function verifyCredential(form: FormData) {
-  await (
-    await service("compliance.verify-credential")
-  ).verify(
-    "credential",
-    String(form.get("recordId") ?? ""),
-    form.get("expectedUpdatedAt"),
-  );
-  revalidatePath(PATH);
+  return measureServerAction("compliance.verify-credential", async () => {
+    await (
+      await service("compliance.verify-credential")
+    ).verify(
+      "credential",
+      String(form.get("recordId") ?? ""),
+      form.get("expectedUpdatedAt"),
+    );
+    revalidatePath(PATH);
+  });
 }
 export async function verifyCertification(form: FormData) {
   await (

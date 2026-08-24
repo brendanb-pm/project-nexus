@@ -3,13 +3,16 @@ import { OrganizationBranchAdmin } from "@/components/admin/organization-branch-
 import { loadOrganizationAdminPage } from "@/features/organization-admin/application";
 import { createOrganizationAdminService } from "@/features/organization-admin/server";
 import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
+import { measureRequest } from "@/server/performance/telemetry";
 import { createBranch, updateBranch, updateOrganization } from "./actions";
 
 export default async function OrganizationAdministrationPage() {
-  const service = createProductionPrincipalResolver().then((resolver) =>
-    createOrganizationAdminService(resolver, "organization-admin.read"),
-  );
-  const state = await loadOrganizationAdminPage(service);
+  const state = await measureRequest("organization-admin.read", async () => {
+    const service = createProductionPrincipalResolver().then((resolver) =>
+      createOrganizationAdminService(resolver, "organization-admin.read"),
+    );
+    return loadOrganizationAdminPage(service);
+  });
 
   return (
     <AppShell>
