@@ -143,7 +143,7 @@ export function authorize(
   )
     return { allowed: false, reason: "site-scope" };
   if (
-    capability === "VIEW_OWN_ASSIGNMENTS" &&
+    ["VIEW_OWN_ASSIGNMENTS", "CLOCK_OWN_SHIFT"].includes(capability) &&
     actor.employeeId !== resource.employeeId
   )
     return { allowed: false, reason: "employee-self-scope" };

@@ -23,6 +23,7 @@ import type { ShiftSummary } from "@/features/scheduling/contracts";
 import type {
   AssignmentSummary,
   AvailabilitySummary,
+  ClockEventSummary,
 } from "@/features/scheduling/contracts";
 import type { ComplianceSummary } from "@/features/compliance-admin/contracts";
 
@@ -40,6 +41,7 @@ class MemorySchedulingRepository implements SchedulingRepository {
   shifts: ShiftSummary[] = [];
   availability: AvailabilitySummary[] = [];
   assignments: AssignmentSummary[] = [];
+  clockEvents: ClockEventSummary[] = [];
   candidate: Omit<
     AssignmentCandidate,
     "availability" | "credentials" | "certifications"
@@ -210,6 +212,44 @@ class MemorySchedulingRepository implements SchedulingRepository {
     this.calls.push("listAssignments");
     return Promise.resolve(this.assignments.slice(0, limit));
   }
+  getClockContext(_scope: SchedulingScope, assignmentId: string) {
+    this.calls.push("getClockContext");
+    const assignment = this.assignments.find(
+      (item) => item.id === assignmentId,
+    );
+    if (!assignment) return Promise.resolve(null);
+    return Promise.resolve({
+      organizationId: assignment.organizationId,
+      branchId: assignment.shift.branchId,
+      clientId: assignment.shift.clientId,
+      siteId: assignment.shift.siteId,
+      employeeId: assignment.employeeId,
+      assignmentId,
+      assignmentStatus: assignment.status,
+      scheduledStart: assignment.shift.scheduledStart,
+      scheduledEnd: assignment.shift.scheduledEnd,
+      siteLatitude: 45.5231,
+      siteLongitude: -122.6765,
+      geofenceRadiusMeters: 150,
+      events: this.clockEvents.filter(
+        (event) => event.shiftAssignmentId === assignmentId,
+      ),
+    });
+  }
+  createClockEvent(
+    _scope: SchedulingScope,
+    _context: NonNullable<
+      Awaited<ReturnType<MemorySchedulingRepository["getClockContext"]>>
+    >,
+    event: Omit<ClockEventSummary, "id">,
+    audit: AuditContext,
+  ) {
+    this.calls.push("createClockEvent");
+    this.audit = audit;
+    const created = { id: `clock-${this.clockEvents.length + 1}`, ...event };
+    this.clockEvents.push(created);
+    return Promise.resolve(created);
+  }
 }
 
 const principal = (
@@ -228,6 +268,7 @@ const principal = (
 async function subject(
   actor: AuthenticatedPrincipal,
   repository = new MemorySchedulingRepository(),
+  now: () => Date = () => new Date(),
 ) {
   const context = await createAuthenticatedRequestContext(
     {
@@ -243,6 +284,7 @@ async function subject(
     service: new SchedulingService(
       new AuthorizedDataAccess(context),
       repository,
+      now,
     ),
     repository,
   };
@@ -480,5 +522,111 @@ describe("NX-2.2 availability and assignments", () => {
     await expect(
       service.assignEmployee({ shiftId: shift.id, employeeId: "employee-1" }),
     ).resolves.toBeDefined();
+  });
+});
+
+describe("NX-2.3 geofence clock events", () => {
+  async function clockSubject(now: string, actorEmployeeId = "employee-1") {
+    const repository = new MemorySchedulingRepository();
+    const manager = await subject(
+      principal(["ADMIN"], { organizationWide: true }),
+      repository,
+    );
+    const shift = await manager.service.createShift({
+      ...shiftInput,
+      status: "PUBLISHED",
+    });
+    const assignment = await manager.service.assignEmployee({
+      shiftId: shift.id,
+      employeeId: "employee-1",
+    });
+    return {
+      ...(await subject(
+        principal(["GUARD"], {
+          employeeId: actorEmployeeId,
+          siteIds: ["site-1"],
+        }),
+        repository,
+        () => new Date(now),
+      )),
+      assignment,
+    };
+  }
+
+  it("records normal self clock-in using server time and Haversine evidence", async () => {
+    const { service, assignment } = await clockSubject(
+      "2026-11-08T05:55:00.000Z",
+    );
+    const event = await service.clockOwnShift({
+      shiftAssignmentId: assignment.id,
+      eventType: "CLOCK_IN",
+      latitude: 45.5231,
+      longitude: -122.6765,
+      accuracyMeters: 15,
+    });
+    expect(event).toMatchObject({
+      occurredAt: "2026-11-08T05:55:00.000Z",
+      effectiveAt: "2026-11-08T05:55:00.000Z",
+      verificationStatus: "NORMAL",
+      recordedByUserId: "manager-1",
+    });
+  });
+
+  it("preserves timing, accuracy, and geofence failures as exceptions", async () => {
+    const { service, assignment } = await clockSubject(
+      "2026-11-08T04:00:00.000Z",
+    );
+    const event = await service.clockOwnShift({
+      shiftAssignmentId: assignment.id,
+      eventType: "CLOCK_IN",
+      latitude: 45.6,
+      longitude: -122.7,
+      accuracyMeters: 150,
+    });
+    expect(event.verificationStatus).toBe("EXCEPTION_REQUIRED");
+    expect(event.exceptionReasons).toEqual(
+      expect.arrayContaining([
+        "OUTSIDE_SCHEDULE_WINDOW",
+        "LOCATION_INACCURATE",
+        "OUTSIDE_GEOFENCE",
+      ]),
+    );
+  });
+
+  it("preserves missing location and never expands radius by accuracy", async () => {
+    const missing = await clockSubject("2026-11-08T05:55:00.000Z");
+    const event = await missing.service.clockOwnShift({
+      shiftAssignmentId: missing.assignment.id,
+      eventType: "CLOCK_IN",
+    });
+    expect(event.exceptionReasons).toContain("LOCATION_MISSING");
+
+    const outsideSubject = await clockSubject("2026-11-08T05:55:00.000Z");
+    const outside = await outsideSubject.service.clockOwnShift({
+      shiftAssignmentId: outsideSubject.assignment.id,
+      eventType: "CLOCK_IN",
+      latitude: 45.525,
+      longitude: -122.6765,
+      accuracyMeters: 99,
+    });
+    expect(outside.exceptionReasons).toContain("OUTSIDE_GEOFENCE");
+  });
+
+  it("denies clocking another employee and rejects invalid event order", async () => {
+    const forged = await clockSubject("2026-11-08T05:55:00.000Z", "employee-2");
+    await expect(
+      forged.service.clockOwnShift({
+        shiftAssignmentId: forged.assignment.id,
+        eventType: "CLOCK_IN",
+      }),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+
+    const own = await clockSubject("2026-11-08T05:55:00.000Z");
+    await expect(
+      own.service.clockOwnShift({
+        shiftAssignmentId: own.assignment.id,
+        eventType: "CLOCK_OUT",
+      }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
   });
 });

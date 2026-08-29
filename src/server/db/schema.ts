@@ -492,18 +492,40 @@ export const shiftAssignments = pgTable(
     ),
   ],
 );
-export const clockEvents = pgTable("clock_events", {
-  id: id(),
-  shiftAssignmentId: uuid("shift_assignment_id")
-    .notNull()
-    .references(() => shiftAssignments.id),
-  eventType: text("event_type").notNull(),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  geolocation: jsonb("geolocation"),
-  verificationStatus: text("verification_status").notNull(),
-  exceptionReason: text("exception_reason"),
-  createdAt: createdAt(),
-});
+export const clockEvents = pgTable(
+  "clock_events",
+  {
+    id: id(),
+    shiftAssignmentId: uuid("shift_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    eventType: text("event_type").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    effectiveAt: timestamp("effective_at", { withTimezone: true }).notNull(),
+    recordedByUserId: uuid("recorded_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    geolocation: jsonb("geolocation"),
+    verificationStatus: text("verification_status").notNull(),
+    exceptionReason: text("exception_reason"),
+    exceptionReasons: jsonb("exception_reasons").notNull().default([]),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("clock_events_assignment_time_idx").on(
+      t.shiftAssignmentId,
+      t.occurredAt,
+    ),
+    check(
+      "clock_events_type_check",
+      sql`${t.eventType} in ('CLOCK_IN', 'CLOCK_OUT')`,
+    ),
+    check(
+      "clock_events_verification_check",
+      sql`${t.verificationStatus} in ('NORMAL', 'EXCEPTION_REQUIRED')`,
+    ),
+  ],
+);
 export const timeRecords = pgTable("time_records", {
   id: id(),
   shiftAssignmentId: uuid("shift_assignment_id")

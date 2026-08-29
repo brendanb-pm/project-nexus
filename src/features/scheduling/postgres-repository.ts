@@ -6,6 +6,7 @@ import {
   auditEvents,
   availability,
   certifications,
+  clockEvents,
   clients,
   credentials,
   employees,
@@ -17,8 +18,10 @@ import {
 import type { AuditContext } from "@/server/request/boundary";
 import type { ShiftSummary } from "./contracts";
 import type { AssignmentSummary, AvailabilitySummary } from "./contracts";
+import type { ClockEventSummary } from "./contracts";
 import type {
   PostSchedulingScope,
+  ClockContext,
   SchedulingRepository,
   SchedulingScope,
   ShiftMutation,
@@ -536,4 +539,147 @@ export class PostgresSchedulingRepository implements SchedulingRepository {
       };
     });
   }
+
+  async getClockContext(scope: SchedulingScope, assignmentId: string) {
+    const rows = await this.database
+      .select({
+        organizationId: clients.organizationId,
+        branchId: clients.branchId,
+        clientId: clients.id,
+        siteId: sites.id,
+        employeeId: shiftAssignments.employeeId,
+        assignmentId: shiftAssignments.id,
+        assignmentStatus: shiftAssignments.status,
+        scheduledStart: shifts.scheduledStart,
+        scheduledEnd: shifts.scheduledEnd,
+        siteLatitude: sites.latitude,
+        siteLongitude: sites.longitude,
+        geofenceConfig: sites.geofenceConfig,
+      })
+      .from(shiftAssignments)
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(and(scopePredicate(scope), eq(shiftAssignments.id, assignmentId)))
+      .limit(1);
+    const row = rows[0];
+    if (!row?.branchId) return null;
+    const eventRows = await this.database
+      .select()
+      .from(clockEvents)
+      .where(eq(clockEvents.shiftAssignmentId, assignmentId))
+      .orderBy(asc(clockEvents.occurredAt), asc(clockEvents.id))
+      .limit(100);
+    const geofence =
+      row.geofenceConfig && typeof row.geofenceConfig === "object"
+        ? (row.geofenceConfig as Record<string, unknown>)
+        : {};
+    return {
+      organizationId: row.organizationId,
+      branchId: row.branchId,
+      clientId: row.clientId,
+      siteId: row.siteId,
+      employeeId: row.employeeId,
+      assignmentId: row.assignmentId,
+      assignmentStatus: row.assignmentStatus as
+        "assigned" | "confirmed" | "cancelled",
+      scheduledStart: row.scheduledStart.toISOString(),
+      scheduledEnd: row.scheduledEnd.toISOString(),
+      ...(row.siteLatitude === null
+        ? {}
+        : { siteLatitude: Number(row.siteLatitude) }),
+      ...(row.siteLongitude === null
+        ? {}
+        : { siteLongitude: Number(row.siteLongitude) }),
+      geofenceRadiusMeters:
+        typeof geofence.radiusMeters === "number" ? geofence.radiusMeters : 150,
+      events: eventRows.map(clockDto),
+    };
+  }
+
+  async createClockEvent(
+    _scope: SchedulingScope,
+    context: ClockContext,
+    event: Omit<ClockEventSummary, "id">,
+    auditContext: AuditContext,
+  ) {
+    const row = await this.database.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(clockEvents)
+        .values({
+          shiftAssignmentId: context.assignmentId,
+          eventType: event.eventType,
+          occurredAt: new Date(event.occurredAt),
+          effectiveAt: new Date(event.effectiveAt),
+          recordedByUserId: event.recordedByUserId,
+          geolocation: event.locationEvidence,
+          verificationStatus: event.verificationStatus,
+          exceptionReason: event.exceptionReasons[0],
+          exceptionReasons: [...event.exceptionReasons],
+        })
+        .returning();
+      const created = inserted[0]!;
+      await tx.insert(auditEvents).values({
+        organizationId: auditContext.organizationId,
+        actorUserId: auditContext.actorUserId,
+        action: "clock-event.created",
+        entityType: "ClockEvent",
+        entityId: created.id,
+        requestId: auditContext.requestId,
+        sessionId: auditContext.sessionId,
+        afterState: {
+          shiftAssignmentId: context.assignmentId,
+          eventType: event.eventType,
+          occurredAt: event.occurredAt,
+          verificationStatus: event.verificationStatus,
+          exceptionReasons: event.exceptionReasons,
+        },
+      });
+      return created;
+    });
+    return clockDto(row);
+  }
+}
+
+function clockDto(row: typeof clockEvents.$inferSelect): ClockEventSummary {
+  const geolocation =
+    row.geolocation && typeof row.geolocation === "object"
+      ? (row.geolocation as Record<string, unknown>)
+      : undefined;
+  const numeric = (key: string) =>
+    typeof geolocation?.[key] === "number"
+      ? (geolocation[key] as number)
+      : undefined;
+  const latitude = numeric("latitude");
+  const longitude = numeric("longitude");
+  const accuracyMeters = numeric("accuracyMeters");
+  const distanceMeters = numeric("distanceMeters");
+  return {
+    id: row.id,
+    shiftAssignmentId: row.shiftAssignmentId,
+    eventType: row.eventType as ClockEventSummary["eventType"],
+    occurredAt: row.occurredAt.toISOString(),
+    effectiveAt: row.effectiveAt.toISOString(),
+    verificationStatus:
+      row.verificationStatus as ClockEventSummary["verificationStatus"],
+    exceptionReasons: Array.isArray(row.exceptionReasons)
+      ? row.exceptionReasons.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [],
+    ...(latitude === undefined ||
+    longitude === undefined ||
+    accuracyMeters === undefined
+      ? {}
+      : {
+          locationEvidence: {
+            latitude,
+            longitude,
+            accuracyMeters,
+            ...(distanceMeters === undefined ? {} : { distanceMeters }),
+          },
+        }),
+    recordedByUserId: row.recordedByUserId,
+  };
 }

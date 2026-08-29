@@ -76,3 +76,29 @@ export type AssignmentMutationInput = {
   shiftId: unknown;
   employeeId: unknown;
 };
+
+export type ClockEventType = "CLOCK_IN" | "CLOCK_OUT";
+export type ClockVerificationStatus = "NORMAL" | "EXCEPTION_REQUIRED";
+export type ClockEventSummary = {
+  id: string;
+  shiftAssignmentId: string;
+  eventType: ClockEventType;
+  occurredAt: string;
+  effectiveAt: string;
+  verificationStatus: ClockVerificationStatus;
+  exceptionReasons: readonly string[];
+  locationEvidence?: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number;
+    distanceMeters?: number;
+  };
+  recordedByUserId: string;
+};
+export type ClockEventInput = {
+  shiftAssignmentId: unknown;
+  eventType: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
+  accuracyMeters?: unknown;
+};

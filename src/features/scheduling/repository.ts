@@ -4,6 +4,7 @@ import type {
   AssignmentSummary,
   AvailabilityStatus,
   AvailabilitySummary,
+  ClockEventSummary,
   ShiftPage,
   ShiftStatus,
   ShiftSummary,
@@ -45,6 +46,22 @@ export type AssignmentCandidate = {
   credentials: readonly ComplianceSummary[];
   certifications: readonly ComplianceSummary[];
   availability: readonly AvailabilitySummary[];
+};
+
+export type ClockContext = {
+  organizationId: string;
+  branchId: string;
+  clientId: string;
+  siteId: string;
+  employeeId: string;
+  assignmentId: string;
+  assignmentStatus: "assigned" | "confirmed" | "cancelled";
+  scheduledStart: string;
+  scheduledEnd: string;
+  siteLatitude?: number;
+  siteLongitude?: number;
+  geofenceRadiusMeters: number;
+  events: readonly ClockEventSummary[];
 };
 
 export interface SchedulingRepository {
@@ -106,4 +123,14 @@ export interface SchedulingRepository {
     scope: SchedulingScope,
     limit: number,
   ): Promise<readonly AssignmentSummary[]>;
+  getClockContext(
+    scope: SchedulingScope,
+    assignmentId: string,
+  ): Promise<ClockContext | null>;
+  createClockEvent(
+    scope: SchedulingScope,
+    context: ClockContext,
+    event: Omit<ClockEventSummary, "id">,
+    audit: AuditContext,
+  ): Promise<ClockEventSummary>;
 }

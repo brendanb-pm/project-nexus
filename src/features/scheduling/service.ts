@@ -7,6 +7,7 @@ import {
 import type {
   AssignmentMutationInput,
   AvailabilityMutationInput,
+  ClockEventInput,
   ShiftMutationInput,
   UpdateShiftInput,
 } from "./contracts";
@@ -14,6 +15,8 @@ import type { SchedulingRepository, SchedulingScope } from "./repository";
 import { validateAvailability, validateShift } from "./validation";
 import { intervalsOverlap } from "./time";
 import { evaluateEmployeeEligibility } from "@/features/compliance-admin/eligibility";
+import { finiteCoordinate, haversineDistanceMeters } from "./geofence";
+import { ValidationError } from "@/server/request/errors";
 
 const transitions = {
   DRAFT: new Set(["DRAFT", "PUBLISHED", "CANCELLED"]),
@@ -26,6 +29,7 @@ export class SchedulingService {
   constructor(
     private readonly access: AuthorizedDataAccess,
     private readonly repository: SchedulingRepository,
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   private scope(): SchedulingScope {
@@ -242,6 +246,112 @@ export class SchedulingService {
     return this.repository.listAssignments(
       this.scope(),
       Math.min(Math.max(limit, 1), 100),
+    );
+  }
+
+  async clockOwnShift(raw: ClockEventInput) {
+    const assignmentId =
+      typeof raw.shiftAssignmentId === "string" ? raw.shiftAssignmentId : "";
+    if (
+      !assignmentId ||
+      !["CLOCK_IN", "CLOCK_OUT"].includes(String(raw.eventType))
+    ) {
+      throw new ValidationError({
+        event: ["Select a valid assignment and clock action."],
+      });
+    }
+    const context = await this.repository.getClockContext(
+      this.scope(),
+      assignmentId,
+    );
+    if (!context) throw new ResourceNotFoundError("Shift assignment");
+    this.access.requireHierarchical("CLOCK_OWN_SHIFT", {
+      organizationId: context.organizationId,
+      branchId: context.branchId,
+      clientId: context.clientId,
+      siteId: context.siteId,
+      employeeId: context.employeeId,
+    });
+    if (context.assignmentStatus === "cancelled") {
+      throw new InvariantViolationError(
+        "A cancelled assignment cannot be clocked.",
+      );
+    }
+    const eventType = raw.eventType as "CLOCK_IN" | "CLOCK_OUT";
+    const previous = context.events.at(-1);
+    if (
+      (eventType === "CLOCK_IN" && previous?.eventType === "CLOCK_IN") ||
+      (eventType === "CLOCK_OUT" && previous?.eventType !== "CLOCK_IN")
+    ) {
+      throw new InvariantViolationError(
+        "Clock events must alternate clock in and clock out.",
+      );
+    }
+    const occurredAt = this.now();
+    const scheduled = new Date(
+      eventType === "CLOCK_IN" ? context.scheduledStart : context.scheduledEnd,
+    );
+    const lateMinutes = eventType === "CLOCK_IN" ? 15 : 30;
+    const exceptionReasons: string[] = [];
+    if (
+      occurredAt.valueOf() < scheduled.valueOf() - 15 * 60_000 ||
+      occurredAt.valueOf() > scheduled.valueOf() + lateMinutes * 60_000
+    ) {
+      exceptionReasons.push("OUTSIDE_SCHEDULE_WINDOW");
+    }
+    const latitude = finiteCoordinate(raw.latitude, -90, 90);
+    const longitude = finiteCoordinate(raw.longitude, -180, 180);
+    const accuracyMeters = finiteCoordinate(raw.accuracyMeters, 0, 100_000);
+    let locationEvidence;
+    if (
+      latitude === undefined ||
+      longitude === undefined ||
+      accuracyMeters === undefined
+    ) {
+      exceptionReasons.push("LOCATION_MISSING");
+    } else {
+      if (accuracyMeters > 100) exceptionReasons.push("LOCATION_INACCURATE");
+      let distanceMeters: number | undefined;
+      if (
+        context.siteLatitude === undefined ||
+        context.siteLongitude === undefined
+      ) {
+        exceptionReasons.push("SITE_GEOFENCE_UNCONFIGURED");
+      } else {
+        distanceMeters = haversineDistanceMeters(
+          { latitude, longitude },
+          {
+            latitude: context.siteLatitude,
+            longitude: context.siteLongitude,
+          },
+        );
+        if (distanceMeters > context.geofenceRadiusMeters) {
+          exceptionReasons.push("OUTSIDE_GEOFENCE");
+        }
+      }
+      locationEvidence = {
+        latitude,
+        longitude,
+        accuracyMeters,
+        ...(distanceMeters === undefined ? {} : { distanceMeters }),
+      };
+    }
+    return this.repository.createClockEvent(
+      this.scope(),
+      context,
+      {
+        shiftAssignmentId: assignmentId,
+        eventType,
+        occurredAt: occurredAt.toISOString(),
+        effectiveAt: occurredAt.toISOString(),
+        verificationStatus: exceptionReasons.length
+          ? "EXCEPTION_REQUIRED"
+          : "NORMAL",
+        exceptionReasons,
+        ...(locationEvidence ? { locationEvidence } : {}),
+        recordedByUserId: this.access.context.actor.userId,
+      },
+      this.access.auditContext(),
     );
   }
 }
