@@ -17,12 +17,14 @@ import {
   shifts,
   sites,
   timeRecords,
+  timeApprovals,
 } from "@/server/db/schema";
 import type { AuditContext } from "@/server/request/boundary";
 import type { ShiftSummary } from "./contracts";
 import type { AssignmentSummary, AvailabilitySummary } from "./contracts";
 import type { ClockEventSummary } from "./contracts";
 import type { ClockCorrectionSummary } from "./contracts";
+import type { TimeRecordSummary } from "./contracts";
 import type {
   PostSchedulingScope,
   ClockContext,
@@ -777,6 +779,7 @@ export class PostgresSchedulingRepository implements SchedulingRepository {
         .set({
           status: "AMENDED",
           approvedByUserId: null,
+          approvedAt: null,
           updatedAt: new Date(),
         })
         .where(
@@ -788,6 +791,122 @@ export class PostgresSchedulingRepository implements SchedulingRepository {
       return created;
     });
     return correctionDto(row);
+  }
+
+  async getTimeApprovalContext(scope: SchedulingScope, assignmentId: string) {
+    const context = await this.getClockContext(scope, assignmentId);
+    if (!context) return null;
+    const eventIds = context.events.map((event) => event.id);
+    const correctionRows = eventIds.length
+      ? await this.database
+          .select()
+          .from(clockEventCorrections)
+          .where(inArray(clockEventCorrections.clockEventId, eventIds))
+          .orderBy(
+            asc(clockEventCorrections.clockEventId),
+            asc(clockEventCorrections.revision),
+          )
+          .limit(500)
+      : [];
+    const currentRows = await this.database
+      .select()
+      .from(timeRecords)
+      .where(eq(timeRecords.shiftAssignmentId, assignmentId))
+      .limit(1);
+    return {
+      ...context,
+      corrections: correctionRows.map(correctionDto),
+      ...(currentRows[0] ? { current: timeRecordDto(currentRows[0]) } : {}),
+    };
+  }
+
+  async approveTime(
+    _scope: SchedulingScope,
+    context: import("./repository").TimeApprovalContext,
+    derived: { pairs: TimeRecordSummary["pairs"]; secondsWorked: number },
+    revision: number,
+    approvedByUserId: string,
+    approvedAt: string,
+    auditContext: AuditContext,
+  ) {
+    const row = await this.database.transaction(async (tx) => {
+      const first = derived.pairs[0]!;
+      const last = derived.pairs.at(-1)!;
+      const timeRows = await tx
+        .insert(timeRecords)
+        .values({
+          shiftAssignmentId: context.assignmentId,
+          startsAt: new Date(first.startsAt),
+          endsAt: new Date(last.endsAt),
+          secondsWorked: derived.secondsWorked,
+          pairs: [...derived.pairs],
+          revision,
+          status: "APPROVED",
+          approvedByUserId,
+          approvedAt: new Date(approvedAt),
+        })
+        .onConflictDoUpdate({
+          target: timeRecords.shiftAssignmentId,
+          set: {
+            startsAt: new Date(first.startsAt),
+            endsAt: new Date(last.endsAt),
+            secondsWorked: derived.secondsWorked,
+            pairs: [...derived.pairs],
+            revision,
+            status: "APPROVED",
+            approvedByUserId,
+            approvedAt: new Date(approvedAt),
+            updatedAt: new Date(approvedAt),
+          },
+          setWhere: eq(timeRecords.revision, revision - 1),
+        })
+        .returning();
+      const timeRecord = timeRows[0];
+      if (!timeRecord) throw new Error("Time approval revision changed.");
+      const auditRows = await tx
+        .insert(auditEvents)
+        .values({
+          organizationId: auditContext.organizationId,
+          actorUserId: auditContext.actorUserId,
+          action: "time-record.approved",
+          entityType: "TimeRecord",
+          entityId: timeRecord.id,
+          requestId: auditContext.requestId,
+          sessionId: auditContext.sessionId,
+          afterState: {
+            shiftAssignmentId: context.assignmentId,
+            revision,
+            secondsWorked: derived.secondsWorked,
+            pairs: derived.pairs,
+          },
+        })
+        .returning({ id: auditEvents.id });
+      const snapshot = {
+        pairs: derived.pairs,
+        secondsWorked: derived.secondsWorked,
+      };
+      await tx.insert(timeApprovals).values({
+        timeRecordId: timeRecord.id,
+        revision,
+        snapshot,
+        approvedByUserId,
+        approvedAt: new Date(approvedAt),
+        auditEventId: auditRows[0]!.id,
+      });
+      await tx.insert(operationalRecordRevisions).values({
+        organizationId: auditContext.organizationId,
+        entityType: "TimeRecord",
+        entityId: timeRecord.id,
+        revision,
+        status: "APPROVED",
+        snapshot,
+        changedByUserId: approvedByUserId,
+        changedAt: new Date(approvedAt),
+        auditEventId: auditRows[0]!.id,
+      });
+      return timeRecord;
+    });
+    return timeRecordDto(row);
   }
 }
 
@@ -845,5 +964,24 @@ function correctionDto(
     correctedByUserId: row.correctedByUserId,
     correctedAt: row.correctedAt.toISOString(),
     reason: row.reason,
+  };
+}
+
+function timeRecordDto(
+  row: typeof timeRecords.$inferSelect,
+): TimeRecordSummary {
+  const pairs = Array.isArray(row.pairs)
+    ? (row.pairs as TimeRecordSummary["pairs"])
+    : [];
+  return {
+    id: row.id,
+    shiftAssignmentId: row.shiftAssignmentId,
+    revision: row.revision,
+    pairs,
+    secondsWorked: row.secondsWorked ?? 0,
+    status: row.status as TimeRecordSummary["status"],
+    ...(row.approvedByUserId ? { approvedByUserId: row.approvedByUserId } : {}),
+    ...(row.approvedAt ? { approvedAt: row.approvedAt.toISOString() } : {}),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }

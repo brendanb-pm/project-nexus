@@ -25,6 +25,7 @@ import type {
   AvailabilitySummary,
   ClockEventSummary,
   ClockCorrectionSummary,
+  TimeRecordSummary,
 } from "@/features/scheduling/contracts";
 import type { ComplianceSummary } from "@/features/compliance-admin/contracts";
 
@@ -44,6 +45,7 @@ class MemorySchedulingRepository implements SchedulingRepository {
   assignments: AssignmentSummary[] = [];
   clockEvents: ClockEventSummary[] = [];
   corrections: ClockCorrectionSummary[] = [];
+  timeRecords: TimeRecordSummary[] = [];
   candidate: Omit<
     AssignmentCandidate,
     "availability" | "credentials" | "certifications"
@@ -284,7 +286,69 @@ class MemorySchedulingRepository implements SchedulingRepository {
       ...correction,
     };
     this.corrections.push(created);
+    const timeRecord = this.timeRecords.find(
+      (item) => item.shiftAssignmentId === _context.assignmentId,
+    );
+    if (timeRecord?.status === "APPROVED") {
+      Object.assign(timeRecord, {
+        status: "AMENDED",
+        approvedByUserId: undefined,
+        approvedAt: undefined,
+      });
+    }
     return Promise.resolve(created);
+  }
+  async getTimeApprovalContext(scope: SchedulingScope, assignmentId: string) {
+    this.calls.push("getTimeApprovalContext");
+    const context = await this.getClockContext(scope, assignmentId);
+    return context
+      ? {
+          ...context,
+          corrections: this.corrections.filter((correction) =>
+            context.events.some(
+              (event) => event.id === correction.clockEventId,
+            ),
+          ),
+          ...(this.timeRecords.find(
+            (record) => record.shiftAssignmentId === assignmentId,
+          )
+            ? {
+                current: this.timeRecords.find(
+                  (record) => record.shiftAssignmentId === assignmentId,
+                )!,
+              }
+            : {}),
+        }
+      : null;
+  }
+  approveTime(
+    _scope: SchedulingScope,
+    context: NonNullable<
+      Awaited<ReturnType<MemorySchedulingRepository["getTimeApprovalContext"]>>
+    >,
+    derived: { pairs: TimeRecordSummary["pairs"]; secondsWorked: number },
+    revision: number,
+    approvedByUserId: string,
+    approvedAt: string,
+    audit: AuditContext,
+  ) {
+    this.calls.push("approveTime");
+    this.audit = audit;
+    const record: TimeRecordSummary = {
+      id: context.current?.id ?? "time-record-1",
+      shiftAssignmentId: context.assignmentId,
+      revision,
+      pairs: derived.pairs,
+      secondsWorked: derived.secondsWorked,
+      status: "APPROVED",
+      approvedByUserId,
+      approvedAt,
+      updatedAt: approvedAt,
+    };
+    const index = this.timeRecords.findIndex((item) => item.id === record.id);
+    if (index >= 0) this.timeRecords[index] = record;
+    else this.timeRecords.push(record);
+    return Promise.resolve(record);
   }
 }
 
@@ -775,5 +839,148 @@ describe("NX-2.4 clock correction history", () => {
         expectedRevision: 0,
       }),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+});
+
+describe("NX-2.5 time derivation and approval", () => {
+  async function approvalSubject(options?: {
+    incomplete?: boolean;
+    exception?: boolean;
+    correctorId?: string;
+  }) {
+    const repository = new MemorySchedulingRepository();
+    const manager = await subject(
+      principal(["ADMIN"], { organizationWide: true }),
+      repository,
+    );
+    const shift = await manager.service.createShift({
+      ...shiftInput,
+      status: "PUBLISHED",
+    });
+    const assignment = await manager.service.assignEmployee({
+      shiftId: shift.id,
+      employeeId: "employee-1",
+    });
+    const event = (
+      id: string,
+      eventType: "CLOCK_IN" | "CLOCK_OUT",
+      effectiveAt: string,
+    ): ClockEventSummary => ({
+      id,
+      shiftAssignmentId: assignment.id,
+      eventType,
+      occurredAt: effectiveAt,
+      effectiveAt,
+      verificationStatus: options?.exception ? "EXCEPTION_REQUIRED" : "NORMAL",
+      exceptionReasons: options?.exception ? ["OUTSIDE_SCHEDULE_WINDOW"] : [],
+      recordedByUserId: "guard-user",
+    });
+    repository.clockEvents.push(
+      event("in-1", "CLOCK_IN", "2026-11-08T06:00:00.000Z"),
+      event("out-1", "CLOCK_OUT", "2026-11-08T10:00:00.000Z"),
+      event("in-2", "CLOCK_IN", "2026-11-08T10:30:00.000Z"),
+    );
+    if (!options?.incomplete) {
+      repository.clockEvents.push(
+        event("out-2", "CLOCK_OUT", "2026-11-08T14:00:01.000Z"),
+      );
+    }
+    if (options?.correctorId) {
+      for (const clockEvent of repository.clockEvents) {
+        repository.corrections.push({
+          id: `correction-${clockEvent.id}`,
+          clockEventId: clockEvent.id,
+          revision: 1,
+          originalEffectiveAt: clockEvent.effectiveAt,
+          correctedEffectiveAt: clockEvent.effectiveAt,
+          correctedByUserId: options.correctorId,
+          correctedAt: "2026-11-08T15:00:00.000Z",
+          reason: "Resolved exception",
+        });
+      }
+    }
+    return {
+      ...(await subject(
+        principal(["SUPERVISOR"], {
+          userId: "approver-user",
+          siteIds: ["site-1"],
+        }),
+        repository,
+        () => new Date("2026-11-08T16:00:00.000Z"),
+      )),
+      assignment,
+    };
+  }
+
+  it("derives multiple pairs at exact-second precision with no deductions", async () => {
+    const { service, assignment } = await approvalSubject();
+    const record = await service.approveTime({
+      shiftAssignmentId: assignment.id,
+      expectedRevision: 0,
+    });
+    expect(record.pairs).toHaveLength(2);
+    expect(record.secondsWorked).toBe(27_001);
+    expect(record).toMatchObject({
+      revision: 1,
+      status: "APPROVED",
+      approvedByUserId: "approver-user",
+    });
+  });
+
+  it("blocks incomplete pairs and unresolved clock exceptions", async () => {
+    const incomplete = await approvalSubject({ incomplete: true });
+    await expect(
+      incomplete.service.approveTime({
+        shiftAssignmentId: incomplete.assignment.id,
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrow(/incomplete/i);
+    const exception = await approvalSubject({ exception: true });
+    await expect(
+      exception.service.approveTime({
+        shiftAssignmentId: exception.assignment.id,
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrow(/exceptions/i);
+  });
+
+  it("rejects double/stale approval and unauthorized client approval", async () => {
+    const approved = await approvalSubject();
+    await approved.service.approveTime({
+      shiftAssignmentId: approved.assignment.id,
+      expectedRevision: 0,
+    });
+    await expect(
+      approved.service.approveTime({
+        shiftAssignmentId: approved.assignment.id,
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrow(/changed/i);
+    const clientService = await subject(
+      principal(["CLIENT_USER"], {
+        userId: "client-user",
+        siteIds: ["site-1"],
+      }),
+      approved.repository,
+    );
+    await expect(
+      clientService.service.approveTime({
+        shiftAssignmentId: approved.assignment.id,
+        expectedRevision: 1,
+      }),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it("enforces correction and approval separation", async () => {
+    const corrected = await approvalSubject({
+      exception: true,
+      correctorId: "approver-user",
+    });
+    await expect(
+      corrected.service.approveTime({
+        shiftAssignmentId: corrected.assignment.id,
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrow(/corrected/i);
   });
 });

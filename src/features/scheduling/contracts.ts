@@ -120,3 +120,26 @@ export type ClockCorrectionInput = {
   reason: unknown;
   expectedRevision: unknown;
 };
+
+export type TimePair = {
+  clockInEventId: string;
+  clockOutEventId: string;
+  startsAt: string;
+  endsAt: string;
+  secondsWorked: number;
+};
+export type TimeRecordSummary = {
+  id: string;
+  shiftAssignmentId: string;
+  revision: number;
+  pairs: readonly TimePair[];
+  secondsWorked: number;
+  status: "DRAFT" | "APPROVED" | "AMENDED";
+  approvedByUserId?: string;
+  approvedAt?: string;
+  updatedAt: string;
+};
+export type ApproveTimeInput = {
+  shiftAssignmentId: unknown;
+  expectedRevision: unknown;
+};

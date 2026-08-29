@@ -9,6 +9,7 @@ import type {
   AvailabilityMutationInput,
   ClockEventInput,
   ClockCorrectionInput,
+  ApproveTimeInput,
   ShiftMutationInput,
   UpdateShiftInput,
 } from "./contracts";
@@ -18,6 +19,7 @@ import { intervalsOverlap, parseZonedInstant } from "./time";
 import { evaluateEmployeeEligibility } from "@/features/compliance-admin/eligibility";
 import { finiteCoordinate, haversineDistanceMeters } from "./geofence";
 import { ValidationError } from "@/server/request/errors";
+import { deriveTimePairs } from "./time-record";
 
 const transitions = {
   DRAFT: new Set(["DRAFT", "PUBLISHED", "CANCELLED"]),
@@ -400,6 +402,56 @@ export class SchedulingService {
         reason,
       },
       this.now().toISOString(),
+      this.access.auditContext(),
+    );
+  }
+
+  async approveTime(raw: ApproveTimeInput) {
+    const assignmentId =
+      typeof raw.shiftAssignmentId === "string" ? raw.shiftAssignmentId : "";
+    const expectedRevision = Number(raw.expectedRevision);
+    if (!assignmentId || !Number.isInteger(expectedRevision)) {
+      throw new ValidationError({
+        approval: ["Assignment and current revision are required."],
+      });
+    }
+    const context = await this.repository.getTimeApprovalContext(
+      this.scope(),
+      assignmentId,
+    );
+    if (!context) throw new ResourceNotFoundError("Shift assignment");
+    this.access.requireHierarchical("APPROVE_TIME", {
+      organizationId: context.organizationId,
+      branchId: context.branchId,
+      clientId: context.clientId,
+      siteId: context.siteId,
+    });
+    const currentRevision = context.current?.revision ?? 0;
+    if (currentRevision !== expectedRevision) throw new StaleUpdateError();
+    if (context.current?.status === "APPROVED") {
+      throw new InvariantViolationError(
+        "This time revision is already approved.",
+      );
+    }
+    if (
+      context.corrections.some(
+        (correction) =>
+          correction.correctedByUserId === this.access.context.actor.userId,
+      )
+    ) {
+      throw new InvariantViolationError(
+        "A user who corrected this time may not approve the resulting revision.",
+      );
+    }
+    const derived = deriveTimePairs(context.events, context.corrections);
+    const approvedAt = this.now().toISOString();
+    return this.repository.approveTime(
+      this.scope(),
+      context,
+      derived,
+      currentRevision + 1,
+      this.access.context.actor.userId,
+      approvedAt,
       this.access.auditContext(),
     );
   }

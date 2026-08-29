@@ -558,19 +558,34 @@ export const clockEventCorrections = pgTable(
     ),
   ],
 );
-export const timeRecords = pgTable("time_records", {
-  id: id(),
-  shiftAssignmentId: uuid("shift_assignment_id")
-    .notNull()
-    .references(() => shiftAssignments.id),
-  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-  endsAt: timestamp("ends_at", { withTimezone: true }),
-  minutesWorked: integer("minutes_worked"),
-  status: recordStatusEnum("status").notNull().default("DRAFT"),
-  approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const timeRecords = pgTable(
+  "time_records",
+  {
+    id: id(),
+    shiftAssignmentId: uuid("shift_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    minutesWorked: integer("minutes_worked"),
+    secondsWorked: integer("seconds_worked"),
+    pairs: jsonb("pairs").notNull().default([]),
+    revision: integer("revision").notNull().default(0),
+    status: recordStatusEnum("status").notNull().default("DRAFT"),
+    approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("time_records_assignment_uidx").on(t.shiftAssignmentId),
+    check(
+      "time_records_seconds_check",
+      sql`${t.secondsWorked} is null or ${t.secondsWorked} >= 0`,
+    ),
+    check("time_records_revision_check", sql`${t.revision} >= 0`),
+  ],
+);
 export const activityEntries = pgTable("activity_entries", {
   id: id(),
   shiftAssignmentId: uuid("shift_assignment_id")
@@ -809,6 +824,30 @@ export const auditEvents = pgTable(
       t.entityId,
     ),
     index("audit_events_occurred_idx").on(t.occurredAt),
+  ],
+);
+export const timeApprovals = pgTable(
+  "time_approvals",
+  {
+    id: id(),
+    timeRecordId: uuid("time_record_id")
+      .notNull()
+      .references(() => timeRecords.id),
+    revision: integer("revision").notNull(),
+    snapshot: jsonb("snapshot").notNull(),
+    approvedByUserId: uuid("approved_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }).notNull(),
+    auditEventId: uuid("audit_event_id")
+      .notNull()
+      .references(() => auditEvents.id),
+  },
+  (t) => [
+    uniqueIndex("time_approvals_record_revision_uidx").on(
+      t.timeRecordId,
+      t.revision,
+    ),
   ],
 );
 export const operationalRecordRevisions = pgTable(

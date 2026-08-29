@@ -6,6 +6,7 @@ import type {
   AvailabilitySummary,
   ClockEventSummary,
   ClockCorrectionSummary,
+  TimeRecordSummary,
   ShiftPage,
   ShiftStatus,
   ShiftSummary,
@@ -68,6 +69,10 @@ export type ClockContext = {
 export type CorrectionContext = ClockContext & {
   clockEvent: ClockEventSummary;
   corrections: readonly ClockCorrectionSummary[];
+};
+export type TimeApprovalContext = ClockContext & {
+  corrections: readonly ClockCorrectionSummary[];
+  current?: TimeRecordSummary;
 };
 
 export interface SchedulingRepository {
@@ -150,4 +155,17 @@ export interface SchedulingRepository {
     correctedAt: string,
     audit: AuditContext,
   ): Promise<ClockCorrectionSummary>;
+  getTimeApprovalContext(
+    scope: SchedulingScope,
+    assignmentId: string,
+  ): Promise<TimeApprovalContext | null>;
+  approveTime(
+    scope: SchedulingScope,
+    context: TimeApprovalContext,
+    derived: { pairs: TimeRecordSummary["pairs"]; secondsWorked: number },
+    revision: number,
+    approvedByUserId: string,
+    approvedAt: string,
+    audit: AuditContext,
+  ): Promise<TimeRecordSummary>;
 }
