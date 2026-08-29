@@ -424,12 +424,27 @@ export const shifts = pgTable(
       withTimezone: true,
     }).notNull(),
     scheduledEnd: timestamp("scheduled_end", { withTimezone: true }).notNull(),
+    timezone: text("timezone").notNull(),
     status: text("status").notNull(),
     staffingRequirement: integer("staffing_requirement").notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("shifts_post_start_idx").on(t.postId, t.scheduledStart)],
+  (t) => [
+    index("shifts_post_start_idx").on(t.postId, t.scheduledStart),
+    check(
+      "shifts_time_order_check",
+      sql`${t.scheduledEnd} > ${t.scheduledStart}`,
+    ),
+    check(
+      "shifts_staffing_check",
+      sql`${t.staffingRequirement} between 1 and 100`,
+    ),
+    check(
+      "shifts_status_check",
+      sql`${t.status} in ('DRAFT', 'PUBLISHED', 'COMPLETED', 'CANCELLED')`,
+    ),
+  ],
 );
 export const shiftAssignments = pgTable(
   "shift_assignments",

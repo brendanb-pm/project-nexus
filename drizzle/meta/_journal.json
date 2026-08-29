@@ -29,6 +29,13 @@
       "when": 1787538851012,
       "tag": "0003_gifted_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788018792741,
+      "tag": "0004_sprint_2_scheduling_timekeeping",
+      "breakpoints": true
     }
   ]
 }
