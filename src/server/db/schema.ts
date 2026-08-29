@@ -401,17 +401,28 @@ export const certifications = pgTable(
     ),
   ],
 );
-export const availability = pgTable("availability", {
-  id: id(),
-  employeeId: uuid("employee_id")
-    .notNull()
-    .references(() => employees.id),
-  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
-  status: text("status").notNull(),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const availability = pgTable(
+  "availability",
+  {
+    id: id(),
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    status: text("status").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("availability_employee_start_idx").on(t.employeeId, t.startsAt),
+    check("availability_time_order_check", sql`${t.endsAt} > ${t.startsAt}`),
+    check(
+      "availability_status_check",
+      sql`${t.status} in ('AVAILABLE', 'UNAVAILABLE')`,
+    ),
+  ],
+);
 
 export const shifts = pgTable(
   "shifts",
@@ -458,6 +469,10 @@ export const shiftAssignments = pgTable(
       .references(() => employees.id),
     status: text("status").notNull(),
     assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull(),
+    availabilityStatus: text("availability_status")
+      .notNull()
+      .default("UNKNOWN"),
+    warnings: jsonb("warnings").notNull().default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -465,6 +480,15 @@ export const shiftAssignments = pgTable(
     uniqueIndex("shift_assignments_shift_employee_uidx").on(
       t.shiftId,
       t.employeeId,
+    ),
+    index("shift_assignments_employee_idx").on(t.employeeId, t.status),
+    check(
+      "shift_assignments_status_check",
+      sql`${t.status} in ('assigned', 'confirmed', 'cancelled')`,
+    ),
+    check(
+      "shift_assignments_availability_check",
+      sql`${t.availabilityStatus} in ('AVAILABLE', 'UNAVAILABLE', 'UNKNOWN')`,
     ),
   ],
 );

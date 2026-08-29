@@ -1,5 +1,10 @@
 import { ValidationError } from "@/server/request/errors";
-import { shiftStatuses, type ShiftMutationInput } from "./contracts";
+import {
+  availabilityStatuses,
+  shiftStatuses,
+  type AvailabilityMutationInput,
+  type ShiftMutationInput,
+} from "./contracts";
 import { parseZonedInstant } from "./time";
 import type { ShiftMutation } from "./repository";
 
@@ -45,5 +50,24 @@ export function validateShift(input: ShiftMutationInput): ShiftMutation {
     scheduledEnd: end.toISOString(),
     staffingRequirement,
     status: input.status as ShiftMutation["status"],
+  };
+}
+
+export function validateAvailability(input: AvailabilityMutationInput) {
+  const timezone = text(input.timezone, "timezone");
+  const start = parseZonedInstant(input.startsAt, timezone, "startsAt");
+  const end = parseZonedInstant(input.endsAt, timezone, "endsAt");
+  if (end <= start)
+    throw new ValidationError({ endsAt: ["End must be after start."] });
+  if (
+    typeof input.status !== "string" ||
+    !availabilityStatuses.includes(input.status as never)
+  ) {
+    throw new ValidationError({ status: ["Select available or unavailable."] });
+  }
+  return {
+    startsAt: start.toISOString(),
+    endsAt: end.toISOString(),
+    status: input.status as (typeof availabilityStatuses)[number],
   };
 }

@@ -4,9 +4,16 @@ import {
   ResourceNotFoundError,
   StaleUpdateError,
 } from "@/server/request/errors";
-import type { ShiftMutationInput, UpdateShiftInput } from "./contracts";
+import type {
+  AssignmentMutationInput,
+  AvailabilityMutationInput,
+  ShiftMutationInput,
+  UpdateShiftInput,
+} from "./contracts";
 import type { SchedulingRepository, SchedulingScope } from "./repository";
-import { validateShift } from "./validation";
+import { validateAvailability, validateShift } from "./validation";
+import { intervalsOverlap } from "./time";
+import { evaluateEmployeeEligibility } from "@/features/compliance-admin/eligibility";
 
 const transitions = {
   DRAFT: new Set(["DRAFT", "PUBLISHED", "CANCELLED"]),
@@ -96,5 +103,145 @@ export class SchedulingService {
     );
     if (!updated) throw new StaleUpdateError();
     return updated;
+  }
+
+  async listOwnAvailability(limit = 25) {
+    const employeeId = this.access.context.scope.employeeId;
+    if (!employeeId) throw new ResourceNotFoundError("Employee relationship");
+    this.access.require("VIEW_OWN_ASSIGNMENTS", {
+      organizationId: this.access.context.organizationId,
+      employeeId,
+    });
+    return this.repository.listAvailability(
+      this.scope(),
+      employeeId,
+      Math.min(Math.max(limit, 1), 100),
+    );
+  }
+
+  async createOwnAvailability(raw: AvailabilityMutationInput) {
+    const employeeId = this.access.context.scope.employeeId;
+    if (!employeeId) throw new ResourceNotFoundError("Employee relationship");
+    this.access.require("VIEW_OWN_ASSIGNMENTS", {
+      organizationId: this.access.context.organizationId,
+      employeeId,
+    });
+    const input = validateAvailability(raw);
+    const existing = await this.repository.listAvailability(
+      this.scope(),
+      employeeId,
+      100,
+    );
+    if (
+      existing.some((item) =>
+        intervalsOverlap(
+          item.startsAt,
+          item.endsAt,
+          input.startsAt,
+          input.endsAt,
+        ),
+      )
+    ) {
+      throw new InvariantViolationError(
+        "Availability intervals may not overlap; adjacent intervals are allowed.",
+      );
+    }
+    return this.repository.createAvailability(
+      this.scope(),
+      employeeId,
+      input,
+      this.access.auditContext(),
+    );
+  }
+
+  async assignEmployee(raw: AssignmentMutationInput) {
+    const shiftId = typeof raw.shiftId === "string" ? raw.shiftId : "";
+    const employeeId = typeof raw.employeeId === "string" ? raw.employeeId : "";
+    const scope = this.scope();
+    const shift = await this.repository.getShift(scope, shiftId);
+    if (!shift) throw new ResourceNotFoundError("Shift");
+    this.access.requireHierarchical("MANAGE_SHIFT_ASSIGNMENTS", shift);
+    if (!["DRAFT", "PUBLISHED"].includes(shift.status)) {
+      throw new InvariantViolationError(
+        "Only draft or published shifts may be staffed.",
+      );
+    }
+    if (shift.assignedCount >= shift.staffingRequirement) {
+      throw new InvariantViolationError(
+        "This shift already meets its staffing requirement.",
+      );
+    }
+    const candidate = await this.repository.getAssignmentCandidate(
+      scope,
+      employeeId,
+    );
+    if (!candidate || candidate.organizationId !== scope.organizationId) {
+      throw new ResourceNotFoundError("Employee");
+    }
+    if (
+      await this.repository.hasOverlappingAssignment(
+        scope,
+        employeeId,
+        shift.scheduledStart,
+        shift.scheduledEnd,
+      )
+    ) {
+      throw new InvariantViolationError(
+        "Employee already has an overlapping active assignment.",
+      );
+    }
+    const overlappingAvailability = candidate.availability.filter((item) =>
+      intervalsOverlap(
+        item.startsAt,
+        item.endsAt,
+        shift.scheduledStart,
+        shift.scheduledEnd,
+      ),
+    );
+    if (overlappingAvailability.some((item) => item.status === "UNAVAILABLE")) {
+      throw new InvariantViolationError(
+        "Employee is explicitly unavailable for this shift.",
+      );
+    }
+    const availability = overlappingAvailability.some(
+      (item) => item.status === "AVAILABLE",
+    )
+      ? "AVAILABLE"
+      : "UNKNOWN";
+    const post = await this.repository.getPostScope(scope, shift.postId);
+    if (!post) throw new ResourceNotFoundError("Post");
+    const eligibility = evaluateEmployeeEligibility({
+      employeeStatus: candidate.employeeStatus,
+      armedRequirement: post.armedRequirement,
+      qualificationRequirements: post.qualificationRequirements,
+      credentials: candidate.credentials,
+      certifications: candidate.certifications,
+      asOf: shift.scheduledStart.slice(0, 10),
+    });
+    if (!eligibility.eligible) {
+      throw new InvariantViolationError(
+        `Employee is not eligible: ${eligibility.missing.join(", ")}.`,
+      );
+    }
+    const warnings =
+      availability === "UNKNOWN"
+        ? ["No availability was declared for this interval."]
+        : [];
+    return this.repository.createAssignment(
+      scope,
+      shiftId,
+      employeeId,
+      availability,
+      warnings,
+      this.access.auditContext(),
+    );
+  }
+
+  async listAssignments(limit = 25) {
+    this.access.requireOrganization("VIEW_SITE_OPERATIONS");
+    return this.repository.listAssignments(
+      this.scope(),
+      Math.min(Math.max(limit, 1), 100),
+    );
   }
 }

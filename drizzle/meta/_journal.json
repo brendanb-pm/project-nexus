@@ -36,6 +36,13 @@
       "when": 1788018792741,
       "tag": "0004_sprint_2_scheduling_timekeeping",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788019239269,
+      "tag": "0005_sprint_2_availability_assignments",
+      "breakpoints": true
     }
   ]
 }
