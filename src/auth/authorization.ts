@@ -30,6 +30,7 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
       "MANAGE_SHIFT_ASSIGNMENTS",
       "ACKNOWLEDGE_INCIDENT",
       "APPROVE_TIME",
+      "CORRECT_TIME",
       "VIEW_EMPLOYEE_COMPLIANCE",
     ]),
     OPERATIONS_MANAGER: new Set([
@@ -37,6 +38,7 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
       "MANAGE_SHIFT_ASSIGNMENTS",
       "ACKNOWLEDGE_INCIDENT",
       "APPROVE_TIME",
+      "CORRECT_TIME",
       "VIEW_EMPLOYEE_COMPLIANCE",
       "MANAGE_CLIENTS",
       "MANAGE_SITES",
@@ -67,6 +69,7 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
       "MANAGE_SHIFT_ASSIGNMENTS",
       "ACKNOWLEDGE_INCIDENT",
       "APPROVE_TIME",
+      "CORRECT_TIME",
       "VIEW_EMPLOYEE_COMPLIANCE",
       "VIEW_CLIENT_REPORTS",
       "VIEW_CLIENT_INCIDENTS",

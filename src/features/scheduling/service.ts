@@ -8,12 +8,13 @@ import type {
   AssignmentMutationInput,
   AvailabilityMutationInput,
   ClockEventInput,
+  ClockCorrectionInput,
   ShiftMutationInput,
   UpdateShiftInput,
 } from "./contracts";
 import type { SchedulingRepository, SchedulingScope } from "./repository";
 import { validateAvailability, validateShift } from "./validation";
-import { intervalsOverlap } from "./time";
+import { intervalsOverlap, parseZonedInstant } from "./time";
 import { evaluateEmployeeEligibility } from "@/features/compliance-admin/eligibility";
 import { finiteCoordinate, haversineDistanceMeters } from "./geofence";
 import { ValidationError } from "@/server/request/errors";
@@ -351,6 +352,54 @@ export class SchedulingService {
         ...(locationEvidence ? { locationEvidence } : {}),
         recordedByUserId: this.access.context.actor.userId,
       },
+      this.access.auditContext(),
+    );
+  }
+
+  async correctClockEvent(raw: ClockCorrectionInput) {
+    const clockEventId =
+      typeof raw.clockEventId === "string" ? raw.clockEventId : "";
+    const reason = typeof raw.reason === "string" ? raw.reason.trim() : "";
+    const expectedRevision = Number(raw.expectedRevision);
+    if (!clockEventId || !reason || !Number.isInteger(expectedRevision)) {
+      throw new ValidationError({
+        correction: ["Clock event, reason, and current revision are required."],
+      });
+    }
+    const context = await this.repository.getCorrectionContext(
+      this.scope(),
+      clockEventId,
+    );
+    if (!context) throw new ResourceNotFoundError("Clock event");
+    this.access.requireHierarchical("CORRECT_TIME", {
+      organizationId: context.organizationId,
+      branchId: context.branchId,
+      clientId: context.clientId,
+      siteId: context.siteId,
+    });
+    if (context.corrections.length !== expectedRevision) {
+      throw new StaleUpdateError();
+    }
+    const corrected = parseZonedInstant(
+      raw.correctedEffectiveAt,
+      raw.timezone,
+      "correctedEffectiveAt",
+    );
+    const originalEffectiveAt =
+      context.corrections.at(-1)?.correctedEffectiveAt ??
+      context.clockEvent.effectiveAt;
+    return this.repository.appendClockCorrection(
+      this.scope(),
+      context,
+      {
+        clockEventId,
+        revision: expectedRevision + 1,
+        originalEffectiveAt,
+        correctedEffectiveAt: corrected.toISOString(),
+        correctedByUserId: this.access.context.actor.userId,
+        reason,
+      },
+      this.now().toISOString(),
       this.access.auditContext(),
     );
   }

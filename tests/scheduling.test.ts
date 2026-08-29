@@ -24,6 +24,7 @@ import type {
   AssignmentSummary,
   AvailabilitySummary,
   ClockEventSummary,
+  ClockCorrectionSummary,
 } from "@/features/scheduling/contracts";
 import type { ComplianceSummary } from "@/features/compliance-admin/contracts";
 
@@ -42,6 +43,7 @@ class MemorySchedulingRepository implements SchedulingRepository {
   availability: AvailabilitySummary[] = [];
   assignments: AssignmentSummary[] = [];
   clockEvents: ClockEventSummary[] = [];
+  corrections: ClockCorrectionSummary[] = [];
   candidate: Omit<
     AssignmentCandidate,
     "availability" | "credentials" | "certifications"
@@ -248,6 +250,40 @@ class MemorySchedulingRepository implements SchedulingRepository {
     this.audit = audit;
     const created = { id: `clock-${this.clockEvents.length + 1}`, ...event };
     this.clockEvents.push(created);
+    return Promise.resolve(created);
+  }
+  async getCorrectionContext(scope: SchedulingScope, clockEventId: string) {
+    this.calls.push("getCorrectionContext");
+    const event = this.clockEvents.find((item) => item.id === clockEventId);
+    if (!event) return null;
+    const context = await this.getClockContext(scope, event.shiftAssignmentId);
+    return context
+      ? {
+          ...context,
+          clockEvent: event,
+          corrections: this.corrections.filter(
+            (item) => item.clockEventId === clockEventId,
+          ),
+        }
+      : null;
+  }
+  appendClockCorrection(
+    _scope: SchedulingScope,
+    _context: NonNullable<
+      Awaited<ReturnType<MemorySchedulingRepository["getCorrectionContext"]>>
+    >,
+    correction: Omit<ClockCorrectionSummary, "id" | "correctedAt">,
+    correctedAt: string,
+    audit: AuditContext,
+  ) {
+    this.calls.push("appendClockCorrection");
+    this.audit = audit;
+    const created = {
+      id: `correction-${this.corrections.length + 1}`,
+      correctedAt,
+      ...correction,
+    };
+    this.corrections.push(created);
     return Promise.resolve(created);
   }
 }
@@ -628,5 +664,116 @@ describe("NX-2.3 geofence clock events", () => {
         eventType: "CLOCK_OUT",
       }),
     ).rejects.toBeInstanceOf(InvariantViolationError);
+  });
+});
+
+describe("NX-2.4 clock correction history", () => {
+  async function correctionSubject(
+    role: AuthenticatedPrincipal["roles"][number],
+  ) {
+    const repository = new MemorySchedulingRepository();
+    const manager = await subject(
+      principal(["ADMIN"], { organizationWide: true }),
+      repository,
+    );
+    const shift = await manager.service.createShift({
+      ...shiftInput,
+      status: "PUBLISHED",
+    });
+    const assignment = await manager.service.assignEmployee({
+      shiftId: shift.id,
+      employeeId: "employee-1",
+    });
+    const guard = await subject(
+      principal(["GUARD"], {
+        userId: "guard-user",
+        employeeId: "employee-1",
+        siteIds: ["site-1"],
+      }),
+      repository,
+      () => new Date("2026-11-08T05:55:00.000Z"),
+    );
+    const event = await guard.service.clockOwnShift({
+      shiftAssignmentId: assignment.id,
+      eventType: "CLOCK_IN",
+      latitude: 45.5231,
+      longitude: -122.6765,
+      accuracyMeters: 10,
+    });
+    return {
+      ...(await subject(
+        principal([role], {
+          userId: "supervisor-user",
+          siteIds: ["site-1"],
+        }),
+        repository,
+        () => new Date("2026-11-08T07:00:00.000Z"),
+      )),
+      event,
+    };
+  }
+
+  it("appends a reasoned correction while preserving the original event", async () => {
+    const { service, repository, event } =
+      await correctionSubject("SUPERVISOR");
+    const correction = await service.correctClockEvent({
+      clockEventId: event.id,
+      correctedEffectiveAt: "2026-11-07T22:00:00-08:00",
+      timezone: "America/Los_Angeles",
+      reason: "Verified supervisor log",
+      expectedRevision: 0,
+    });
+    expect(correction).toMatchObject({
+      revision: 1,
+      originalEffectiveAt: event.effectiveAt,
+      correctedEffectiveAt: "2026-11-08T06:00:00.000Z",
+      correctedByUserId: "supervisor-user",
+      reason: "Verified supervisor log",
+    });
+    expect(repository.clockEvents[0]).toEqual(event);
+  });
+
+  it("requires a reason, rejects stale revision, and preserves amendment history", async () => {
+    const { service, event, repository } =
+      await correctionSubject("SUPERVISOR");
+    await expect(
+      service.correctClockEvent({
+        clockEventId: event.id,
+        correctedEffectiveAt: "2026-11-07T22:00:00-08:00",
+        timezone: "America/Los_Angeles",
+        reason: "",
+        expectedRevision: 0,
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await service.correctClockEvent({
+      clockEventId: event.id,
+      correctedEffectiveAt: "2026-11-07T22:00:00-08:00",
+      timezone: "America/Los_Angeles",
+      reason: "First verification",
+      expectedRevision: 0,
+    });
+    await expect(
+      service.correctClockEvent({
+        clockEventId: event.id,
+        correctedEffectiveAt: "2026-11-07T22:05:00-08:00",
+        timezone: "America/Los_Angeles",
+        reason: "Stale attempt",
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrow(/changed/i);
+    expect(repository.corrections).toHaveLength(1);
+  });
+
+  it("denies unauthorized client correction", async () => {
+    const { service, event } = await correctionSubject("CLIENT_USER");
+    await expect(
+      service.correctClockEvent({
+        clockEventId: event.id,
+        correctedEffectiveAt: "2026-11-07T22:00:00-08:00",
+        timezone: "America/Los_Angeles",
+        reason: "Forged correction",
+        expectedRevision: 0,
+      }),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 });

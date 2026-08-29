@@ -526,6 +526,38 @@ export const clockEvents = pgTable(
     ),
   ],
 );
+export const clockEventCorrections = pgTable(
+  "clock_event_corrections",
+  {
+    id: id(),
+    clockEventId: uuid("clock_event_id")
+      .notNull()
+      .references(() => clockEvents.id),
+    revision: integer("revision").notNull(),
+    originalEffectiveAt: timestamp("original_effective_at", {
+      withTimezone: true,
+    }).notNull(),
+    correctedEffectiveAt: timestamp("corrected_effective_at", {
+      withTimezone: true,
+    }).notNull(),
+    correctedByUserId: uuid("corrected_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    correctedAt: timestamp("corrected_at", { withTimezone: true }).notNull(),
+    reason: text("reason").notNull(),
+  },
+  (t) => [
+    uniqueIndex("clock_event_corrections_revision_uidx").on(
+      t.clockEventId,
+      t.revision,
+    ),
+    check("clock_event_corrections_revision_check", sql`${t.revision} > 0`),
+    check(
+      "clock_event_corrections_reason_check",
+      sql`length(trim(${t.reason})) > 0`,
+    ),
+  ],
+);
 export const timeRecords = pgTable("time_records", {
   id: id(),
   shiftAssignmentId: uuid("shift_assignment_id")

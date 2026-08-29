@@ -5,6 +5,7 @@ import type {
   AvailabilityStatus,
   AvailabilitySummary,
   ClockEventSummary,
+  ClockCorrectionSummary,
   ShiftPage,
   ShiftStatus,
   ShiftSummary,
@@ -62,6 +63,11 @@ export type ClockContext = {
   siteLongitude?: number;
   geofenceRadiusMeters: number;
   events: readonly ClockEventSummary[];
+};
+
+export type CorrectionContext = ClockContext & {
+  clockEvent: ClockEventSummary;
+  corrections: readonly ClockCorrectionSummary[];
 };
 
 export interface SchedulingRepository {
@@ -133,4 +139,15 @@ export interface SchedulingRepository {
     event: Omit<ClockEventSummary, "id">,
     audit: AuditContext,
   ): Promise<ClockEventSummary>;
+  getCorrectionContext(
+    scope: SchedulingScope,
+    clockEventId: string,
+  ): Promise<CorrectionContext | null>;
+  appendClockCorrection(
+    scope: SchedulingScope,
+    context: CorrectionContext,
+    correction: Omit<ClockCorrectionSummary, "id" | "correctedAt">,
+    correctedAt: string,
+    audit: AuditContext,
+  ): Promise<ClockCorrectionSummary>;
 }

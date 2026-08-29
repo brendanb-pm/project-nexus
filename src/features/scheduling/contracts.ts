@@ -102,3 +102,21 @@ export type ClockEventInput = {
   longitude?: unknown;
   accuracyMeters?: unknown;
 };
+
+export type ClockCorrectionSummary = {
+  id: string;
+  clockEventId: string;
+  revision: number;
+  originalEffectiveAt: string;
+  correctedEffectiveAt: string;
+  correctedByUserId: string;
+  correctedAt: string;
+  reason: string;
+};
+export type ClockCorrectionInput = {
+  clockEventId: unknown;
+  correctedEffectiveAt: unknown;
+  timezone: unknown;
+  reason: unknown;
+  expectedRevision: unknown;
+};
