@@ -252,6 +252,30 @@ export class SchedulingService {
     );
   }
 
+  async listPostOptions() {
+    this.access.requireOrganization("VIEW_SITE_OPERATIONS");
+    return this.repository.listPostOptions(this.scope(), 100);
+  }
+
+  async listEmployeeOptions() {
+    this.access.requireOrganization("MANAGE_SHIFT_ASSIGNMENTS");
+    return this.repository.listEmployeeOptions(this.scope(), 100);
+  }
+
+  async listOwnAssignments(limit = 25) {
+    const employeeId = this.access.context.scope.employeeId;
+    if (!employeeId) throw new ResourceNotFoundError("Employee relationship");
+    this.access.require("VIEW_OWN_ASSIGNMENTS", {
+      organizationId: this.access.context.organizationId,
+      employeeId,
+    });
+    return this.repository.listEmployeeAssignments(
+      this.scope(),
+      employeeId,
+      Math.min(Math.max(limit, 1), 100),
+    );
+  }
+
   async clockOwnShift(raw: ClockEventInput) {
     const assignmentId =
       typeof raw.shiftAssignmentId === "string" ? raw.shiftAssignmentId : "";

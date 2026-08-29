@@ -7,6 +7,8 @@ import type {
   ClockEventSummary,
   ClockCorrectionSummary,
   TimeRecordSummary,
+  SchedulingPostOption,
+  SchedulingEmployeeOption,
   ShiftPage,
   ShiftStatus,
   ShiftSummary,
@@ -132,6 +134,19 @@ export interface SchedulingRepository {
   ): Promise<AssignmentSummary>;
   listAssignments(
     scope: SchedulingScope,
+    limit: number,
+  ): Promise<readonly AssignmentSummary[]>;
+  listPostOptions(
+    scope: SchedulingScope,
+    limit: number,
+  ): Promise<readonly SchedulingPostOption[]>;
+  listEmployeeOptions(
+    scope: SchedulingScope,
+    limit: number,
+  ): Promise<readonly SchedulingEmployeeOption[]>;
+  listEmployeeAssignments(
+    scope: SchedulingScope,
+    employeeId: string,
     limit: number,
   ): Promise<readonly AssignmentSummary[]>;
   getClockContext(

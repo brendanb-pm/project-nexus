@@ -546,6 +546,73 @@ export class PostgresSchedulingRepository implements SchedulingRepository {
     });
   }
 
+  async listPostOptions(scope: SchedulingScope, limit: number) {
+    const rows = await this.database
+      .select({
+        id: posts.id,
+        name: posts.name,
+        siteName: sites.name,
+        timezone: sites.timezone,
+      })
+      .from(posts)
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(
+          scopePredicate(scope),
+          eq(posts.active, true),
+          eq(sites.active, true),
+        ),
+      )
+      .orderBy(asc(sites.name), asc(posts.name), asc(posts.id))
+      .limit(limit);
+    return rows;
+  }
+
+  async listEmployeeOptions(scope: SchedulingScope, limit: number) {
+    const rows = await this.database
+      .select({
+        id: employees.id,
+        employeeNumber: employees.employeeNumber,
+        profile: employees.profile,
+      })
+      .from(employees)
+      .where(
+        and(
+          eq(employees.organizationId, scope.organizationId),
+          eq(employees.employmentStatus, "active"),
+          scope.organizationWide || !scope.branchIds.length
+            ? undefined
+            : inArray(employees.primaryBranchId, [...scope.branchIds]),
+        ),
+      )
+      .orderBy(asc(employees.employeeNumber), asc(employees.id))
+      .limit(limit);
+    return rows.map((row) => {
+      const profile =
+        row.profile && typeof row.profile === "object"
+          ? (row.profile as Record<string, unknown>)
+          : {};
+      return {
+        id: row.id,
+        employeeNumber: row.employeeNumber,
+        displayName:
+          typeof profile.displayName === "string"
+            ? profile.displayName
+            : row.employeeNumber,
+      };
+    });
+  }
+
+  async listEmployeeAssignments(
+    scope: SchedulingScope,
+    employeeId: string,
+    limit: number,
+  ) {
+    const rows = await this.listAssignments(scope, 100);
+    return rows.filter((row) => row.employeeId === employeeId).slice(0, limit);
+  }
+
   async getClockContext(scope: SchedulingScope, assignmentId: string) {
     const rows = await this.database
       .select({

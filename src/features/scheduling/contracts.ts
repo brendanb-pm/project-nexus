@@ -143,3 +143,33 @@ export type ApproveTimeInput = {
   shiftAssignmentId: unknown;
   expectedRevision: unknown;
 };
+
+export type SchedulingPostOption = {
+  id: string;
+  name: string;
+  siteName: string;
+  timezone: string;
+};
+export type SchedulingEmployeeOption = {
+  id: string;
+  employeeNumber: string;
+  displayName: string;
+};
+export type SchedulingAdminPageState =
+  | { kind: "permission-denied"; message: string }
+  | { kind: "error"; message: string; retryable: boolean }
+  | {
+      kind: "ready";
+      shifts: ShiftPage;
+      assignments: readonly AssignmentSummary[];
+      posts: readonly SchedulingPostOption[];
+      employees: readonly SchedulingEmployeeOption[];
+    };
+export type MySchedulePageState =
+  | { kind: "permission-denied"; message: string }
+  | { kind: "error"; message: string; retryable: boolean }
+  | {
+      kind: "ready";
+      assignments: readonly AssignmentSummary[];
+      availability: readonly AvailabilitySummary[];
+    };

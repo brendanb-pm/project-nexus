@@ -216,6 +216,36 @@ class MemorySchedulingRepository implements SchedulingRepository {
     this.calls.push("listAssignments");
     return Promise.resolve(this.assignments.slice(0, limit));
   }
+  listPostOptions() {
+    return Promise.resolve([
+      {
+        id: this.post.postId,
+        name: "Lobby",
+        siteName: "HQ",
+        timezone: this.post.timezone,
+      },
+    ]);
+  }
+  listEmployeeOptions() {
+    return Promise.resolve([
+      {
+        id: this.candidate.employeeId,
+        employeeNumber: this.candidate.employeeNumber,
+        displayName: "Alex Guard",
+      },
+    ]);
+  }
+  listEmployeeAssignments(
+    _scope: SchedulingScope,
+    employeeId: string,
+    limit: number,
+  ) {
+    return Promise.resolve(
+      this.assignments
+        .filter((assignment) => assignment.employeeId === employeeId)
+        .slice(0, limit),
+    );
+  }
   getClockContext(_scope: SchedulingScope, assignmentId: string) {
     this.calls.push("getClockContext");
     const assignment = this.assignments.find(
