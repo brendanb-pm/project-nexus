@@ -110,3 +110,17 @@ export async function amendOperationalRecord(form: FormData) {
     return record;
   });
 }
+
+export async function getOperationalRecord(form: FormData) {
+  const service = await createReportingService(
+    await createProductionPrincipalResolver(),
+    "reporting.get-operational-record",
+  );
+  const entityType = String(form.get("entityType"));
+  if (!["ActivityEntry", "IncidentReport", "Handoff"].includes(entityType))
+    throw new Error("Invalid operational record type.");
+  return service.getReviewRecord(
+    entityType as "ActivityEntry" | "IncidentReport" | "Handoff",
+    String(form.get("recordId")),
+  );
+}

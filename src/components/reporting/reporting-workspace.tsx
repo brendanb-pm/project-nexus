@@ -5,6 +5,7 @@ import type {
   HandoffSummary,
   IncidentReportSummary,
   ReportingPageState,
+  ReviewRecord,
 } from "@/features/reporting/contracts";
 import { incidentGateMessage } from "@/features/reporting/incident-gate";
 const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
@@ -19,12 +20,25 @@ export function ReportingWorkspace({
     createActivity(form: FormData): Promise<ActivityEntrySummary>;
     createIncident(form: FormData): Promise<IncidentReportSummary>;
     createHandoff(form: FormData): Promise<HandoffSummary>;
+    acknowledgeOperationalRecord?(form: FormData): Promise<ReviewRecord>;
+    amendOperationalRecord?(form: FormData): Promise<ReviewRecord>;
+    getOperationalRecord?(form: FormData): Promise<ReviewRecord>;
   };
 }) {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submittingIncident, setSubmittingIncident] = useState(false);
   const [submittingHandoff, setSubmittingHandoff] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
+  const [history, setHistory] = useState<Record<string, ReviewRecord>>({});
+  const [acknowledged, setAcknowledged] = useState<Record<string, boolean>>({});
+  const [amendmentReason, setAmendmentReason] = useState<
+    Record<string, string>
+  >({});
+  const [amendmentText, setAmendmentText] = useState<Record<string, string>>(
+    {},
+  );
   const [submissionKey] = useState(() =>
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -92,6 +106,73 @@ export function ReportingWorkspace({
       setSubmittingHandoff(false);
     }
   }
+  async function loadHistory(entityType: string, recordId: string) {
+    if (!actions?.getOperationalRecord) return;
+    const key = `${entityType}:${recordId}`;
+    setReviewBusy(key);
+    setReviewMessage("Loading revision history…");
+    try {
+      const form = new FormData();
+      form.set("entityType", entityType);
+      form.set("recordId", recordId);
+      const result = await actions.getOperationalRecord(form);
+      setHistory((current) => ({ ...current, [key]: result }));
+      setReviewMessage(
+        result.history.length
+          ? "Revision history loaded."
+          : "No amendments recorded.",
+      );
+    } catch {
+      setReviewMessage("Revision history is unavailable for this record.");
+    } finally {
+      setReviewBusy("");
+    }
+  }
+  async function amend(entityType: string, recordId: string, revision: number) {
+    if (!actions?.amendOperationalRecord || reviewBusy) return;
+    const key = `${entityType}:${recordId}`;
+    const reason = (amendmentReason[key] || "").trim();
+    const text = (amendmentText[key] || "").trim();
+    if (reason.length < 3) {
+      setReviewMessage(
+        "Enter a meaningful amendment reason (at least 3 characters).",
+      );
+      return;
+    }
+    if (!text) {
+      setReviewMessage(
+        "Enter the corrected detail before recording an amendment.",
+      );
+      return;
+    }
+    setReviewBusy(key);
+    setReviewMessage("Recording amendment…");
+    try {
+      const form = new FormData();
+      form.set("entityType", entityType);
+      form.set("recordId", recordId);
+      form.set("expectedRevision", String(revision));
+      form.set("reason", reason);
+      form.set("amendment", JSON.stringify({ narrative: text }));
+      form.set(
+        "idempotencyKey",
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${key}-${Date.now()}`,
+      );
+      const result = await actions.amendOperationalRecord(form);
+      setHistory((current) => ({ ...current, [key]: result }));
+      setReviewMessage(
+        "Amendment recorded; original submission remains unchanged.",
+      );
+    } catch {
+      setReviewMessage(
+        "Amendment could not be recorded. Refresh for conflicts, then retry.",
+      );
+    } finally {
+      setReviewBusy("");
+    }
+  }
   return (
     <div className="grid gap-6">
       <section className={panel}>
@@ -101,6 +182,215 @@ export function ReportingWorkspace({
           assignment are confirmed by Nexus.
         </p>
       </section>
+      {state.reviewEnabled ? (
+        <section
+          className={panel}
+          aria-label="Supervisor and operations review"
+        >
+          <h2 className="text-xl font-semibold">
+            Supervisor / operations review
+          </h2>
+          <p className="mt-1 text-[var(--text-muted)]">
+            Review submitted records without rewriting the original report.
+            Acknowledgements and amendments are recorded against your authorized
+            scope.
+          </p>
+          <p
+            aria-live="polite"
+            className="mt-2 text-sm text-[var(--text-muted)]"
+          >
+            {reviewMessage}
+          </p>
+          {[
+            ...state.recent.map((record) => ({
+              entityType: "ActivityEntry",
+              id: record.id,
+              title: `Activity · ${record.category.replaceAll("_", " ")}`,
+              summary: record.narrative,
+              acknowledgedByUserId: record.acknowledgedByUserId,
+            })),
+            ...state.incidents.map((record) => ({
+              entityType: "IncidentReport",
+              id: record.id,
+              title: `Incident · ${record.incidentNumber}`,
+              summary: record.narrative,
+              acknowledgedByUserId: record.acknowledgedByUserId,
+            })),
+            ...state.handoffs.map((record) => ({
+              entityType: "Handoff",
+              id: record.id,
+              title: `Handoff · ${record.siteName} — ${record.postName}`,
+              summary: record.equipmentKeyStatus,
+              acknowledgedByUserId: record.acknowledgedByUserId,
+            })),
+          ].length ? (
+            <div className="mt-3 grid gap-3">
+              {[
+                ...state.recent.map((record) => ({
+                  entityType: "ActivityEntry",
+                  id: record.id,
+                  title: `Activity · ${record.category.replaceAll("_", " ")}`,
+                  summary: record.narrative,
+                  acknowledgedByUserId: record.acknowledgedByUserId,
+                })),
+                ...state.incidents.map((record) => ({
+                  entityType: "IncidentReport",
+                  id: record.id,
+                  title: `Incident · ${record.incidentNumber}`,
+                  summary: record.narrative,
+                  acknowledgedByUserId: record.acknowledgedByUserId,
+                })),
+                ...state.handoffs.map((record) => ({
+                  entityType: "Handoff",
+                  id: record.id,
+                  title: `Handoff · ${record.siteName} — ${record.postName}`,
+                  summary: record.equipmentKeyStatus,
+                  acknowledgedByUserId: record.acknowledgedByUserId,
+                })),
+              ].map((record) => {
+                const key = `${record.entityType}:${record.id}`;
+                const detail = history[key];
+                const revision = detail?.revision ?? 0;
+                const isAcknowledged =
+                  acknowledged[key] || Boolean(record.acknowledgedByUserId);
+                return (
+                  <article
+                    className="rounded-lg border border-white/10 p-3"
+                    key={key}
+                  >
+                    <strong>{record.title}</strong>
+                    <p className="mt-1">{record.summary}</p>
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                      {isAcknowledged
+                        ? `Acknowledged${record.acknowledgedByUserId ? ` by ${record.acknowledgedByUserId}` : ""}`
+                        : "Awaiting acknowledgement"}{" "}
+                      · Revision {revision}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {!isAcknowledged ? (
+                        <button
+                          type="button"
+                          className="min-h-10 rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-medium text-black disabled:opacity-60"
+                          disabled={reviewBusy === key}
+                          onClick={() => {
+                            const form = new FormData();
+                            form.set("entityType", record.entityType);
+                            form.set("recordId", record.id);
+                            if (actions?.acknowledgeOperationalRecord) {
+                              setReviewBusy(key);
+                              setReviewMessage("Acknowledging record…");
+                              actions
+                                .acknowledgeOperationalRecord(form)
+                                .then(() => {
+                                  setAcknowledged((current) => ({
+                                    ...current,
+                                    [key]: true,
+                                  }));
+                                  setReviewMessage("Record acknowledged.");
+                                })
+                                .catch(() =>
+                                  setReviewMessage(
+                                    "Acknowledgement failed. Refresh and retry safely.",
+                                  ),
+                                )
+                                .finally(() => setReviewBusy(""));
+                            }
+                          }}
+                        >
+                          {reviewBusy === key
+                            ? "Acknowledging…"
+                            : "Acknowledge"}
+                        </button>
+                      ) : (
+                        <span className="rounded-lg border border-white/15 px-3 py-2 text-sm">
+                          Acknowledged
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="min-h-10 rounded-lg border border-white/20 px-3 py-2 text-sm"
+                        disabled={reviewBusy === key}
+                        onClick={() =>
+                          loadHistory(record.entityType, record.id)
+                        }
+                      >
+                        {reviewBusy === key ? "Loading…" : "View history"}
+                      </button>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      <label className="text-sm">
+                        Amendment reason
+                        <textarea
+                          className={input}
+                          rows={2}
+                          value={amendmentReason[key] || ""}
+                          onChange={(event) =>
+                            setAmendmentReason((current) => ({
+                              ...current,
+                              [key]: event.target.value,
+                            }))
+                          }
+                          placeholder="Why is this correction needed?"
+                        />
+                      </label>
+                      <label className="text-sm">
+                        Corrected detail
+                        <textarea
+                          className={input}
+                          rows={2}
+                          value={amendmentText[key] || ""}
+                          onChange={(event) =>
+                            setAmendmentText((current) => ({
+                              ...current,
+                              [key]: event.target.value,
+                            }))
+                          }
+                          placeholder="Describe the corrected detail"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="min-h-10 justify-self-start rounded-lg border border-white/20 px-3 py-2 text-sm"
+                        disabled={reviewBusy === key}
+                        onClick={() =>
+                          amend(record.entityType, record.id, revision)
+                        }
+                      >
+                        {reviewBusy === key ? "Recording…" : "Record amendment"}
+                      </button>
+                    </div>
+                    {detail ? (
+                      <div className="mt-3 rounded-lg bg-black/10 p-3 text-sm">
+                        <strong>Immutable history</strong>
+                        {detail.history.length ? (
+                          <ol className="mt-2 grid gap-2">
+                            {detail.history.map((item) => (
+                              <li key={item.revision}>
+                                Revision {item.revision} ·{" "}
+                                {item.changedByUserId} ·{" "}
+                                {new Date(item.changedAt).toLocaleString()} ·{" "}
+                                {item.reason}
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="mt-1 text-[var(--text-muted)]">
+                            No amendments recorded.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-3 text-[var(--text-muted)]">
+              No submitted records are available in your authorized scope.
+            </p>
+          )}
+        </section>
+      ) : null}
       <section className={panel}>
         <h2 className="text-xl font-semibold">End-of-shift handoff</h2>
         <p className="mt-1 text-[var(--text-muted)]">

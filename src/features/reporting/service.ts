@@ -31,6 +31,12 @@ export class ReportingService {
     const { context } = this.access;
     return { organizationId: context.organizationId, ...context.scope };
   }
+  canReview() {
+    return (
+      this.access.context.capabilities.has("VIEW_SITE_OPERATIONS") &&
+      this.access.context.visibility.has("SUPERVISOR")
+    );
+  }
   async listOwnAssignments() {
     const employeeId = this.access.context.scope.employeeId;
     if (!employeeId) throw new ResourceNotFoundError("Employee relationship");

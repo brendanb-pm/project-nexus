@@ -17,7 +17,14 @@ export async function loadReportingPage(
         service.listOwnIncidents(),
         service.listOwnHandoffs(),
       ]);
-      return { kind: "ready", assignments, recent, incidents, handoffs };
+      return {
+        kind: "ready",
+        assignments,
+        recent,
+        incidents,
+        handoffs,
+        reviewEnabled: service.canReview(),
+      };
     } catch (error) {
       if (
         !(error instanceof ResourceNotFoundError) &&
@@ -31,6 +38,7 @@ export async function loadReportingPage(
         recent: [],
         incidents,
         handoffs: [],
+        reviewEnabled: service.canReview(),
       };
     }
   } catch (error) {

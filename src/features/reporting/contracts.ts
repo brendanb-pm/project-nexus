@@ -173,6 +173,7 @@ export type ReportingPageState =
       recent: readonly ActivityEntrySummary[];
       incidents: readonly IncidentReportSummary[];
       handoffs: readonly HandoffSummary[];
+      reviewEnabled?: boolean;
     };
 
 export type ActivityAssignment = {
