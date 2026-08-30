@@ -606,6 +606,10 @@ export const activityEntries = pgTable(
     submissionKey: text("submission_key"),
     visibility: visibilityEnum("visibility").notNull().default("INTERNAL"),
     status: recordStatusEnum("status").notNull().default("DRAFT"),
+    acknowledgedByUserId: uuid("acknowledged_by_user_id").references(
+      () => users.id,
+    ),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -719,6 +723,10 @@ export const handoffs = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     submissionKey: text("submission_key"),
     status: recordStatusEnum("status").notNull().default("DRAFT"),
+    acknowledgedByUserId: uuid("acknowledged_by_user_id").references(
+      () => users.id,
+    ),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
     visibility: visibilityEnum("visibility").notNull().default("INTERNAL"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
