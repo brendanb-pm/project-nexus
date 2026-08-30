@@ -643,9 +643,9 @@ export const incidentReports = pgTable(
     shiftAssignmentId: uuid("shift_assignment_id").references(
       () => shiftAssignments.id,
     ),
-    originatingActivityEntryId: uuid("originating_activity_entry_id").references(
-      () => activityEntries.id,
-    ),
+    originatingActivityEntryId: uuid(
+      "originating_activity_entry_id",
+    ).references(() => activityEntries.id),
     incidentNumber: text("incident_number").notNull(),
     classification: text("classification").notNull(),
     severity: text("severity").notNull(),
