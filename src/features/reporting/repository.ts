@@ -8,6 +8,7 @@ import type {
   IncidentReportSummary,
   IncidentSeverity,
   HandoffSummary,
+  ReviewRecord,
 } from "./contracts";
 
 export type ReportingScope = {
@@ -59,6 +60,30 @@ export type NewHandoff = {
 };
 
 export interface ReportingRepository {
+  getReviewRecord(
+    scope: ReportingScope,
+    entityType: "ActivityEntry" | "IncidentReport" | "Handoff",
+    id: string,
+    historyLimit: number,
+  ): Promise<ReviewRecord | null>;
+  acknowledgeReviewRecord(
+    scope: ReportingScope,
+    record: ReviewRecord,
+    actorUserId: string,
+    acknowledgedAt: string,
+    audit: AuditContext,
+  ): Promise<ReviewRecord>;
+  amendReviewRecord(
+    scope: ReportingScope,
+    record: ReviewRecord,
+    expectedRevision: number,
+    reason: string,
+    amendment: Record<string, unknown>,
+    idempotencyKey: string,
+    actorUserId: string,
+    changedAt: string,
+    audit: AuditContext,
+  ): Promise<ReviewRecord | null>;
   listOwnAssignments(
     scope: ReportingScope,
     employeeId: string,

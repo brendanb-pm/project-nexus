@@ -6,6 +6,9 @@ import {
   type CreateActivityInput,
   type CreateIncidentInput,
   type CreateHandoffInput,
+  operationalRecordTypes,
+  type AcknowledgeOperationalRecordInput,
+  type AmendOperationalRecordInput,
 } from "./contracts";
 import { visibilityClassifications } from "@/domain/model";
 
@@ -48,6 +51,58 @@ export function validateActivity(input: CreateActivityInput) {
       input.followUpRequired === true ||
       input.followUpRequired === "true" ||
       input.followUpRequired === "on",
+  };
+}
+
+export function validateAcknowledgement(
+  input: AcknowledgeOperationalRecordInput,
+) {
+  const entityType = string(input.entityType);
+  const recordId = string(input.recordId);
+  if (
+    !operationalRecordTypes.includes(
+      entityType as (typeof operationalRecordTypes)[number],
+    ) ||
+    !recordId
+  )
+    throw new ValidationError({
+      record: ["Choose a valid operational record."],
+    });
+  return {
+    entityType: entityType as (typeof operationalRecordTypes)[number],
+    recordId,
+  };
+}
+
+export function validateAmendment(input: AmendOperationalRecordInput) {
+  const target = validateAcknowledgement(input);
+  const reason = string(input.reason);
+  const idempotencyKey = string(input.idempotencyKey);
+  const expectedRevision = Number(input.expectedRevision);
+  const amendment =
+    input.amendment &&
+    typeof input.amendment === "object" &&
+    !Array.isArray(input.amendment)
+      ? (input.amendment as Record<string, unknown>)
+      : null;
+  const errors: Record<string, string[]> = {};
+  if (reason.length < 3 || reason.length > 2000)
+    errors.reason = [
+      "Provide a meaningful amendment reason (3–2,000 characters).",
+    ];
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 0)
+    errors.expectedRevision = ["Refresh the record and try again."];
+  if (!idempotencyKey || idempotencyKey.length > 100)
+    errors.idempotencyKey = ["Start a new amendment and try again."];
+  if (!amendment || !Object.keys(amendment).length)
+    errors.amendment = ["Provide the corrected record details."];
+  if (Object.keys(errors).length) throw new ValidationError(errors);
+  return {
+    ...target,
+    reason,
+    expectedRevision,
+    idempotencyKey,
+    amendment: amendment!,
   };
 }
 

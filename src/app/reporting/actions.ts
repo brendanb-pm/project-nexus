@@ -70,3 +70,43 @@ export async function createHandoff(form: FormData) {
     return handoff;
   });
 }
+
+export async function acknowledgeOperationalRecord(form: FormData) {
+  return measureServerAction(
+    "reporting.acknowledge-operational-record",
+    async () => {
+      const service = await createReportingService(
+        await createProductionPrincipalResolver(),
+        "reporting.acknowledge-operational-record",
+      );
+      const record = await service.acknowledgeOperationalRecord({
+        entityType: form.get("entityType"),
+        recordId: form.get("recordId"),
+      });
+      revalidatePath("/reporting");
+      return record;
+    },
+  );
+}
+
+export async function amendOperationalRecord(form: FormData) {
+  return measureServerAction("reporting.amend-operational-record", async () => {
+    const service = await createReportingService(
+      await createProductionPrincipalResolver(),
+      "reporting.amend-operational-record",
+    );
+    const record = await service.amendOperationalRecord({
+      entityType: form.get("entityType"),
+      recordId: form.get("recordId"),
+      expectedRevision: form.get("expectedRevision"),
+      reason: form.get("reason"),
+      amendment: JSON.parse(String(form.get("amendment") || "{}")) as Record<
+        string,
+        unknown
+      >,
+      idempotencyKey: form.get("idempotencyKey"),
+    });
+    revalidatePath("/reporting");
+    return record;
+  });
+}

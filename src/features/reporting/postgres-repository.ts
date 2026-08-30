@@ -7,6 +7,7 @@ import {
   clients,
   incidentReports,
   handoffs,
+  operationalRecordRevisions,
   posts,
   shiftAssignments,
   shifts,
@@ -16,6 +17,7 @@ import type { AuditContext } from "@/server/request/boundary";
 import type {
   ActivityEntrySummary,
   HandoffSummary,
+  ReviewRecord,
   IncidentReportSummary,
 } from "./contracts";
 import { incidentGateFor } from "./incident-gate";
@@ -213,6 +215,181 @@ function handoffDto(row: HandoffRow): HandoffSummary {
 
 export class PostgresReportingRepository implements ReportingRepository {
   constructor(private readonly database: NexusDatabase) {}
+  async getReviewRecord(
+    scope: ReportingScope,
+    entityType: "ActivityEntry" | "IncidentReport" | "Handoff",
+    id: string,
+    historyLimit: number,
+  ): Promise<ReviewRecord | null> {
+    const table =
+      entityType === "ActivityEntry"
+        ? activityEntries
+        : entityType === "IncidentReport"
+          ? incidentReports
+          : handoffs;
+    const rows = await this.database
+      .select({
+        id: table.id,
+        visibility: table.visibility,
+        acknowledgedByUserId: table.acknowledgedByUserId,
+        acknowledgedAt: table.acknowledgedAt,
+        branchId: clients.branchId,
+        clientId: clients.id,
+        siteId: sites.id,
+        organizationId: clients.organizationId,
+      })
+      .from(table)
+      .innerJoin(
+        shiftAssignments,
+        eq(table.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(and(scopePredicate(scope), eq(table.id, id)))
+      .limit(1);
+    const row = rows[0];
+    if (!row?.branchId) return null;
+    const historyRows = await this.database
+      .select({
+        revision: operationalRecordRevisions.revision,
+        changedByUserId: operationalRecordRevisions.changedByUserId,
+        changedAt: operationalRecordRevisions.changedAt,
+        reason: operationalRecordRevisions.reason,
+        snapshot: operationalRecordRevisions.snapshot,
+      })
+      .from(operationalRecordRevisions)
+      .where(
+        and(
+          eq(operationalRecordRevisions.organizationId, scope.organizationId),
+          eq(operationalRecordRevisions.entityType, entityType),
+          eq(operationalRecordRevisions.entityId, id),
+        ),
+      )
+      .orderBy(desc(operationalRecordRevisions.revision))
+      .limit(Math.min(historyLimit, 100));
+    return {
+      entityType,
+      id: row.id,
+      organizationId: row.organizationId,
+      branchId: row.branchId,
+      clientId: row.clientId,
+      siteId: row.siteId,
+      visibility: row.visibility,
+      ...(row.acknowledgedByUserId
+        ? { acknowledgedByUserId: row.acknowledgedByUserId }
+        : {}),
+      ...(row.acknowledgedAt
+        ? { acknowledgedAt: row.acknowledgedAt.toISOString() }
+        : {}),
+      revision: historyRows[0]?.revision ?? 0,
+      snapshot: {},
+      history: historyRows
+        .slice()
+        .reverse()
+        .map((item) => ({
+          revision: item.revision,
+          changedByUserId: item.changedByUserId,
+          changedAt: item.changedAt.toISOString(),
+          reason: item.reason ?? "",
+          snapshot: item.snapshot as Record<string, unknown>,
+        })),
+    };
+  }
+  async acknowledgeReviewRecord(
+    scope: ReportingScope,
+    record: ReviewRecord,
+    actorUserId: string,
+    acknowledgedAt: string,
+    audit: AuditContext,
+  ) {
+    const table =
+      record.entityType === "ActivityEntry"
+        ? activityEntries
+        : record.entityType === "IncidentReport"
+          ? incidentReports
+          : handoffs;
+    await this.database.transaction(async (tx) => {
+      await tx
+        .update(table)
+        .set({
+          acknowledgedByUserId: actorUserId,
+          acknowledgedAt: new Date(acknowledgedAt),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(table.id, record.id),
+            sql`${table.acknowledgedByUserId} is null`,
+          ),
+        );
+      await tx.insert(auditEvents).values({
+        organizationId: audit.organizationId,
+        actorUserId: audit.actorUserId,
+        action: "operational-record.acknowledged",
+        entityType: record.entityType,
+        entityId: record.id,
+        requestId: audit.requestId,
+        sessionId: audit.sessionId,
+        afterState: { acknowledgedAt },
+      });
+    });
+    return (await this.getReviewRecord(
+      scope,
+      record.entityType,
+      record.id,
+      25,
+    ))!;
+  }
+  async amendReviewRecord(
+    scope: ReportingScope,
+    record: ReviewRecord,
+    expectedRevision: number,
+    reason: string,
+    amendment: Record<string, unknown>,
+    idempotencyKey: string,
+    actorUserId: string,
+    changedAt: string,
+    audit: AuditContext,
+  ) {
+    const duplicate = record.history.find(
+      (item) => item.snapshot.idempotencyKey === idempotencyKey,
+    );
+    if (duplicate) return record;
+    if (record.revision !== expectedRevision) return null;
+    await this.database.transaction(async (tx) => {
+      const auditRows = await tx
+        .insert(auditEvents)
+        .values({
+          organizationId: audit.organizationId,
+          actorUserId: audit.actorUserId,
+          action: "operational-record.amended",
+          entityType: record.entityType,
+          entityId: record.id,
+          requestId: audit.requestId,
+          sessionId: audit.sessionId,
+          reason,
+          beforeState: record.snapshot,
+          afterState: amendment,
+          metadata: { idempotencyKey },
+        })
+        .returning({ id: auditEvents.id });
+      await tx.insert(operationalRecordRevisions).values({
+        organizationId: scope.organizationId,
+        entityType: record.entityType,
+        entityId: record.id,
+        revision: expectedRevision + 1,
+        status: "AMENDED",
+        snapshot: { ...record.snapshot, ...amendment, idempotencyKey },
+        changedByUserId: actorUserId,
+        changedAt: new Date(changedAt),
+        reason,
+        auditEventId: auditRows[0]!.id,
+      });
+    });
+    return this.getReviewRecord(scope, record.entityType, record.id, 25);
+  }
   async listOwnAssignments(
     scope: ReportingScope,
     employeeId: string,

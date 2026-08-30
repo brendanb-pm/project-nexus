@@ -33,6 +33,8 @@ export type ActivityEntrySummary = {
   status: "SUBMITTED";
   createdAt: string;
   incidentGate: IncidentGateOutcome;
+  acknowledgedByUserId?: string;
+  acknowledgedAt?: string;
 };
 
 export const incidentClassifications = [
@@ -67,6 +69,8 @@ export type IncidentReportSummary = {
   status: "SUBMITTED";
   visibility: VisibilityClassification;
   createdAt: string;
+  acknowledgedByUserId?: string;
+  acknowledgedAt?: string;
 };
 
 export type HandoffSummary = {
@@ -81,6 +85,48 @@ export type HandoffSummary = {
   status: "SUBMITTED";
   visibility: VisibilityClassification;
   createdAt: string;
+  acknowledgedByUserId?: string;
+  acknowledgedAt?: string;
+};
+
+export const operationalRecordTypes = [
+  "ActivityEntry",
+  "IncidentReport",
+  "Handoff",
+] as const;
+export type OperationalRecordType = (typeof operationalRecordTypes)[number];
+export type OperationalRevision = {
+  revision: number;
+  changedByUserId: string;
+  changedAt: string;
+  reason: string;
+  snapshot: Record<string, unknown>;
+};
+export type ReviewRecord = {
+  entityType: OperationalRecordType;
+  id: string;
+  organizationId: string;
+  branchId: string;
+  clientId: string;
+  siteId: string;
+  visibility: VisibilityClassification;
+  acknowledgedByUserId?: string;
+  acknowledgedAt?: string;
+  revision: number;
+  snapshot: Record<string, unknown>;
+  history: readonly OperationalRevision[];
+};
+export type AcknowledgeOperationalRecordInput = {
+  entityType: unknown;
+  recordId: unknown;
+};
+export type AmendOperationalRecordInput = {
+  entityType: unknown;
+  recordId: unknown;
+  expectedRevision: unknown;
+  reason: unknown;
+  amendment: unknown;
+  idempotencyKey: unknown;
 };
 
 export type CreateActivityInput = {
