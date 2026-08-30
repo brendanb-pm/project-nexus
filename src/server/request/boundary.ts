@@ -54,16 +54,26 @@ export class AuthorizedDataAccess {
     const authorizedResource = scope.organizationWide
       ? { organizationId: resource.organizationId }
       : resource.siteId && scope.siteIds.includes(resource.siteId)
-        ? { organizationId: resource.organizationId, siteId: resource.siteId }
+        ? {
+            organizationId: resource.organizationId,
+            siteId: resource.siteId,
+            ...(resource.employeeId ? { employeeId: resource.employeeId } : {}),
+          }
         : resource.clientId && scope.clientIds.includes(resource.clientId)
           ? {
               organizationId: resource.organizationId,
               clientId: resource.clientId,
+              ...(resource.employeeId
+                ? { employeeId: resource.employeeId }
+                : {}),
             }
           : resource.branchId && scope.branchIds.includes(resource.branchId)
             ? {
                 organizationId: resource.organizationId,
                 branchId: resource.branchId,
+                ...(resource.employeeId
+                  ? { employeeId: resource.employeeId }
+                  : {}),
               }
             : resource;
     this.requireAny(capabilities, authorizedResource);

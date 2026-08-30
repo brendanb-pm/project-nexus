@@ -401,17 +401,28 @@ export const certifications = pgTable(
     ),
   ],
 );
-export const availability = pgTable("availability", {
-  id: id(),
-  employeeId: uuid("employee_id")
-    .notNull()
-    .references(() => employees.id),
-  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
-  status: text("status").notNull(),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const availability = pgTable(
+  "availability",
+  {
+    id: id(),
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    status: text("status").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("availability_employee_start_idx").on(t.employeeId, t.startsAt),
+    check("availability_time_order_check", sql`${t.endsAt} > ${t.startsAt}`),
+    check(
+      "availability_status_check",
+      sql`${t.status} in ('AVAILABLE', 'UNAVAILABLE')`,
+    ),
+  ],
+);
 
 export const shifts = pgTable(
   "shifts",
@@ -424,12 +435,27 @@ export const shifts = pgTable(
       withTimezone: true,
     }).notNull(),
     scheduledEnd: timestamp("scheduled_end", { withTimezone: true }).notNull(),
+    timezone: text("timezone").notNull(),
     status: text("status").notNull(),
     staffingRequirement: integer("staffing_requirement").notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("shifts_post_start_idx").on(t.postId, t.scheduledStart)],
+  (t) => [
+    index("shifts_post_start_idx").on(t.postId, t.scheduledStart),
+    check(
+      "shifts_time_order_check",
+      sql`${t.scheduledEnd} > ${t.scheduledStart}`,
+    ),
+    check(
+      "shifts_staffing_check",
+      sql`${t.staffingRequirement} between 1 and 100`,
+    ),
+    check(
+      "shifts_status_check",
+      sql`${t.status} in ('DRAFT', 'PUBLISHED', 'COMPLETED', 'CANCELLED')`,
+    ),
+  ],
 );
 export const shiftAssignments = pgTable(
   "shift_assignments",
@@ -443,6 +469,10 @@ export const shiftAssignments = pgTable(
       .references(() => employees.id),
     status: text("status").notNull(),
     assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull(),
+    availabilityStatus: text("availability_status")
+      .notNull()
+      .default("UNKNOWN"),
+    warnings: jsonb("warnings").notNull().default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -451,33 +481,111 @@ export const shiftAssignments = pgTable(
       t.shiftId,
       t.employeeId,
     ),
+    index("shift_assignments_employee_idx").on(t.employeeId, t.status),
+    check(
+      "shift_assignments_status_check",
+      sql`${t.status} in ('assigned', 'confirmed', 'cancelled')`,
+    ),
+    check(
+      "shift_assignments_availability_check",
+      sql`${t.availabilityStatus} in ('AVAILABLE', 'UNAVAILABLE', 'UNKNOWN')`,
+    ),
   ],
 );
-export const clockEvents = pgTable("clock_events", {
-  id: id(),
-  shiftAssignmentId: uuid("shift_assignment_id")
-    .notNull()
-    .references(() => shiftAssignments.id),
-  eventType: text("event_type").notNull(),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  geolocation: jsonb("geolocation"),
-  verificationStatus: text("verification_status").notNull(),
-  exceptionReason: text("exception_reason"),
-  createdAt: createdAt(),
-});
-export const timeRecords = pgTable("time_records", {
-  id: id(),
-  shiftAssignmentId: uuid("shift_assignment_id")
-    .notNull()
-    .references(() => shiftAssignments.id),
-  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-  endsAt: timestamp("ends_at", { withTimezone: true }),
-  minutesWorked: integer("minutes_worked"),
-  status: recordStatusEnum("status").notNull().default("DRAFT"),
-  approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const clockEvents = pgTable(
+  "clock_events",
+  {
+    id: id(),
+    shiftAssignmentId: uuid("shift_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    eventType: text("event_type").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    effectiveAt: timestamp("effective_at", { withTimezone: true }).notNull(),
+    recordedByUserId: uuid("recorded_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    geolocation: jsonb("geolocation"),
+    verificationStatus: text("verification_status").notNull(),
+    exceptionReason: text("exception_reason"),
+    exceptionReasons: jsonb("exception_reasons").notNull().default([]),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("clock_events_assignment_time_idx").on(
+      t.shiftAssignmentId,
+      t.occurredAt,
+    ),
+    check(
+      "clock_events_type_check",
+      sql`${t.eventType} in ('CLOCK_IN', 'CLOCK_OUT')`,
+    ),
+    check(
+      "clock_events_verification_check",
+      sql`${t.verificationStatus} in ('NORMAL', 'EXCEPTION_REQUIRED')`,
+    ),
+  ],
+);
+export const clockEventCorrections = pgTable(
+  "clock_event_corrections",
+  {
+    id: id(),
+    clockEventId: uuid("clock_event_id")
+      .notNull()
+      .references(() => clockEvents.id),
+    revision: integer("revision").notNull(),
+    originalEffectiveAt: timestamp("original_effective_at", {
+      withTimezone: true,
+    }).notNull(),
+    correctedEffectiveAt: timestamp("corrected_effective_at", {
+      withTimezone: true,
+    }).notNull(),
+    correctedByUserId: uuid("corrected_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    correctedAt: timestamp("corrected_at", { withTimezone: true }).notNull(),
+    reason: text("reason").notNull(),
+  },
+  (t) => [
+    uniqueIndex("clock_event_corrections_revision_uidx").on(
+      t.clockEventId,
+      t.revision,
+    ),
+    check("clock_event_corrections_revision_check", sql`${t.revision} > 0`),
+    check(
+      "clock_event_corrections_reason_check",
+      sql`length(trim(${t.reason})) > 0`,
+    ),
+  ],
+);
+export const timeRecords = pgTable(
+  "time_records",
+  {
+    id: id(),
+    shiftAssignmentId: uuid("shift_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    minutesWorked: integer("minutes_worked"),
+    secondsWorked: integer("seconds_worked"),
+    pairs: jsonb("pairs").notNull().default([]),
+    revision: integer("revision").notNull().default(0),
+    status: recordStatusEnum("status").notNull().default("DRAFT"),
+    approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("time_records_assignment_uidx").on(t.shiftAssignmentId),
+    check(
+      "time_records_seconds_check",
+      sql`${t.secondsWorked} is null or ${t.secondsWorked} >= 0`,
+    ),
+    check("time_records_revision_check", sql`${t.revision} >= 0`),
+  ],
+);
 export const activityEntries = pgTable("activity_entries", {
   id: id(),
   shiftAssignmentId: uuid("shift_assignment_id")
@@ -716,6 +824,30 @@ export const auditEvents = pgTable(
       t.entityId,
     ),
     index("audit_events_occurred_idx").on(t.occurredAt),
+  ],
+);
+export const timeApprovals = pgTable(
+  "time_approvals",
+  {
+    id: id(),
+    timeRecordId: uuid("time_record_id")
+      .notNull()
+      .references(() => timeRecords.id),
+    revision: integer("revision").notNull(),
+    snapshot: jsonb("snapshot").notNull(),
+    approvedByUserId: uuid("approved_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }).notNull(),
+    auditEventId: uuid("audit_event_id")
+      .notNull()
+      .references(() => auditEvents.id),
+  },
+  (t) => [
+    uniqueIndex("time_approvals_record_revision_uidx").on(
+      t.timeRecordId,
+      t.revision,
+    ),
   ],
 );
 export const operationalRecordRevisions = pgTable(
