@@ -67,6 +67,46 @@ describe("performance instrumentation", () => {
     expect(event).not.toContain("tenant");
   });
 
+  it("counts pooled reads once when the pool delegates to an instrumented client", async () => {
+    const samples: RequestPerformanceSample[] = [];
+    const client: QueryableClient = {
+      query: async () => ({ rowCount: 1 }),
+    };
+    const pool: QueryableClient = {
+      query: async (...arguments_) => client.query(...arguments_),
+    };
+    instrumentPgClient(client);
+    instrumentPgClient(pool, { delegatesQueries: true });
+
+    await measureRequest(
+      "organization-admin.read",
+      () => pool.query("select") as Promise<unknown>,
+      (sample) => samples.push(sample),
+    );
+
+    expect(samples[0]).toMatchObject({ queryCount: 1, rowsReturned: 1 });
+  });
+
+  it("retains both independent pooled reads in one request", async () => {
+    const samples: RequestPerformanceSample[] = [];
+    const client: QueryableClient = {
+      query: async () => ({ rowCount: 1 }),
+    };
+    const pool: QueryableClient = {
+      query: async (...arguments_) => client.query(...arguments_),
+    };
+    instrumentPgClient(client);
+    instrumentPgClient(pool, { delegatesQueries: true });
+
+    await measureRequest(
+      "organization-admin.read",
+      async () => Promise.all([pool.query("first"), pool.query("second")]),
+      (sample) => samples.push(sample),
+    );
+
+    expect(samples[0]).toMatchObject({ queryCount: 2, rowsReturned: 2 });
+  });
+
   it("summarizes repeatable p50 and p95 measurements by operation", () => {
     expect(percentile([1, 2, 3, 4], 0.95)).toBe(4);
     expect(

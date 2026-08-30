@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { NexusDatabase } from "@/server/db/client";
 import type { AuditContext } from "@/server/request/boundary";
+import { matchesUpdatedAt } from "@/server/db/optimistic-concurrency";
 import {
   assets,
   auditEvents,
@@ -395,7 +396,7 @@ export class PostgresSiteAdminRepository implements SiteAdminRepository {
           and(
             eq(sites.id, siteId),
             eq(sites.clientId, input.clientId),
-            eq(sites.updatedAt, new Date(expected)),
+            matchesUpdatedAt(sites.updatedAt, expected),
           ),
         )
         .returning({
@@ -536,7 +537,7 @@ export class PostgresSiteAdminRepository implements SiteAdminRepository {
           and(
             eq(posts.id, postId),
             eq(posts.siteId, input.siteId),
-            eq(posts.updatedAt, new Date(expected)),
+            matchesUpdatedAt(posts.updatedAt, expected),
           ),
         )
         .returning(postProjection);
