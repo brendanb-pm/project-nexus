@@ -58,6 +58,12 @@ class Repo implements ReportingRepository {
       status: "SUBMITTED" as const,
       createdAt: input.occurredAt,
       submissionKey: input.submissionKey,
+      incidentGate:
+        input.category === "REPORTABLE_INCIDENT"
+          ? ("REQUIRED" as const)
+          : input.category === "SAFETY_CONCERN"
+            ? ("SUGGESTED" as const)
+            : ("ROUTINE" as const),
     };
     this.entries.push(entry);
     return entry;
@@ -151,5 +157,21 @@ describe("NX-3.1 activity reporting", () => {
       }),
     ).rejects.toThrow(/current assignment/i);
     expect(repo.entries).toHaveLength(0);
+  });
+
+  it("persists an explainable reportable-incident gate without creating an incident", async () => {
+    const { repo, request } = await subject();
+    const entry = await new ReportingService(
+      new AuthorizedDataAccess(request),
+      repo,
+      () => new Date("2026-08-29T12:00:00.000Z"),
+    ).createActivity({
+      shiftAssignmentId: "assignment-1",
+      category: "REPORTABLE_INCIDENT",
+      narrative: "Unauthorized entry reported.",
+      submissionKey: "incident-gate",
+    });
+    expect(entry.incidentGate).toBe("REQUIRED");
+    expect(repo.entries).toHaveLength(1);
   });
 });

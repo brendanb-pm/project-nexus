@@ -1,6 +1,10 @@
 "use client";
 import { useState } from "react";
-import type { ReportingPageState } from "@/features/reporting/contracts";
+import type {
+  ActivityEntrySummary,
+  ReportingPageState,
+} from "@/features/reporting/contracts";
+import { incidentGateMessage } from "@/features/reporting/incident-gate";
 const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
 const input =
   "mt-1 w-full rounded-lg border border-white/15 bg-[var(--background)] px-3 py-2";
@@ -9,7 +13,7 @@ export function ReportingWorkspace({
   actions,
 }: {
   state: ReportingPageState;
-  actions?: { createActivity(form: FormData): Promise<unknown> };
+  actions?: { createActivity(form: FormData): Promise<ActivityEntrySummary> };
 }) {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -30,8 +34,10 @@ export function ReportingWorkspace({
     setSubmitting(true);
     setMessage("Submitting activity…");
     try {
-      await actions.createActivity(form);
-      setMessage("Activity recorded.");
+      const entry = await actions.createActivity(form);
+      setMessage(
+        `Activity recorded. ${incidentGateMessage(entry.incidentGate)}`,
+      );
     } catch {
       setMessage(
         "Your activity was not submitted. Review the entry and try again.",
@@ -70,6 +76,8 @@ export function ReportingWorkspace({
                 <option value="OBSERVATION">Observation</option>
                 <option value="ACCESS_CONTROL">Access control</option>
                 <option value="SAFETY_CHECK">Safety check</option>
+                <option value="SAFETY_CONCERN">Safety concern</option>
+                <option value="REPORTABLE_INCIDENT">Reportable incident</option>
                 <option value="CUSTOMER_SERVICE">Customer service</option>
                 <option value="OTHER">Other</option>
               </select>
@@ -125,6 +133,11 @@ export function ReportingWorkspace({
                 <p className="mt-1">{entry.narrative}</p>
                 {entry.followUpRequired ? (
                   <p className="mt-1 text-sm">Follow-up required</p>
+                ) : null}
+                {entry.incidentGate !== "ROUTINE" ? (
+                  <p className="mt-1 text-sm">
+                    {incidentGateMessage(entry.incidentGate)}
+                  </p>
                 ) : null}
               </article>
             ))}

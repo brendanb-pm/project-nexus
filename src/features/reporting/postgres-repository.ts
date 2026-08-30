@@ -12,6 +12,7 @@ import {
 } from "@/server/db/schema";
 import type { AuditContext } from "@/server/request/boundary";
 import type { ActivityEntrySummary } from "./contracts";
+import { incidentGateFor } from "./incident-gate";
 import type {
   ActivityContext,
   NewActivity,
@@ -41,6 +42,8 @@ const fields = {
   description: activityEntries.description,
   actionTaken: activityEntries.actionTaken,
   followUpRequired: activityEntries.followUpRequired,
+  incidentRelated: activityEntries.incidentRelated,
+  incidentGate: activityEntries.incidentGate,
   visibility: activityEntries.visibility,
   status: activityEntries.status,
   createdAt: activityEntries.createdAt,
@@ -55,6 +58,8 @@ type ActivityRow = {
   description: unknown;
   actionTaken: string | null;
   followUpRequired: boolean;
+  incidentRelated: boolean;
+  incidentGate: string;
   visibility: ActivityEntrySummary["visibility"];
   status: string;
   createdAt: Date;
@@ -83,6 +88,7 @@ function dto(row: ActivityRow): ActivityEntrySummary {
     visibility: row.visibility,
     status: "SUBMITTED",
     createdAt: row.createdAt.toISOString(),
+    incidentGate: row.incidentGate as ActivityEntrySummary["incidentGate"],
   };
 }
 
@@ -216,6 +222,8 @@ export class PostgresReportingRepository implements ReportingRepository {
           },
           actionTaken: input.actionTaken,
           followUpRequired: input.followUpRequired,
+          incidentRelated: incidentGateFor(input.category) !== "ROUTINE",
+          incidentGate: incidentGateFor(input.category),
           visibility: input.visibility,
           status: "SUBMITTED",
           submissionKey: input.submissionKey,
