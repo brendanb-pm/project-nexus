@@ -706,20 +706,30 @@ export const incidentAttachments = pgTable("incident_attachments", {
     .references(() => users.id),
   createdAt: createdAt(),
 });
-export const handoffs = pgTable("handoffs", {
-  id: id(),
-  shiftAssignmentId: uuid("shift_assignment_id")
-    .notNull()
-    .references(() => shiftAssignments.id),
-  unresolvedIssues: jsonb("unresolved_issues").notNull().default([]),
-  equipmentKeyStatus: jsonb("equipment_key_status").notNull().default({}),
-  followUpItems: jsonb("follow_up_items").notNull().default([]),
-  submittedAt: timestamp("submitted_at", { withTimezone: true }),
-  status: recordStatusEnum("status").notNull().default("DRAFT"),
-  visibility: visibilityEnum("visibility").notNull().default("INTERNAL"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const handoffs = pgTable(
+  "handoffs",
+  {
+    id: id(),
+    shiftAssignmentId: uuid("shift_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    unresolvedIssues: jsonb("unresolved_issues").notNull().default([]),
+    equipmentKeyStatus: jsonb("equipment_key_status").notNull().default({}),
+    followUpItems: jsonb("follow_up_items").notNull().default([]),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    submissionKey: text("submission_key"),
+    status: recordStatusEnum("status").notNull().default("DRAFT"),
+    visibility: visibilityEnum("visibility").notNull().default("INTERNAL"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("handoffs_assignment_submission_key_uidx").on(
+      t.shiftAssignmentId,
+      t.submissionKey,
+    ),
+  ],
+);
 
 export const assets = pgTable(
   "assets",

@@ -6,17 +6,23 @@ import {
   auditEvents,
   clients,
   incidentReports,
+  handoffs,
   posts,
   shiftAssignments,
   shifts,
   sites,
 } from "@/server/db/schema";
 import type { AuditContext } from "@/server/request/boundary";
-import type { ActivityEntrySummary, IncidentReportSummary } from "./contracts";
+import type {
+  ActivityEntrySummary,
+  HandoffSummary,
+  IncidentReportSummary,
+} from "./contracts";
 import { incidentGateFor } from "./incident-gate";
 import type {
   ActivityContext,
   NewIncident,
+  NewHandoff,
   NewActivity,
   ReportingRepository,
   ReportingScope,
@@ -146,6 +152,59 @@ function incidentDto(row: IncidentRow): IncidentReportSummary {
     ...(row.externalReportNumber
       ? { externalReportNumber: row.externalReportNumber }
       : {}),
+    status: "SUBMITTED",
+    visibility: row.visibility,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+const handoffFields = {
+  id: handoffs.id,
+  shiftAssignmentId: handoffs.shiftAssignmentId,
+  unresolvedIssues: handoffs.unresolvedIssues,
+  equipmentKeyStatus: handoffs.equipmentKeyStatus,
+  followUpItems: handoffs.followUpItems,
+  submittedAt: handoffs.submittedAt,
+  status: handoffs.status,
+  visibility: handoffs.visibility,
+  createdAt: handoffs.createdAt,
+  siteName: sites.name,
+  postName: posts.name,
+};
+type HandoffRow = {
+  id: string;
+  shiftAssignmentId: string;
+  unresolvedIssues: unknown;
+  equipmentKeyStatus: unknown;
+  followUpItems: unknown;
+  submittedAt: Date | null;
+  status: string;
+  visibility: HandoffSummary["visibility"];
+  createdAt: Date;
+  siteName: string;
+  postName: string;
+};
+function stringList(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+function handoffDto(row: HandoffRow): HandoffSummary {
+  if (!row.submittedAt)
+    throw new Error("Submitted handoff timestamp is required");
+  return {
+    id: row.id,
+    shiftAssignmentId: row.shiftAssignmentId,
+    siteName: row.siteName,
+    postName: row.postName,
+    unresolvedIssues: stringList(row.unresolvedIssues),
+    equipmentKeyStatus:
+      row.equipmentKeyStatus && typeof row.equipmentKeyStatus === "object"
+        ? ((row.equipmentKeyStatus as { summary?: unknown })
+            .summary as string) || ""
+        : "",
+    followUpItems: stringList(row.followUpItems),
+    submittedAt: row.submittedAt.toISOString(),
     status: "SUBMITTED",
     visibility: row.visibility,
     createdAt: row.createdAt.toISOString(),
@@ -467,6 +526,101 @@ export class PostgresReportingRepository implements ReportingRepository {
         .where(eq(incidentReports.id, id))
         .limit(1);
       return incidentDto(created[0]!);
+    });
+  }
+  async listOwnHandoffs(
+    scope: ReportingScope,
+    employeeId: string,
+    limit: number,
+  ) {
+    const rows = await this.database
+      .select(handoffFields)
+      .from(handoffs)
+      .innerJoin(
+        shiftAssignments,
+        eq(handoffs.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(scopePredicate(scope), eq(shiftAssignments.employeeId, employeeId)),
+      )
+      .orderBy(desc(handoffs.submittedAt), desc(handoffs.id))
+      .limit(limit);
+    return rows.map(handoffDto);
+  }
+  async createHandoff(
+    scope: ReportingScope,
+    context: ActivityContext,
+    input: NewHandoff,
+    audit: AuditContext,
+  ) {
+    return this.database.transaction(async (tx) => {
+      const existing = await tx
+        .select(handoffFields)
+        .from(handoffs)
+        .innerJoin(
+          shiftAssignments,
+          eq(handoffs.shiftAssignmentId, shiftAssignments.id),
+        )
+        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+        .innerJoin(posts, eq(shifts.postId, posts.id))
+        .innerJoin(sites, eq(posts.siteId, sites.id))
+        .innerJoin(clients, eq(sites.clientId, clients.id))
+        .where(
+          and(
+            scopePredicate(scope),
+            eq(handoffs.shiftAssignmentId, context.id),
+            eq(handoffs.submissionKey, input.submissionKey),
+          ),
+        )
+        .limit(1);
+      if (existing[0]) return handoffDto(existing[0]);
+      const inserted = await tx
+        .insert(handoffs)
+        .values({
+          shiftAssignmentId: context.id,
+          unresolvedIssues: input.unresolvedIssues,
+          equipmentKeyStatus: { summary: input.equipmentKeyStatus },
+          followUpItems: input.followUpItems,
+          submittedAt: new Date(input.submittedAt),
+          submissionKey: input.submissionKey,
+          status: "SUBMITTED",
+          visibility: input.visibility,
+        })
+        .returning({ id: handoffs.id });
+      const id = inserted[0]!.id;
+      await tx.insert(auditEvents).values({
+        organizationId: audit.organizationId,
+        actorUserId: audit.actorUserId,
+        action: "handoff.submitted",
+        entityType: "Handoff",
+        entityId: id,
+        requestId: audit.requestId,
+        sessionId: audit.sessionId,
+        afterState: {
+          shiftAssignmentId: context.id,
+          unresolvedIssueCount: input.unresolvedIssues.length,
+          followUpItemCount: input.followUpItems.length,
+          visibility: input.visibility,
+        },
+      });
+      const created = await tx
+        .select(handoffFields)
+        .from(handoffs)
+        .innerJoin(
+          shiftAssignments,
+          eq(handoffs.shiftAssignmentId, shiftAssignments.id),
+        )
+        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+        .innerJoin(posts, eq(shifts.postId, posts.id))
+        .innerJoin(sites, eq(posts.siteId, sites.id))
+        .innerJoin(clients, eq(sites.clientId, clients.id))
+        .where(eq(handoffs.id, id))
+        .limit(1);
+      return handoffDto(created[0]!);
     });
   }
 }

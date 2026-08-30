@@ -11,12 +11,13 @@ export async function loadReportingPage(
   try {
     const service = await serviceOrPromise;
     try {
-      const [assignments, recent, incidents] = await Promise.all([
+      const [assignments, recent, incidents, handoffs] = await Promise.all([
         service.listOwnAssignments(),
         service.listOwnRecent(),
         service.listOwnIncidents(),
+        service.listOwnHandoffs(),
       ]);
-      return { kind: "ready", assignments, recent, incidents };
+      return { kind: "ready", assignments, recent, incidents, handoffs };
     } catch (error) {
       if (
         !(error instanceof ResourceNotFoundError) &&
@@ -24,7 +25,13 @@ export async function loadReportingPage(
       )
         throw error;
       const incidents = await service.listAuthorizedIncidents();
-      return { kind: "ready", assignments: [], recent: [], incidents };
+      return {
+        kind: "ready",
+        assignments: [],
+        recent: [],
+        incidents,
+        handoffs: [],
+      };
     }
   } catch (error) {
     if (

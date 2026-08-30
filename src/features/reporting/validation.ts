@@ -5,6 +5,7 @@ import {
   incidentSeverities,
   type CreateActivityInput,
   type CreateIncidentInput,
+  type CreateHandoffInput,
 } from "./contracts";
 import { visibilityClassifications } from "@/domain/model";
 
@@ -101,5 +102,50 @@ export function validateIncident(input: CreateIncidentInput) {
       input.emergencyServiceInvolvement === "true" ||
       input.emergencyServiceInvolvement === "on",
     externalReportNumber: string(input.externalReportNumber) || undefined,
+  };
+}
+
+function list(value: unknown, field: string, errors: Record<string, string[]>) {
+  const entries = string(value)
+    .split("\n")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (entries.some((entry) => entry.length > 500))
+    errors[field] = ["Keep each item under 500 characters."];
+  if (entries.length > 25) errors[field] = ["Provide no more than 25 items."];
+  return entries;
+}
+
+export function validateHandoff(input: CreateHandoffInput) {
+  const submissionKey = string(input.submissionKey);
+  const visibility = string(input.visibility) || "INTERNAL";
+  const equipmentKeyStatus = string(input.equipmentKeyStatus);
+  const errors: Record<string, string[]> = {};
+  const unresolvedIssues = list(
+    input.unresolvedIssues,
+    "unresolvedIssues",
+    errors,
+  );
+  const followUpItems = list(input.followUpItems, "followUpItems", errors);
+  if (equipmentKeyStatus.length > 2000)
+    errors.equipmentKeyStatus = [
+      "Keep equipment and key status under 2,000 characters.",
+    ];
+  if (!submissionKey || submissionKey.length > 100)
+    errors.submissionKey = ["Start a new submission and try again."];
+  if (
+    !visibilityClassifications.includes(
+      visibility as (typeof visibilityClassifications)[number],
+    )
+  )
+    errors.visibility = ["Choose a valid visibility level."];
+  if (Object.keys(errors).length) throw new ValidationError(errors);
+  return {
+    shiftAssignmentId: string(input.shiftAssignmentId),
+    unresolvedIssues,
+    equipmentKeyStatus,
+    followUpItems,
+    submissionKey,
+    visibility: visibility as (typeof visibilityClassifications)[number],
   };
 }
