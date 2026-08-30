@@ -7,6 +7,7 @@ import type {
   IncidentClassification,
   IncidentReportSummary,
   IncidentSeverity,
+  HandoffSummary,
 } from "./contracts";
 
 export type ReportingScope = {
@@ -45,6 +46,14 @@ export type NewIncident = {
   actionsTaken: string;
   emergencyServiceInvolvement: boolean;
   externalReportNumber?: string;
+  visibility: VisibilityClassification;
+  submissionKey: string;
+};
+export type NewHandoff = {
+  unresolvedIssues: readonly string[];
+  equipmentKeyStatus: string;
+  followUpItems: readonly string[];
+  submittedAt: string;
   visibility: VisibilityClassification;
   submissionKey: string;
 };
@@ -91,4 +100,15 @@ export interface ReportingRepository {
     input: NewIncident,
     audit: AuditContext,
   ): Promise<IncidentReportSummary>;
+  listOwnHandoffs(
+    scope: ReportingScope,
+    employeeId: string,
+    limit: number,
+  ): Promise<readonly HandoffSummary[]>;
+  createHandoff(
+    scope: ReportingScope,
+    context: ActivityContext,
+    input: NewHandoff,
+    audit: AuditContext,
+  ): Promise<HandoffSummary>;
 }

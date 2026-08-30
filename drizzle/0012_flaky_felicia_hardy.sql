@@ -1,0 +1,2 @@
+ALTER TABLE "handoffs" ADD COLUMN "submission_key" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "handoffs_assignment_submission_key_uidx" ON "handoffs" USING btree ("shift_assignment_id","submission_key");

@@ -69,6 +69,20 @@ export type IncidentReportSummary = {
   createdAt: string;
 };
 
+export type HandoffSummary = {
+  id: string;
+  shiftAssignmentId: string;
+  siteName: string;
+  postName: string;
+  unresolvedIssues: readonly string[];
+  equipmentKeyStatus: string;
+  followUpItems: readonly string[];
+  submittedAt: string;
+  status: "SUBMITTED";
+  visibility: VisibilityClassification;
+  createdAt: string;
+};
+
 export type CreateActivityInput = {
   shiftAssignmentId: unknown;
   category: unknown;
@@ -95,6 +109,15 @@ export type CreateIncidentInput = {
   submissionKey: unknown;
 };
 
+export type CreateHandoffInput = {
+  shiftAssignmentId: unknown;
+  unresolvedIssues?: unknown;
+  equipmentKeyStatus?: unknown;
+  followUpItems?: unknown;
+  visibility?: unknown;
+  submissionKey: unknown;
+};
+
 export type ReportingPageState =
   | { kind: "permission-denied"; message: string }
   | { kind: "error"; message: string; retryable: boolean }
@@ -103,6 +126,7 @@ export type ReportingPageState =
       assignments: readonly ActivityAssignment[];
       recent: readonly ActivityEntrySummary[];
       incidents: readonly IncidentReportSummary[];
+      handoffs: readonly HandoffSummary[];
     };
 
 export type ActivityAssignment = {

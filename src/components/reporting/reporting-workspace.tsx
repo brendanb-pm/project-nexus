@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type {
   ActivityEntrySummary,
+  HandoffSummary,
   IncidentReportSummary,
   ReportingPageState,
 } from "@/features/reporting/contracts";
@@ -17,11 +18,13 @@ export function ReportingWorkspace({
   actions?: {
     createActivity(form: FormData): Promise<ActivityEntrySummary>;
     createIncident(form: FormData): Promise<IncidentReportSummary>;
+    createHandoff(form: FormData): Promise<HandoffSummary>;
   };
 }) {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submittingIncident, setSubmittingIncident] = useState(false);
+  const [submittingHandoff, setSubmittingHandoff] = useState(false);
   const [submissionKey] = useState(() =>
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -31,6 +34,11 @@ export function ReportingWorkspace({
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
       : "incident-report",
+  );
+  const [handoffSubmissionKey] = useState(() =>
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : "handoff",
   );
   if (state.kind !== "ready")
     return (
@@ -71,6 +79,19 @@ export function ReportingWorkspace({
       setSubmittingIncident(false);
     }
   }
+  async function submitHandoff(form: FormData) {
+    if (!actions || submittingHandoff) return;
+    setSubmittingHandoff(true);
+    setMessage("Submitting handoff…");
+    try {
+      await actions.createHandoff(form);
+      setMessage("Handoff submitted for the next shift.");
+    } catch {
+      setMessage("Your handoff was not submitted. Review it and try again.");
+    } finally {
+      setSubmittingHandoff(false);
+    }
+  }
   return (
     <div className="grid gap-6">
       <section className={panel}>
@@ -79,6 +100,56 @@ export function ReportingWorkspace({
           Record routine activity for your assigned site. Site, post, and
           assignment are confirmed by Nexus.
         </p>
+      </section>
+      <section className={panel}>
+        <h2 className="text-xl font-semibold">End-of-shift handoff</h2>
+        <p className="mt-1 text-[var(--text-muted)]">
+          Leave the next guard and supervisor an accurate record of unresolved
+          issues, equipment or key status, and follow-up work.
+        </p>
+        {state.assignments.length ? (
+          <form action={submitHandoff} className="mt-3 grid gap-3">
+            <label>
+              <span className="text-sm">Current assignment</span>
+              <select className={input} name="shiftAssignmentId" required>
+                {state.assignments.map((assignment) => (
+                  <option key={assignment.id} value={assignment.id}>
+                    {assignment.siteName} — {assignment.postName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <input
+              name="submissionKey"
+              type="hidden"
+              value={handoffSubmissionKey}
+            />
+            <input name="visibility" type="hidden" value="INTERNAL" />
+            <label>
+              <span className="text-sm">Unresolved issues (one per line)</span>
+              <textarea className={input} name="unresolvedIssues" rows={3} />
+            </label>
+            <label>
+              <span className="text-sm">Equipment and key status</span>
+              <textarea className={input} name="equipmentKeyStatus" rows={3} />
+            </label>
+            <label>
+              <span className="text-sm">Follow-up items (one per line)</span>
+              <textarea className={input} name="followUpItems" rows={3} />
+            </label>
+            <button
+              className="min-h-11 rounded-lg bg-[var(--accent)] px-4 py-2 font-medium text-black disabled:opacity-60"
+              disabled={submittingHandoff}
+              type="submit"
+            >
+              {submittingHandoff ? "Submitting…" : "Submit handoff"}
+            </button>
+          </form>
+        ) : (
+          <p className="mt-3 text-[var(--text-muted)]">
+            An active assignment is required to submit a handoff.
+          </p>
+        )}
       </section>
       <section className={panel}>
         <h2 className="text-xl font-semibold">Record activity</h2>
@@ -138,6 +209,40 @@ export function ReportingWorkspace({
         ) : (
           <p className="mt-3 text-[var(--text-muted)]">
             No active assignment is available for activity reporting.
+          </p>
+        )}
+      </section>
+      <section className={panel}>
+        <h2 className="text-xl font-semibold">Submitted handoffs</h2>
+        {state.handoffs.length ? (
+          <div className="mt-3 grid gap-3">
+            {state.handoffs.map((handoff) => (
+              <article
+                className="rounded-lg border border-white/10 p-3"
+                key={handoff.id}
+              >
+                <strong>
+                  {handoff.siteName} — {handoff.postName}
+                </strong>
+                <p className="text-sm text-[var(--text-muted)]">
+                  Submitted {new Date(handoff.submittedAt).toLocaleString()}
+                </p>
+                {handoff.unresolvedIssues.length ? (
+                  <p className="mt-1">
+                    Unresolved: {handoff.unresolvedIssues.join("; ")}
+                  </p>
+                ) : null}
+                {handoff.equipmentKeyStatus ? (
+                  <p className="mt-1">
+                    Equipment/keys: {handoff.equipmentKeyStatus}
+                  </p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-[var(--text-muted)]">
+            No handoffs have been submitted for your assignments.
           </p>
         )}
       </section>
