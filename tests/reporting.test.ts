@@ -11,6 +11,7 @@ import type {
   HandoffSummary,
   IncidentReportSummary,
 } from "@/features/reporting/contracts";
+import type { ReviewRecord } from "@/features/reporting/contracts";
 import type { AuditContext } from "@/server/request/boundary";
 import type {
   ActivityContext,
@@ -43,6 +44,63 @@ class Repo implements ReportingRepository {
   handoffs: Array<
     HandoffSummary & { submissionKey: string; actorUserId: string }
   > = [];
+  revisions = new Map<string, ReviewRecord>();
+  async getReviewRecord(
+    _scope: ReportingScope,
+    entityType: "ActivityEntry" | "IncidentReport" | "Handoff",
+    id: string,
+  ) {
+    return this.revisions.get(`${entityType}:${id}`) ?? null;
+  }
+  async acknowledgeReviewRecord(
+    _scope: ReportingScope,
+    record: ReviewRecord,
+    actorUserId: string,
+    acknowledgedAt: string,
+  ) {
+    const updated = {
+      ...record,
+      acknowledgedByUserId: actorUserId,
+      acknowledgedAt,
+    };
+    this.revisions.set(`${record.entityType}:${record.id}`, updated);
+    return updated;
+  }
+  async amendReviewRecord(
+    _scope: ReportingScope,
+    record: ReviewRecord,
+    expectedRevision: number,
+    reason: string,
+    amendment: Record<string, unknown>,
+    idempotencyKey: string,
+    actorUserId: string,
+    changedAt: string,
+  ) {
+    const current = this.revisions.get(`${record.entityType}:${record.id}`);
+    if (!current) return null;
+    const duplicate = current.history.find(
+      (item) => item.snapshot.idempotencyKey === idempotencyKey,
+    );
+    if (duplicate) return current;
+    if (current.revision !== expectedRevision) return null;
+    const updated: ReviewRecord = {
+      ...current,
+      revision: current.revision + 1,
+      snapshot: { ...current.snapshot, ...amendment },
+      history: [
+        ...current.history,
+        {
+          revision: current.revision + 1,
+          changedByUserId: actorUserId,
+          changedAt,
+          reason,
+          snapshot: { ...current.snapshot, ...amendment, idempotencyKey },
+        },
+      ],
+    };
+    this.revisions.set(`${record.entityType}:${record.id}`, updated);
+    return updated;
+  }
   async listOwnAssignments() {
     return [context];
   }
@@ -434,6 +492,131 @@ describe("NX-3.4 end-of-shift handoffs", () => {
         shiftAssignmentId: "assignment-1",
         visibility: "RESTRICTED",
         submissionKey: "restricted-handoff",
+      }),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+});
+
+describe("NX-3.5 supervisor acknowledgement and amendments", () => {
+  async function reviewer(
+    role:
+      | "SUPERVISOR"
+      | "OPERATIONS_MANAGER"
+      | "GUARD"
+      | "CLIENT_USER" = "SUPERVISOR",
+    organizationId = "org-1",
+  ) {
+    const request = await createAuthenticatedRequestContext(
+      {
+        resolve: async () => ({
+          principal: {
+            userId: "supervisor-1",
+            organizationId,
+            roles: [role],
+            branchIds: [],
+            clientIds: [],
+            siteIds: ["site-1"],
+          },
+        }),
+      },
+      "review.test",
+    );
+    const repo = new Repo();
+    repo.revisions.set("ActivityEntry:activity-1", {
+      entityType: "ActivityEntry",
+      id: "activity-1",
+      organizationId: "org-1",
+      branchId: "branch-1",
+      clientId: "client-1",
+      siteId: "site-1",
+      visibility: "INTERNAL",
+      revision: 0,
+      snapshot: {
+        narrative: "Original guard entry",
+        authoredByUserId: "guard-1",
+      },
+      history: [],
+    });
+    return {
+      repo,
+      service: new ReportingService(
+        new AuthorizedDataAccess(request),
+        repo,
+        () => new Date("2026-08-30T12:00:00.000Z"),
+      ),
+    };
+  }
+  it("acknowledges idempotently with the authoritative actor", async () => {
+    const { service } = await reviewer();
+    const first = await service.acknowledgeOperationalRecord({
+      entityType: "ActivityEntry",
+      recordId: "activity-1",
+    });
+    const second = await service.acknowledgeOperationalRecord({
+      entityType: "ActivityEntry",
+      recordId: "activity-1",
+    });
+    expect(first.acknowledgedByUserId).toBe("supervisor-1");
+    expect(second.acknowledgedAt).toBe(first.acknowledgedAt);
+  });
+  it("requires reason, preserves authorship, is retry safe, and rejects stale amendments", async () => {
+    const { service } = await reviewer();
+    await expect(
+      service.amendOperationalRecord({
+        entityType: "ActivityEntry",
+        recordId: "activity-1",
+        expectedRevision: 0,
+        reason: "",
+        amendment: { narrative: "Corrected" },
+        idempotencyKey: "a",
+      }),
+    ).rejects.toThrow(/highlighted/i);
+    const first = await service.amendOperationalRecord({
+      entityType: "ActivityEntry",
+      recordId: "activity-1",
+      expectedRevision: 0,
+      reason: "Clarifies sequence",
+      amendment: { narrative: "Corrected" },
+      idempotencyKey: "retry-1",
+    });
+    const retried = await service.amendOperationalRecord({
+      entityType: "ActivityEntry",
+      recordId: "activity-1",
+      expectedRevision: 0,
+      reason: "Clarifies sequence",
+      amendment: { narrative: "Corrected" },
+      idempotencyKey: "retry-1",
+    });
+    expect(first.revision).toBe(1);
+    expect(retried.revision).toBe(1);
+    expect(first.snapshot.authoredByUserId).toBe("guard-1");
+    await expect(
+      service.amendOperationalRecord({
+        entityType: "ActivityEntry",
+        recordId: "activity-1",
+        expectedRevision: 0,
+        reason: "Another correction",
+        amendment: { narrative: "Other" },
+        idempotencyKey: "other",
+      }),
+    ).rejects.toBeInstanceOf(
+      (await import("@/server/request/errors")).StaleUpdateError,
+    );
+  });
+  it("denies guard, client-user, and cross-tenant review mutations", async () => {
+    for (const role of ["GUARD", "CLIENT_USER"] as const)
+      await expect(
+        (await reviewer(role)).service.acknowledgeOperationalRecord({
+          entityType: "ActivityEntry",
+          recordId: "activity-1",
+        }),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(
+      (
+        await reviewer("SUPERVISOR", "org-2")
+      ).service.acknowledgeOperationalRecord({
+        entityType: "ActivityEntry",
+        recordId: "activity-1",
       }),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
   });

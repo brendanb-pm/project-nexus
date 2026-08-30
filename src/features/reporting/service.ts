@@ -3,16 +3,21 @@ import {
   InvariantViolationError,
   PermissionDeniedError,
   ResourceNotFoundError,
+  StaleUpdateError,
 } from "@/server/request/errors";
 import {
   validateActivity,
   validateHandoff,
   validateIncident,
+  validateAcknowledgement,
+  validateAmendment,
 } from "./validation";
 import type {
   CreateActivityInput,
   CreateHandoffInput,
   CreateIncidentInput,
+  AcknowledgeOperationalRecordInput,
+  AmendOperationalRecordInput,
 } from "./contracts";
 import type { ReportingRepository, ReportingScope } from "./repository";
 
@@ -72,6 +77,70 @@ export class ReportingService {
       ? [...this.access.context.visibility]
       : ["CLIENT_VISIBLE" as const];
     return this.repository.listIncidents(this.scope(), visibility, 25);
+  }
+  async getReviewRecord(
+    entityType: "ActivityEntry" | "IncidentReport" | "Handoff",
+    recordId: string,
+  ) {
+    const record = await this.repository.getReviewRecord(
+      this.scope(),
+      entityType,
+      recordId,
+      25,
+    );
+    if (!record) throw new ResourceNotFoundError("Operational record");
+    this.access.requireHierarchical("VIEW_SITE_OPERATIONS", record);
+    return record;
+  }
+  async acknowledgeOperationalRecord(raw: AcknowledgeOperationalRecordInput) {
+    const input = validateAcknowledgement(raw);
+    const record = await this.repository.getReviewRecord(
+      this.scope(),
+      input.entityType,
+      input.recordId,
+      25,
+    );
+    if (!record) throw new ResourceNotFoundError("Operational record");
+    this.access.requireHierarchical("ACKNOWLEDGE_OPERATIONAL_RECORD", record);
+    if (record.acknowledgedByUserId) return record;
+    return this.repository.acknowledgeReviewRecord(
+      this.scope(),
+      record,
+      this.access.context.actor.userId,
+      this.now().toISOString(),
+      this.access.auditContext(),
+    );
+  }
+  async amendOperationalRecord(raw: AmendOperationalRecordInput) {
+    const input = validateAmendment(raw);
+    const record = await this.repository.getReviewRecord(
+      this.scope(),
+      input.entityType,
+      input.recordId,
+      25,
+    );
+    if (!record) throw new ResourceNotFoundError("Operational record");
+    this.access.requireHierarchical("AMEND_OPERATIONAL_RECORD", record);
+    if (
+      record.revision !== input.expectedRevision &&
+      !record.history.some(
+        (item) => item.snapshot.idempotencyKey === input.idempotencyKey,
+      )
+    )
+      throw new StaleUpdateError();
+    const changed = await this.repository.amendReviewRecord(
+      this.scope(),
+      record,
+      input.expectedRevision,
+      input.reason,
+      input.amendment,
+      input.idempotencyKey,
+      this.access.context.actor.userId,
+      this.now().toISOString(),
+      this.access.auditContext(),
+    );
+    if (!changed) throw new StaleUpdateError();
+    return changed;
   }
   async createActivity(raw: CreateActivityInput) {
     const input = validateActivity(raw);
