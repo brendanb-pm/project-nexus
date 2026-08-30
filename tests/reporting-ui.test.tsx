@@ -49,7 +49,7 @@ describe("NX-3.1 reporting UI", () => {
   });
 
   it("renders an actionable empty state and stable denial state", () => {
-    const { rerender } = render(
+    const { container, rerender } = render(
       <ReportingWorkspace state={{ ...ready, assignments: [] }} />,
     );
     expect(screen.getByText(/No active assignment/i)).toBeInTheDocument();
@@ -168,9 +168,9 @@ describe("NX-3.5 supervisor review UI", () => {
       <ReportingWorkspace state={{ ...reviewState, reviewEnabled: false }} />,
     );
     expect(
-      screen.queryByRole("heading", {
-        name: /supervisor \/ operations review/i,
-      }),
+      container.querySelector(
+        '[aria-label="Supervisor and operations review"]',
+      ),
     ).not.toBeInTheDocument();
   });
 });
