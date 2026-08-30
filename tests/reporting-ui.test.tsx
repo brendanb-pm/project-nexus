@@ -49,7 +49,7 @@ describe("NX-3.1 reporting UI", () => {
   });
 
   it("renders an actionable empty state and stable denial state", () => {
-    const { container, rerender } = render(
+    const { rerender } = render(
       <ReportingWorkspace state={{ ...ready, assignments: [] }} />,
     );
     expect(screen.getByText(/No active assignment/i)).toBeInTheDocument();
