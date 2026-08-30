@@ -76,3 +76,22 @@ For new or materially changed UI/workflows, load `modules/UI-UX.md`. Add `module
 Use existing targeted tests first, including Playwright only when the affected workflow requires end-to-end evidence. Expand verification proportionally under the core standard.
 
 Keep completion reports concise and include applicable changed files, tests/results, schema/config changes, loaded modules, blockers/deferred scope, commit/push state, and the core `EFF` line for substantive story work.
+
+## Integration default
+
+Completed feature, story, and sprint work follows the normal automatic
+integration path: run its required acceptance gates; when they pass and no
+material high-risk or high-impact condition is present, push the branch,
+create or update its PR, merge it, verify remote `main`, and report the
+integrated main SHA. Do not leave accepted work indefinitely on a feature
+branch or draft PR.
+
+Manual review is the exception. Stop before merging only for a destructive or
+irreversible schema/data migration; material authentication, authorization,
+RBAC, or tenant-boundary change; irreversible production infrastructure or
+configuration change; major dependency/framework/runtime upgrade; ambiguous
+merge conflict or architecture change; failed/skipped/waived acceptance gate;
+security or tenant-isolation regression; material data-loss risk; or an
+unresolved product, legal, or compliance decision. Additive migrations and
+ordinary tested backend, UI, or multi-file feature work are not review triggers
+by themselves.
