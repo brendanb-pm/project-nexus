@@ -1,5 +1,11 @@
 import { ValidationError } from "@/server/request/errors";
-import { activityCategories, type CreateActivityInput } from "./contracts";
+import {
+  activityCategories,
+  incidentClassifications,
+  incidentSeverities,
+  type CreateActivityInput,
+  type CreateIncidentInput,
+} from "./contracts";
 import { visibilityClassifications } from "@/domain/model";
 
 const string = (value: unknown) =>
@@ -41,5 +47,59 @@ export function validateActivity(input: CreateActivityInput) {
       input.followUpRequired === true ||
       input.followUpRequired === "true" ||
       input.followUpRequired === "on",
+  };
+}
+
+export function validateIncident(input: CreateIncidentInput) {
+  const classification = string(input.classification);
+  const severity = string(input.severity);
+  const narrative = string(input.narrative);
+  const actionsTaken = string(input.actionsTaken);
+  const submissionKey = string(input.submissionKey);
+  const visibility = string(input.visibility) || "INTERNAL";
+  const errors: Record<string, string[]> = {};
+  if (
+    !incidentClassifications.includes(
+      classification as (typeof incidentClassifications)[number],
+    )
+  )
+    errors.classification = ["Choose an incident classification."];
+  if (
+    !incidentSeverities.includes(
+      severity as (typeof incidentSeverities)[number],
+    )
+  )
+    errors.severity = ["Choose an incident severity."];
+  if (!narrative) errors.narrative = ["Describe the incident."];
+  if (narrative.length > 8000)
+    errors.narrative = ["Keep the narrative under 8,000 characters."];
+  if (!actionsTaken)
+    errors.actionsTaken = ["Describe the immediate actions taken."];
+  if (actionsTaken.length > 4000)
+    errors.actionsTaken = ["Keep actions taken under 4,000 characters."];
+  if (!submissionKey || submissionKey.length > 100)
+    errors.submissionKey = ["Start a new submission and try again."];
+  if (
+    !visibilityClassifications.includes(
+      visibility as (typeof visibilityClassifications)[number],
+    )
+  )
+    errors.visibility = ["Choose a valid visibility level."];
+  if (Object.keys(errors).length) throw new ValidationError(errors);
+  return {
+    shiftAssignmentId: string(input.shiftAssignmentId),
+    originatingActivityEntryId:
+      string(input.originatingActivityEntryId) || undefined,
+    classification: classification as (typeof incidentClassifications)[number],
+    severity: severity as (typeof incidentSeverities)[number],
+    narrative,
+    actionsTaken,
+    submissionKey,
+    visibility: visibility as (typeof visibilityClassifications)[number],
+    emergencyServiceInvolvement:
+      input.emergencyServiceInvolvement === true ||
+      input.emergencyServiceInvolvement === "true" ||
+      input.emergencyServiceInvolvement === "on",
+    externalReportNumber: string(input.externalReportNumber) || undefined,
   };
 }

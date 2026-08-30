@@ -78,6 +78,13 @@
       "when": 1788070620869,
       "tag": "0010_nx_3_2_incident_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788116582654,
+      "tag": "0011_marvelous_northstar",
+      "breakpoints": true
     }
   ]
 }

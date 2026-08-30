@@ -15,13 +15,14 @@ const ready: ReportingPageState = {
     },
   ],
   recent: [],
+  incidents: [],
 };
 
 describe("NX-3.1 reporting UI", () => {
   it("uses human-readable authoritative assignment context", () => {
     render(
       <ReportingWorkspace
-        actions={{ createActivity: vi.fn() }}
+        actions={{ createActivity: vi.fn(), createIncident: vi.fn() }}
         state={ready}
       />,
     );
@@ -29,10 +30,13 @@ describe("NX-3.1 reporting UI", () => {
       screen.getByRole("heading", { name: "Shift activity" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("option", { name: /Cedar Plaza.*Lobby/ }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("option", { name: /Cedar Plaza.*Lobby/ }),
+    ).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Record activity" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Submit incident report" }),
     ).toBeInTheDocument();
   });
 

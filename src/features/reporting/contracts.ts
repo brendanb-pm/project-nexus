@@ -35,6 +35,40 @@ export type ActivityEntrySummary = {
   incidentGate: IncidentGateOutcome;
 };
 
+export const incidentClassifications = [
+  "SECURITY",
+  "SAFETY",
+  "ACCESS",
+  "PROPERTY",
+  "OTHER",
+] as const;
+export type IncidentClassification = (typeof incidentClassifications)[number];
+
+export const incidentSeverities = [
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "CRITICAL",
+] as const;
+export type IncidentSeverity = (typeof incidentSeverities)[number];
+
+export type IncidentReportSummary = {
+  id: string;
+  shiftAssignmentId: string;
+  originatingActivityEntryId?: string;
+  incidentNumber: string;
+  classification: IncidentClassification;
+  severity: IncidentSeverity;
+  occurredAt: string;
+  narrative: string;
+  actionsTaken: string;
+  emergencyServiceInvolvement: boolean;
+  externalReportNumber?: string;
+  status: "SUBMITTED";
+  visibility: VisibilityClassification;
+  createdAt: string;
+};
+
 export type CreateActivityInput = {
   shiftAssignmentId: unknown;
   category: unknown;
@@ -47,6 +81,20 @@ export type CreateActivityInput = {
   submissionKey: unknown;
 };
 
+export type CreateIncidentInput = {
+  shiftAssignmentId: unknown;
+  originatingActivityEntryId?: unknown;
+  classification: unknown;
+  severity: unknown;
+  occurredAt?: unknown;
+  narrative: unknown;
+  actionsTaken: unknown;
+  emergencyServiceInvolvement?: unknown;
+  externalReportNumber?: unknown;
+  visibility?: unknown;
+  submissionKey: unknown;
+};
+
 export type ReportingPageState =
   | { kind: "permission-denied"; message: string }
   | { kind: "error"; message: string; retryable: boolean }
@@ -54,6 +102,7 @@ export type ReportingPageState =
       kind: "ready";
       assignments: readonly ActivityAssignment[];
       recent: readonly ActivityEntrySummary[];
+      incidents: readonly IncidentReportSummary[];
     };
 
 export type ActivityAssignment = {

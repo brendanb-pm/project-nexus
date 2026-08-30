@@ -10,11 +10,22 @@ export async function loadReportingPage(
 ): Promise<ReportingPageState> {
   try {
     const service = await serviceOrPromise;
-    const [assignments, recent] = await Promise.all([
-      service.listOwnAssignments(),
-      service.listOwnRecent(),
-    ]);
-    return { kind: "ready", assignments, recent };
+    try {
+      const [assignments, recent, incidents] = await Promise.all([
+        service.listOwnAssignments(),
+        service.listOwnRecent(),
+        service.listOwnIncidents(),
+      ]);
+      return { kind: "ready", assignments, recent, incidents };
+    } catch (error) {
+      if (
+        !(error instanceof ResourceNotFoundError) &&
+        !(error instanceof PermissionDeniedError)
+      )
+        throw error;
+      const incidents = await service.listAuthorizedIncidents();
+      return { kind: "ready", assignments: [], recent: [], incidents };
+    }
   } catch (error) {
     if (
       error instanceof AuthenticationRequiredError ||

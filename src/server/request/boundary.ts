@@ -58,6 +58,7 @@ export class AuthorizedDataAccess {
             organizationId: resource.organizationId,
             siteId: resource.siteId,
             ...(resource.employeeId ? { employeeId: resource.employeeId } : {}),
+            ...(resource.visibility ? { visibility: resource.visibility } : {}),
           }
         : resource.clientId && scope.clientIds.includes(resource.clientId)
           ? {
@@ -66,6 +67,9 @@ export class AuthorizedDataAccess {
               ...(resource.employeeId
                 ? { employeeId: resource.employeeId }
                 : {}),
+              ...(resource.visibility
+                ? { visibility: resource.visibility }
+                : {}),
             }
           : resource.branchId && scope.branchIds.includes(resource.branchId)
             ? {
@@ -73,6 +77,9 @@ export class AuthorizedDataAccess {
                 branchId: resource.branchId,
                 ...(resource.employeeId
                   ? { employeeId: resource.employeeId }
+                  : {}),
+                ...(resource.visibility
+                  ? { visibility: resource.visibility }
                   : {}),
               }
             : resource;

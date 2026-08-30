@@ -5,16 +5,18 @@ import {
   activityEntries,
   auditEvents,
   clients,
+  incidentReports,
   posts,
   shiftAssignments,
   shifts,
   sites,
 } from "@/server/db/schema";
 import type { AuditContext } from "@/server/request/boundary";
-import type { ActivityEntrySummary } from "./contracts";
+import type { ActivityEntrySummary, IncidentReportSummary } from "./contracts";
 import { incidentGateFor } from "./incident-gate";
 import type {
   ActivityContext,
+  NewIncident,
   NewActivity,
   ReportingRepository,
   ReportingScope,
@@ -89,6 +91,64 @@ function dto(row: ActivityRow): ActivityEntrySummary {
     status: "SUBMITTED",
     createdAt: row.createdAt.toISOString(),
     incidentGate: row.incidentGate as ActivityEntrySummary["incidentGate"],
+  };
+}
+
+const incidentFields = {
+  id: incidentReports.id,
+  shiftAssignmentId: incidentReports.shiftAssignmentId,
+  originatingActivityEntryId: incidentReports.originatingActivityEntryId,
+  incidentNumber: incidentReports.incidentNumber,
+  classification: incidentReports.classification,
+  severity: incidentReports.severity,
+  occurredAt: incidentReports.occurredAt,
+  narrative: incidentReports.narrative,
+  actionsTaken: incidentReports.actionsTaken,
+  emergencyServiceInvolvement: incidentReports.emergencyServiceInvolvement,
+  externalReportNumber: incidentReports.externalReportNumber,
+  status: incidentReports.status,
+  visibility: incidentReports.visibility,
+  createdAt: incidentReports.createdAt,
+};
+type IncidentRow = {
+  id: string;
+  shiftAssignmentId: string | null;
+  originatingActivityEntryId: string | null;
+  incidentNumber: string;
+  classification: string;
+  severity: string;
+  occurredAt: Date;
+  narrative: string;
+  actionsTaken: string;
+  emergencyServiceInvolvement: boolean;
+  externalReportNumber: string | null;
+  status: string;
+  visibility: IncidentReportSummary["visibility"];
+  createdAt: Date;
+};
+function incidentDto(row: IncidentRow): IncidentReportSummary {
+  if (!row.shiftAssignmentId)
+    throw new Error("Incident assignment is required");
+  return {
+    id: row.id,
+    shiftAssignmentId: row.shiftAssignmentId,
+    ...(row.originatingActivityEntryId
+      ? { originatingActivityEntryId: row.originatingActivityEntryId }
+      : {}),
+    incidentNumber: row.incidentNumber,
+    classification:
+      row.classification as IncidentReportSummary["classification"],
+    severity: row.severity as IncidentReportSummary["severity"],
+    occurredAt: row.occurredAt.toISOString(),
+    narrative: row.narrative,
+    actionsTaken: row.actionsTaken,
+    emergencyServiceInvolvement: row.emergencyServiceInvolvement,
+    ...(row.externalReportNumber
+      ? { externalReportNumber: row.externalReportNumber }
+      : {}),
+    status: "SUBMITTED",
+    visibility: row.visibility,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -259,6 +319,154 @@ export class PostgresReportingRepository implements ReportingRepository {
         .where(eq(activityEntries.id, id))
         .limit(1);
       return dto(created[0]!);
+    });
+  }
+  async listOwnIncidents(
+    scope: ReportingScope,
+    employeeId: string,
+    limit: number,
+  ) {
+    const rows = await this.database
+      .select(incidentFields)
+      .from(incidentReports)
+      .innerJoin(
+        shiftAssignments,
+        eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(scopePredicate(scope), eq(shiftAssignments.employeeId, employeeId)),
+      )
+      .orderBy(desc(incidentReports.occurredAt), desc(incidentReports.id))
+      .limit(limit);
+    return rows.map(incidentDto);
+  }
+  async listIncidents(
+    scope: ReportingScope,
+    visibility: readonly IncidentReportSummary["visibility"][],
+    limit: number,
+  ) {
+    const rows = await this.database
+      .select(incidentFields)
+      .from(incidentReports)
+      .innerJoin(
+        shiftAssignments,
+        eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(
+          scopePredicate(scope),
+          inArray(incidentReports.visibility, [...visibility]),
+        ),
+      )
+      .orderBy(desc(incidentReports.occurredAt), desc(incidentReports.id))
+      .limit(limit);
+    return rows.map(incidentDto);
+  }
+  async getOriginatingActivity(
+    scope: ReportingScope,
+    context: ActivityContext,
+    activityEntryId: string,
+  ) {
+    const rows = await this.database
+      .select(fields)
+      .from(activityEntries)
+      .innerJoin(
+        shiftAssignments,
+        eq(activityEntries.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(
+          scopePredicate(scope),
+          eq(activityEntries.id, activityEntryId),
+          eq(activityEntries.shiftAssignmentId, context.id),
+        ),
+      )
+      .limit(1);
+    return rows[0] ? dto(rows[0]) : null;
+  }
+  async createIncident(
+    scope: ReportingScope,
+    context: ActivityContext,
+    input: NewIncident,
+    audit: AuditContext,
+  ) {
+    return this.database.transaction(async (tx) => {
+      const existing = await tx
+        .select(incidentFields)
+        .from(incidentReports)
+        .innerJoin(
+          shiftAssignments,
+          eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+        )
+        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+        .innerJoin(posts, eq(shifts.postId, posts.id))
+        .innerJoin(sites, eq(posts.siteId, sites.id))
+        .innerJoin(clients, eq(sites.clientId, clients.id))
+        .where(
+          and(
+            scopePredicate(scope),
+            eq(incidentReports.shiftAssignmentId, context.id),
+            eq(incidentReports.submissionKey, input.submissionKey),
+          ),
+        )
+        .limit(1);
+      if (existing[0]) return incidentDto(existing[0]);
+      const incidentNumber = `INC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const inserted = await tx
+        .insert(incidentReports)
+        .values({
+          siteId: context.siteId,
+          shiftAssignmentId: context.id,
+          originatingActivityEntryId: input.originatingActivityEntryId,
+          reportedByUserId: audit.actorUserId,
+          incidentNumber,
+          classification: input.classification,
+          severity: input.severity,
+          occurredAt: new Date(input.occurredAt),
+          narrative: input.narrative,
+          actionsTaken: input.actionsTaken,
+          emergencyServiceInvolvement: input.emergencyServiceInvolvement,
+          externalReportNumber: input.externalReportNumber,
+          status: "SUBMITTED",
+          visibility: input.visibility,
+          submissionKey: input.submissionKey,
+        })
+        .returning({ id: incidentReports.id });
+      const id = inserted[0]!.id;
+      await tx.insert(auditEvents).values({
+        organizationId: audit.organizationId,
+        actorUserId: audit.actorUserId,
+        action: "incident-report.submitted",
+        entityType: "IncidentReport",
+        entityId: id,
+        requestId: audit.requestId,
+        sessionId: audit.sessionId,
+        afterState: {
+          shiftAssignmentId: context.id,
+          originatingActivityEntryId: input.originatingActivityEntryId,
+          classification: input.classification,
+          severity: input.severity,
+          visibility: input.visibility,
+        },
+      });
+      const created = await tx
+        .select(incidentFields)
+        .from(incidentReports)
+        .where(eq(incidentReports.id, id))
+        .limit(1);
+      return incidentDto(created[0]!);
     });
   }
 }
