@@ -161,10 +161,7 @@ describe("NX-3.5 supervisor review UI", () => {
     );
     expect(screen.getAllByText(/Amendment reason/i).length).toBeGreaterThan(0);
     expect(amend).not.toHaveBeenCalled();
-    const { rerender } = render(
-      <ReportingWorkspace state={{ ...reviewState, reviewEnabled: false }} />,
-    );
-    rerender(
+    const { container } = render(
       <ReportingWorkspace state={{ ...reviewState, reviewEnabled: false }} />,
     );
     expect(
