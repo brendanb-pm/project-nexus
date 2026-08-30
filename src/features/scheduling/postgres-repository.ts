@@ -461,8 +461,46 @@ export class PostgresSchedulingRepository implements SchedulingRepository {
   }
 
   private async getAssignment(scope: SchedulingScope, assignmentId: string) {
-    const rows = await this.listAssignments(scope, 100);
-    return rows.find((row) => row.id === assignmentId) ?? null;
+    const rows = await this.database
+      .select({
+        assignmentId: shiftAssignments.id,
+        employeeId: shiftAssignments.employeeId,
+        employeeNumber: employees.employeeNumber,
+        assignmentStatus: shiftAssignments.status,
+        availabilityStatus: shiftAssignments.availabilityStatus,
+        warnings: shiftAssignments.warnings,
+        assignedAt: shiftAssignments.assignedAt,
+        assignmentUpdatedAt: shiftAssignments.updatedAt,
+        ...projection,
+      })
+      .from(shiftAssignments)
+      .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(and(scopePredicate(scope), eq(shiftAssignments.id, assignmentId)))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    const shift = dto(row);
+    return {
+      id: row.assignmentId,
+      organizationId: row.organizationId,
+      shiftId: row.id,
+      employeeId: row.employeeId,
+      employeeNumber: row.employeeNumber,
+      shift,
+      status: row.assignmentStatus as AssignmentSummary["status"],
+      availability: row.availabilityStatus as AssignmentSummary["availability"],
+      warnings: Array.isArray(row.warnings)
+        ? row.warnings.filter(
+            (value): value is string => typeof value === "string",
+          )
+        : [],
+      assignedAt: row.assignedAt.toISOString(),
+      updatedAt: row.assignmentUpdatedAt.toISOString(),
+    };
   }
 
   async createAssignment(
