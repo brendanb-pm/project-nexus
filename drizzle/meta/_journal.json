@@ -64,6 +64,13 @@
       "when": 1788035664863,
       "tag": "0008_sprint_2_time_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788070041907,
+      "tag": "0009_nx_3_1_activity_idempotency",
+      "breakpoints": true
     }
   ]
 }

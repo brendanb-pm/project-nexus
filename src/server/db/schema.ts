@@ -586,23 +586,39 @@ export const timeRecords = pgTable(
     check("time_records_revision_check", sql`${t.revision} >= 0`),
   ],
 );
-export const activityEntries = pgTable("activity_entries", {
-  id: id(),
-  shiftAssignmentId: uuid("shift_assignment_id")
-    .notNull()
-    .references(() => shiftAssignments.id),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  category: text("category").notNull(),
-  postId: uuid("post_id").references(() => posts.id),
-  description: jsonb("description").notNull(),
-  actionTaken: text("action_taken"),
-  followUpRequired: boolean("follow_up_required").notNull().default(false),
-  incidentRelated: boolean("incident_related").notNull().default(false),
-  visibility: visibilityEnum("visibility").notNull().default("INTERNAL"),
-  status: recordStatusEnum("status").notNull().default("DRAFT"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const activityEntries = pgTable(
+  "activity_entries",
+  {
+    id: id(),
+    shiftAssignmentId: uuid("shift_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    category: text("category").notNull(),
+    postId: uuid("post_id").references(() => posts.id),
+    description: jsonb("description").notNull(),
+    actionTaken: text("action_taken"),
+    followUpRequired: boolean("follow_up_required").notNull().default(false),
+    incidentRelated: boolean("incident_related").notNull().default(false),
+    // Nullable for rows created before retry idempotency was introduced. New
+    // activity submissions always supply a key in the reporting service.
+    submissionKey: text("submission_key"),
+    visibility: visibilityEnum("visibility").notNull().default("INTERNAL"),
+    status: recordStatusEnum("status").notNull().default("DRAFT"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("activity_entries_assignment_submission_uidx").on(
+      t.shiftAssignmentId,
+      t.submissionKey,
+    ),
+    index("activity_entries_assignment_occurred_idx").on(
+      t.shiftAssignmentId,
+      t.occurredAt,
+    ),
+  ],
+);
 export const dailyActivityReports = pgTable("daily_activity_reports", {
   id: id(),
   shiftAssignmentId: uuid("shift_assignment_id")
