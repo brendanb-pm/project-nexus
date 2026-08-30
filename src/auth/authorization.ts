@@ -30,6 +30,7 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
       "MANAGE_SHIFT_ASSIGNMENTS",
       "ACKNOWLEDGE_INCIDENT",
       "APPROVE_TIME",
+      "CORRECT_TIME",
       "VIEW_EMPLOYEE_COMPLIANCE",
     ]),
     OPERATIONS_MANAGER: new Set([
@@ -37,6 +38,7 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
       "MANAGE_SHIFT_ASSIGNMENTS",
       "ACKNOWLEDGE_INCIDENT",
       "APPROVE_TIME",
+      "CORRECT_TIME",
       "VIEW_EMPLOYEE_COMPLIANCE",
       "MANAGE_CLIENTS",
       "MANAGE_SITES",
@@ -67,6 +69,7 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
       "MANAGE_SHIFT_ASSIGNMENTS",
       "ACKNOWLEDGE_INCIDENT",
       "APPROVE_TIME",
+      "CORRECT_TIME",
       "VIEW_EMPLOYEE_COMPLIANCE",
       "VIEW_CLIENT_REPORTS",
       "VIEW_CLIENT_INCIDENTS",
@@ -143,7 +146,7 @@ export function authorize(
   )
     return { allowed: false, reason: "site-scope" };
   if (
-    capability === "VIEW_OWN_ASSIGNMENTS" &&
+    ["VIEW_OWN_ASSIGNMENTS", "CLOCK_OWN_SHIFT"].includes(capability) &&
     actor.employeeId !== resource.employeeId
   )
     return { allowed: false, reason: "employee-self-scope" };

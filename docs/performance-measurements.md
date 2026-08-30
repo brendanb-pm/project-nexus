@@ -72,3 +72,35 @@ audit, pagination, and performance foundations. The measured representative
 Sprint 1 paths satisfy the applicable non-production server/application
 budgets, so Sprint 1 performance acceptance is **PASS**. This result does not
 substitute for future deployed-environment or end-user network measurements.
+## Sprint 2 non-production runtime closure
+
+**Status: PASS — 2026-08-29.** Measurements used a temporary isolated local
+PostgreSQL 17 cluster on a non-default port with 2 synthetic organizations, 2
+users, 2 employees, 110 shifts/assignments, and 93 initial clock events. The
+cluster was not connected to a production database or production data.
+
+One warm-up preceded each path. Each result below contains 30 successful,
+server-side samples; it does not represent browser, network, device, or user
+perceived latency.
+
+| Path                        | Request p50 / p95 |   DB p50 / p95 | Max queries | Result |
+| --------------------------- | ----------------: | -------------: | ----------: | ------ |
+| Shift list/read             |    1.26 / 1.66 ms | 0.97 / 1.19 ms |           1 | PASS   |
+| Assignment list/read        |    1.93 / 2.40 ms | 1.59 / 2.10 ms |           1 | PASS   |
+| Clock event creation        |    2.60 / 3.99 ms | 2.12 / 3.22 ms |           6 | PASS*  |
+| Clock correction            |    3.66 / 5.12 ms | 2.74 / 3.87 ms |           8 | PASS*  |
+| Time-record derivation/read |    1.87 / 2.45 ms | 1.50 / 1.95 ms |           4 | PASS   |
+| Time approval               |    3.37 / 4.50 ms | 2.65 / 3.64 ms |          10 | PASS*  |
+
+All request p95 values are below 900 ms and all DB p95 values are below the
+400 ms hard ceiling. Read paths are single bounded queries and the derivation
+path uses four bounded queries. The higher fixed counts on audited mutations
+include transaction control plus required authorization/context, append-only
+history, revision, and audit writes. They are constant across 30 samples and
+show no N+1 behavior; they are an explicit, non-blocking audit-integrity
+exception to the usual five-round-trip guideline.
+
+Runtime checks also passed for tenant isolation, assignment overlap,
+unavailability, self-only clocking, missing/inaccurate/out-of-radius location
+exceptions, append-only corrections, approval separation, incomplete-pair
+blocking, and exact-second overnight derivation.
