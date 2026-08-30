@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { AuthorizedDataAccess } from "@/server/request/boundary";
 import { createAuthenticatedRequestContext } from "@/server/request/context";
-import { PermissionDeniedError } from "@/server/request/errors";
+import {
+  PermissionDeniedError,
+  ResourceNotFoundError,
+} from "@/server/request/errors";
 import { ReportingService } from "@/features/reporting/service";
-import type { ActivityEntrySummary } from "@/features/reporting/contracts";
+import type {
+  ActivityEntrySummary,
+  IncidentReportSummary,
+} from "@/features/reporting/contracts";
+import type { AuditContext } from "@/server/request/boundary";
 import type {
   ActivityContext,
   NewActivity,
+  NewIncident,
   ReportingRepository,
   ReportingScope,
 } from "@/features/reporting/repository";
@@ -27,6 +35,9 @@ const context: ActivityContext = {
 };
 class Repo implements ReportingRepository {
   entries: Array<ActivityEntrySummary & { submissionKey: string }> = [];
+  incidents: Array<
+    IncidentReportSummary & { submissionKey: string; reportedByUserId: string }
+  > = [];
   async listOwnAssignments() {
     return [context];
   }
@@ -68,17 +79,67 @@ class Repo implements ReportingRepository {
     this.entries.push(entry);
     return entry;
   }
+  async listOwnIncidents() {
+    return this.incidents;
+  }
+  async listIncidents() {
+    return this.incidents;
+  }
+  async getOriginatingActivity(
+    _scope: ReportingScope,
+    value: ActivityContext,
+    id: string,
+  ) {
+    const entry = this.entries.find(
+      (candidate) =>
+        candidate.id === id && candidate.shiftAssignmentId === value.id,
+    );
+    return entry ?? null;
+  }
+  async createIncident(
+    _scope: ReportingScope,
+    value: ActivityContext,
+    input: NewIncident,
+    audit: AuditContext,
+  ) {
+    const existing = this.incidents.find(
+      (incident) => incident.submissionKey === input.submissionKey,
+    );
+    if (existing) return existing;
+    const incident = {
+      id: `incident-${this.incidents.length + 1}`,
+      shiftAssignmentId: value.id,
+      incidentNumber: `INC-${this.incidents.length + 1}`,
+      classification: input.classification,
+      severity: input.severity,
+      occurredAt: input.occurredAt,
+      narrative: input.narrative,
+      actionsTaken: input.actionsTaken,
+      emergencyServiceInvolvement: input.emergencyServiceInvolvement,
+      status: "SUBMITTED" as const,
+      visibility: input.visibility,
+      createdAt: input.occurredAt,
+      submissionKey: input.submissionKey,
+      reportedByUserId: audit.actorUserId,
+      ...(input.originatingActivityEntryId
+        ? { originatingActivityEntryId: input.originatingActivityEntryId }
+        : {}),
+    };
+    this.incidents.push(incident);
+    return incident;
+  }
 }
 async function subject(
   employeeId = "employee-1",
   role: "GUARD" | "CLIENT_USER" = "GUARD",
+  organizationId = "org-1",
 ) {
   const request = await createAuthenticatedRequestContext(
     {
       resolve: async () => ({
         principal: {
           userId: "user-1",
-          organizationId: "org-1",
+          organizationId,
           roles: [role],
           branchIds: [],
           clientIds: [],
@@ -173,5 +234,99 @@ describe("NX-3.1 activity reporting", () => {
     });
     expect(entry.incidentGate).toBe("REQUIRED");
     expect(repo.entries).toHaveLength(1);
+  });
+
+  it("creates a durable incident from trusted assignment context and deduplicates retry", async () => {
+    const { repo, request } = await subject();
+    const service = new ReportingService(
+      new AuthorizedDataAccess(request),
+      repo,
+      () => new Date("2026-08-29T12:00:00.000Z"),
+    );
+    const input = {
+      shiftAssignmentId: "assignment-1",
+      classification: "SECURITY",
+      severity: "HIGH",
+      narrative: "Unauthorized entry attempted.",
+      actionsTaken: "Denied entry and notified supervision.",
+      visibility: "INTERNAL",
+      submissionKey: "incident-retry-key",
+    };
+    const first = await service.createIncident(input);
+    const second = await service.createIncident(input);
+    expect(repo.incidents).toHaveLength(1);
+    expect(first.id).toBe(second.id);
+    expect(first).toMatchObject({
+      shiftAssignmentId: "assignment-1",
+      reportedByUserId: "user-1",
+      status: "SUBMITTED",
+    });
+  });
+
+  it("denies client mutation and an originating activity from another assignment", async () => {
+    const client = await subject("employee-1", "CLIENT_USER");
+    await expect(
+      new ReportingService(
+        new AuthorizedDataAccess(client.request),
+        client.repo,
+      ).createIncident({
+        shiftAssignmentId: "assignment-1",
+        classification: "SECURITY",
+        severity: "LOW",
+        narrative: "Forbidden",
+        actionsTaken: "None",
+        submissionKey: "client-incident",
+      }),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    const { repo, request } = await subject();
+    await expect(
+      new ReportingService(
+        new AuthorizedDataAccess(request),
+        repo,
+        () => new Date("2026-08-29T12:00:00.000Z"),
+      ).createIncident({
+        shiftAssignmentId: "assignment-1",
+        originatingActivityEntryId: "other-assignment-activity",
+        classification: "SECURITY",
+        severity: "LOW",
+        narrative: "Wrong activity",
+        actionsTaken: "None",
+        submissionKey: "wrong-activity",
+      }),
+    ).rejects.toBeInstanceOf(ResourceNotFoundError);
+  });
+
+  it("denies cross-organization and restricted-visibility incident submission", async () => {
+    const crossOrganization = await subject("employee-1", "GUARD", "org-2");
+    await expect(
+      new ReportingService(
+        new AuthorizedDataAccess(crossOrganization.request),
+        crossOrganization.repo,
+        () => new Date("2026-08-29T12:00:00.000Z"),
+      ).createIncident({
+        shiftAssignmentId: "assignment-1",
+        classification: "SECURITY",
+        severity: "LOW",
+        narrative: "Cross organization",
+        actionsTaken: "None",
+        submissionKey: "cross-organization",
+      }),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    const guard = await subject();
+    await expect(
+      new ReportingService(
+        new AuthorizedDataAccess(guard.request),
+        guard.repo,
+        () => new Date("2026-08-29T12:00:00.000Z"),
+      ).createIncident({
+        shiftAssignmentId: "assignment-1",
+        classification: "SECURITY",
+        severity: "LOW",
+        narrative: "Restricted visibility",
+        actionsTaken: "None",
+        visibility: "RESTRICTED",
+        submissionKey: "restricted-visibility",
+      }),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 });

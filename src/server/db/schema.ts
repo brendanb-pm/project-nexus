@@ -646,6 +646,7 @@ export const incidentReports = pgTable(
     originatingActivityEntryId: uuid(
       "originating_activity_entry_id",
     ).references(() => activityEntries.id),
+    reportedByUserId: uuid("reported_by_user_id").references(() => users.id),
     incidentNumber: text("incident_number").notNull(),
     classification: text("classification").notNull(),
     severity: text("severity").notNull(),
@@ -656,6 +657,9 @@ export const incidentReports = pgTable(
       .notNull()
       .default(false),
     externalReportNumber: text("external_report_number"),
+    // Nullable for records created before incident retry idempotency was
+    // introduced. New incident submissions always provide a key.
+    submissionKey: text("submission_key"),
     status: recordStatusEnum("status").notNull().default("DRAFT"),
     acknowledgedByUserId: uuid("acknowledged_by_user_id").references(
       () => users.id,
@@ -672,6 +676,10 @@ export const incidentReports = pgTable(
     ),
     uniqueIndex("incident_reports_originating_activity_uidx").on(
       t.originatingActivityEntryId,
+    ),
+    uniqueIndex("incident_reports_assignment_submission_key_uidx").on(
+      t.shiftAssignmentId,
+      t.submissionKey,
     ),
   ],
 );

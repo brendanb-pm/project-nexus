@@ -22,6 +22,7 @@ erDiagram
   SHIFT_ASSIGNMENT ||--o{ CLOCK_EVENT : records
   SHIFT_ASSIGNMENT ||--o{ TIME_RECORD : produces
   SHIFT_ASSIGNMENT ||--o{ ACTIVITY_ENTRY : records
+  ACTIVITY_ENTRY ||--o| INCIDENT_REPORT : escalates
   SHIFT_ASSIGNMENT ||--o{ DAILY_ACTIVITY_REPORT : summarizes
   SHIFT_ASSIGNMENT ||--o{ INCIDENT_REPORT : reports
   SHIFT_ASSIGNMENT ||--o{ HANDOFF : transfers
@@ -39,5 +40,7 @@ erDiagram
 ```
 
 Operational records (`ActivityEntry`, `DailyActivityReport`, `IncidentReport`, `Handoff`, and `TimeRecord`) share explicit lifecycle concepts without sharing one overloaded table. `OperationalRecordRevision` stores immutable snapshots for material post-submission changes. `BillableTimeRecord` is approved operational time at an applicable rate; it is not an accounting ledger.
+
+An incident may reference one originating activity entry but does not replace it. New incident reports retain their server-derived assignment/site/post context, authoritative reporting user, submission key, and append-only audit attribution. Later acknowledgement and amendment work extends this history without overwriting the original report.
 
 Service types are extensible V1 static/uniformed categories. They contain no vehicle-patrol or Executive Protection behavior.

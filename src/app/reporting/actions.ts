@@ -25,3 +25,28 @@ export async function createActivity(form: FormData) {
     return entry;
   });
 }
+
+export async function createIncident(form: FormData) {
+  return measureServerAction("reporting.create-incident", async () => {
+    const incident = await (
+      await createReportingService(
+        await createProductionPrincipalResolver(),
+        "reporting.create-incident",
+      )
+    ).createIncident({
+      shiftAssignmentId: form.get("shiftAssignmentId"),
+      originatingActivityEntryId: form.get("originatingActivityEntryId"),
+      classification: form.get("classification"),
+      severity: form.get("severity"),
+      occurredAt: form.get("occurredAt"),
+      narrative: form.get("narrative"),
+      actionsTaken: form.get("actionsTaken"),
+      emergencyServiceInvolvement: form.get("emergencyServiceInvolvement"),
+      externalReportNumber: form.get("externalReportNumber"),
+      visibility: form.get("visibility"),
+      submissionKey: form.get("submissionKey"),
+    });
+    revalidatePath("/reporting");
+    return incident;
+  });
+}

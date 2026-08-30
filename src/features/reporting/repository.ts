@@ -4,6 +4,9 @@ import type {
   ActivityAssignment,
   ActivityEntrySummary,
   ActivityCategory,
+  IncidentClassification,
+  IncidentReportSummary,
+  IncidentSeverity,
 } from "./contracts";
 
 export type ReportingScope = {
@@ -33,6 +36,19 @@ export type NewActivity = {
   submissionKey: string;
 };
 
+export type NewIncident = {
+  originatingActivityEntryId?: string;
+  classification: IncidentClassification;
+  severity: IncidentSeverity;
+  occurredAt: string;
+  narrative: string;
+  actionsTaken: string;
+  emergencyServiceInvolvement: boolean;
+  externalReportNumber?: string;
+  visibility: VisibilityClassification;
+  submissionKey: string;
+};
+
 export interface ReportingRepository {
   listOwnAssignments(
     scope: ReportingScope,
@@ -54,4 +70,25 @@ export interface ReportingRepository {
     input: NewActivity,
     audit: AuditContext,
   ): Promise<ActivityEntrySummary>;
+  listOwnIncidents(
+    scope: ReportingScope,
+    employeeId: string,
+    limit: number,
+  ): Promise<readonly IncidentReportSummary[]>;
+  listIncidents(
+    scope: ReportingScope,
+    visibility: readonly VisibilityClassification[],
+    limit: number,
+  ): Promise<readonly IncidentReportSummary[]>;
+  getOriginatingActivity(
+    scope: ReportingScope,
+    context: ActivityContext,
+    activityEntryId: string,
+  ): Promise<ActivityEntrySummary | null>;
+  createIncident(
+    scope: ReportingScope,
+    context: ActivityContext,
+    input: NewIncident,
+    audit: AuditContext,
+  ): Promise<IncidentReportSummary>;
 }
