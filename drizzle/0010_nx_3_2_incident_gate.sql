@@ -1,0 +1,4 @@
+ALTER TABLE "activity_entries" ADD COLUMN "incident_gate" text DEFAULT 'ROUTINE' NOT NULL;--> statement-breakpoint
+ALTER TABLE "incident_reports" ADD COLUMN "originating_activity_entry_id" uuid;--> statement-breakpoint
+ALTER TABLE "incident_reports" ADD CONSTRAINT "incident_reports_originating_activity_entry_id_activity_entries_id_fk" FOREIGN KEY ("originating_activity_entry_id") REFERENCES "public"."activity_entries"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "incident_reports_originating_activity_uidx" ON "incident_reports" USING btree ("originating_activity_entry_id");

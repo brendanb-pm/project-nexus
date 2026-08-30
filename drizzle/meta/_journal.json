@@ -71,6 +71,13 @@
       "when": 1788070041907,
       "tag": "0009_nx_3_1_activity_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788070620869,
+      "tag": "0010_nx_3_2_incident_gate",
+      "breakpoints": true
     }
   ]
 }

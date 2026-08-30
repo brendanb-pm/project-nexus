@@ -4,10 +4,19 @@ export const activityCategories = [
   "OBSERVATION",
   "ACCESS_CONTROL",
   "SAFETY_CHECK",
+  "SAFETY_CONCERN",
+  "REPORTABLE_INCIDENT",
   "CUSTOMER_SERVICE",
   "OTHER",
 ] as const;
 export type ActivityCategory = (typeof activityCategories)[number];
+
+export const incidentGateOutcomes = [
+  "ROUTINE",
+  "SUGGESTED",
+  "REQUIRED",
+] as const;
+export type IncidentGateOutcome = (typeof incidentGateOutcomes)[number];
 
 export type ActivityEntrySummary = {
   id: string;
@@ -23,6 +32,7 @@ export type ActivityEntrySummary = {
   visibility: VisibilityClassification;
   status: "SUBMITTED";
   createdAt: string;
+  incidentGate: IncidentGateOutcome;
 };
 
 export type CreateActivityInput = {

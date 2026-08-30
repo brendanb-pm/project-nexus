@@ -600,6 +600,7 @@ export const activityEntries = pgTable(
     actionTaken: text("action_taken"),
     followUpRequired: boolean("follow_up_required").notNull().default(false),
     incidentRelated: boolean("incident_related").notNull().default(false),
+    incidentGate: text("incident_gate").notNull().default("ROUTINE"),
     // Nullable for rows created before retry idempotency was introduced. New
     // activity submissions always supply a key in the reporting service.
     submissionKey: text("submission_key"),
@@ -642,6 +643,9 @@ export const incidentReports = pgTable(
     shiftAssignmentId: uuid("shift_assignment_id").references(
       () => shiftAssignments.id,
     ),
+    originatingActivityEntryId: uuid("originating_activity_entry_id").references(
+      () => activityEntries.id,
+    ),
     incidentNumber: text("incident_number").notNull(),
     classification: text("classification").notNull(),
     severity: text("severity").notNull(),
@@ -665,6 +669,9 @@ export const incidentReports = pgTable(
     uniqueIndex("incident_reports_site_number_uidx").on(
       t.siteId,
       t.incidentNumber,
+    ),
+    uniqueIndex("incident_reports_originating_activity_uidx").on(
+      t.originatingActivityEntryId,
     ),
   ],
 );

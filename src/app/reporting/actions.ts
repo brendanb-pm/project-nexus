@@ -5,7 +5,7 @@ import { createReportingService } from "@/features/reporting/server";
 import { measureServerAction } from "@/server/performance/telemetry";
 export async function createActivity(form: FormData) {
   return measureServerAction("reporting.create-activity", async () => {
-    await (
+    const entry = await (
       await createReportingService(
         await createProductionPrincipalResolver(),
         "reporting.create-activity",
@@ -22,5 +22,6 @@ export async function createActivity(form: FormData) {
       submissionKey: form.get("submissionKey"),
     });
     revalidatePath("/reporting");
+    return entry;
   });
 }
