@@ -198,20 +198,20 @@ export const seedData = {
     {
       id: uuid(80),
       postId: uuid(40),
-      scheduledStart: "2026-08-10T08:00:00.000Z",
-      scheduledEnd: "2026-08-10T16:00:00.000Z",
+      scheduledStart: "2026-08-31T15:00:00.000Z",
+      scheduledEnd: "2026-08-31T23:00:00.000Z",
     },
     {
       id: uuid(81),
       postId: uuid(41),
-      scheduledStart: "2026-08-10T16:00:00.000Z",
-      scheduledEnd: "2026-08-11T00:00:00.000Z",
+      scheduledStart: "2026-08-31T23:00:00.000Z",
+      scheduledEnd: "2026-09-01T07:00:00.000Z",
     },
     {
       id: uuid(82),
       postId: uuid(42),
-      scheduledStart: "2026-08-11T00:00:00.000Z",
-      scheduledEnd: "2026-08-11T08:00:00.000Z",
+      scheduledStart: "2026-09-01T07:00:00.000Z",
+      scheduledEnd: "2026-09-01T15:00:00.000Z",
     },
   ],
   shiftAssignments: [
