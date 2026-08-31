@@ -277,6 +277,13 @@ export class SchedulingService {
   }
 
   async getOwnClockState(assignmentId: string) {
+    const context = await this.getOwnClockContext(assignmentId);
+    return context.events.at(-1)?.eventType === "CLOCK_IN"
+      ? "CLOCK_OUT"
+      : "CLOCK_IN";
+  }
+
+  async getOwnClockContext(assignmentId: string) {
     const context = await this.repository.getClockContext(
       this.scope(),
       assignmentId,
@@ -289,9 +296,7 @@ export class SchedulingService {
       siteId: context.siteId,
       employeeId: context.employeeId,
     });
-    return context.events.at(-1)?.eventType === "CLOCK_IN"
-      ? "CLOCK_OUT"
-      : "CLOCK_IN";
+    return context;
   }
 
   async clockOwnShift(raw: ClockEventInput) {

@@ -26,6 +26,9 @@ const ids = {
   operationsEmployee: "00000000-0000-4000-8000-000000000062",
   shift: "00000000-0000-4000-8000-000000000080",
   assignment: "00000000-0000-4000-8000-000000000090",
+  activity: "00000000-0000-4000-8000-000000000091",
+  incident: "00000000-0000-4000-8000-000000000092",
+  handoff: "00000000-0000-4000-8000-000000000093",
 } as const;
 
 async function main() {
@@ -99,6 +102,44 @@ async function main() {
     await pool.query(
       "INSERT INTO shift_assignments (id, shift_id, employee_id, status, assigned_at) VALUES ($1, $2, $3, 'assigned', NOW())",
       [ids.assignment, ids.shift, ids.guardEmployee],
+    );
+    await pool.query(
+      "INSERT INTO activity_entries (id, shift_assignment_id, occurred_at, category, post_id, description, action_taken, follow_up_required, incident_related, incident_gate, submission_key, visibility, status) VALUES ($1, $2, $3, 'OBSERVATION', $4, $5::jsonb, $6, false, false, 'ROUTINE', 'demo-routine-activity', 'INTERNAL', 'SUBMITTED')",
+      [
+        ids.activity,
+        ids.assignment,
+        startsAt,
+        ids.post,
+        JSON.stringify({
+          narrative: "Routine north lobby access-control patrol completed.",
+          locationContext: "North lobby",
+        }),
+        "Verified doors, visitor log, and radio status.",
+      ],
+    );
+    await pool.query(
+      "INSERT INTO incident_reports (id, site_id, shift_assignment_id, originating_activity_entry_id, reported_by_user_id, incident_number, classification, severity, occurred_at, narrative, actions_taken, emergency_service_involvement, submission_key, status, visibility) VALUES ($1, $2, $3, $4, $5, 'INC-DEMO-0001', 'SECURITY', 'LOW', $6, 'Synthetic demo access-control concern for review.', 'Logged the concern and notified operations.', false, 'demo-incident', 'SUBMITTED', 'INTERNAL')",
+      [
+        ids.incident,
+        ids.site,
+        ids.assignment,
+        ids.activity,
+        ids.guardUser,
+        startsAt,
+      ],
+    );
+    await pool.query(
+      "INSERT INTO handoffs (id, shift_assignment_id, unresolved_issues, equipment_key_status, follow_up_items, submitted_at, submission_key, status, visibility) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, 'demo-handoff', 'SUBMITTED', 'INTERNAL')",
+      [
+        ids.handoff,
+        ids.assignment,
+        JSON.stringify(["Review synthetic access-control concern."]),
+        JSON.stringify({
+          summary: "North lobby keys and radio accounted for.",
+        }),
+        JSON.stringify(["Operations acknowledgement pending."]),
+        endsAt,
+      ],
     );
     console.log("Nexus demo data reset and seeded.");
   } finally {

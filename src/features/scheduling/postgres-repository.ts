@@ -56,6 +56,7 @@ const projection = {
   branchId: clients.branchId,
   postName: posts.name,
   siteName: sites.name,
+  siteAddress: sites.address,
   timezone: shifts.timezone,
   scheduledStart: shifts.scheduledStart,
   scheduledEnd: shifts.scheduledEnd,
@@ -78,6 +79,7 @@ function dto(row: {
   branchId: string | null;
   postName: string;
   siteName: string;
+  siteAddress: unknown;
   timezone: string;
   scheduledStart: Date;
   scheduledEnd: Date;
@@ -86,8 +88,24 @@ function dto(row: {
   status: string;
   updatedAt: Date;
 }): ShiftSummary {
+  const address =
+    row.siteAddress && typeof row.siteAddress === "object"
+      ? (row.siteAddress as Record<string, unknown>)
+      : {};
+  const addressParts = [
+    address.line1,
+    address.city,
+    address.region,
+    address.postalCode,
+  ]
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0,
+    )
+    .map((value) => value.trim());
   return {
     ...row,
+    siteAddress: addressParts.length ? addressParts.join(", ") : undefined,
     branchId: row.branchId!,
     scheduledStart: row.scheduledStart.toISOString(),
     scheduledEnd: row.scheduledEnd.toISOString(),

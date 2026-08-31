@@ -19,6 +19,24 @@ function assignmentTime(start: string, end: string, timezone: string) {
   return `${format.format(new Date(start))} → ${format.format(new Date(end))}`;
 }
 
+function mapsUrl(address: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
+function localTime(value: string, timezone: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: timezone,
+  }).format(new Date(value));
+}
+
+function durationLabel(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+}
+
 export type MyScheduleActions = {
   createAvailability(form: FormData): Promise<void>;
   clock(form: FormData): Promise<void>;
@@ -131,7 +149,22 @@ export function MySchedule({
                     assignment.shift.timezone,
                   )}
                 </p>
+                {assignment.shift.siteAddress ? (
+                  <p className="mb-3 text-sm text-[var(--text-muted)]">
+                    {assignment.shift.siteAddress}
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-3">
+                  {assignment.shift.siteAddress ? (
+                    <a
+                      className="min-h-11 rounded-lg border border-white/20 px-4 py-2 font-medium"
+                      href={mapsUrl(assignment.shift.siteAddress)}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Get directions
+                    </a>
+                  ) : null}
                   <ClockButton
                     action={actions?.clock}
                     assignmentId={assignment.id}
@@ -146,6 +179,110 @@ export function MySchedule({
             No assignments are currently scheduled.
           </p>
         )}
+      </section>
+      <section className={panel}>
+        <h2 className="text-xl font-semibold">Upcoming schedule</h2>
+        <p className="mt-1 text-[var(--text-muted)]">
+          Your next scheduled shifts, with local start and end times.
+        </p>
+        <div className="mt-3 grid gap-3">
+          {state.assignments
+            .filter((assignment) => assignment.shift.status === "PUBLISHED")
+            .map((assignment) => (
+              <article
+                className="rounded-lg border border-white/10 p-4"
+                key={`upcoming-${assignment.id}`}
+              >
+                <strong>
+                  {assignment.shift.siteName} — {assignment.shift.postName}
+                </strong>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  {assignmentTime(
+                    assignment.shift.scheduledStart,
+                    assignment.shift.scheduledEnd,
+                    assignment.shift.timezone,
+                  )}
+                </p>
+                <p className="mt-1 text-sm">Assignment: {assignment.status}</p>
+                {assignment.shift.siteAddress ? (
+                  <a
+                    className="mt-3 inline-flex min-h-10 items-center rounded-lg border border-white/20 px-3 py-2 text-sm"
+                    href={mapsUrl(assignment.shift.siteAddress)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Get directions
+                  </a>
+                ) : null}
+              </article>
+            ))}
+        </div>
+      </section>
+      <section className={panel}>
+        <h2 className="text-xl font-semibold">Timecard</h2>
+        <p className="mt-1 text-[var(--text-muted)]">
+          What time Nexus currently has recorded for you.
+        </p>
+        <div className="mt-3 grid gap-3">
+          {state.assignments.map((assignment) => {
+            const events = state.clockEvents?.[assignment.id] ?? [];
+            const totalSeconds = events.reduce((total, event, index) => {
+              if (event.eventType !== "CLOCK_OUT") return total;
+              const prior = events[index - 1];
+              return prior?.eventType === "CLOCK_IN"
+                ? total +
+                    Math.max(
+                      0,
+                      (new Date(event.effectiveAt).valueOf() -
+                        new Date(prior.effectiveAt).valueOf()) /
+                        1000,
+                    )
+                : total;
+            }, 0);
+            const incomplete = events.at(-1)?.eventType === "CLOCK_IN";
+            return (
+              <article
+                className="rounded-lg border border-white/10 p-4"
+                key={`timecard-${assignment.id}`}
+              >
+                <strong>
+                  {assignment.shift.siteName} — {assignment.shift.postName}
+                </strong>
+                {events.length ? (
+                  <>
+                    {events.map((event) => (
+                      <p
+                        className="mt-1 text-sm text-[var(--text-muted)]"
+                        key={event.id}
+                      >
+                        {event.eventType === "CLOCK_IN"
+                          ? "Clock-in"
+                          : "Clock-out"}
+                        :{" "}
+                        {localTime(
+                          event.effectiveAt,
+                          assignment.shift.timezone,
+                        )}
+                      </p>
+                    ))}
+                    <p className="mt-2 font-medium">
+                      Total: {durationLabel(totalSeconds)}
+                    </p>
+                    {incomplete ? (
+                      <p className="mt-1 text-sm">
+                        Incomplete pair — clock out to complete this shift.
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-[var(--text-muted)]">
+                    No clock events recorded yet.
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
       </section>
       <section className={panel}>
         <h2 className="text-xl font-semibold">Declare availability</h2>
