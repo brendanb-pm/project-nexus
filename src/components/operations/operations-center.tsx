@@ -13,17 +13,16 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
     "ALL" | "CRITICAL" | "URGENT" | "REVIEW"
   >("ALL");
   const [query, setQuery] = useState("");
-  const source = state.kind === "ready" ? state.exceptions.items : [];
   const items = useMemo(
     () =>
-      source.filter(
+      (state.kind === "ready" ? state.exceptions.items : []).filter(
         (item) =>
           (filter === "ALL" || item.severity === filter) &&
           `${item.title} ${item.detail}`
             .toLowerCase()
             .includes(query.toLowerCase()),
       ),
-    [source, filter, query],
+    [state, filter, query],
   );
   if (state.kind !== "ready")
     return (
