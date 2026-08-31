@@ -18,10 +18,11 @@ jobs:
       - name: Check changed-surface formatting
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git diff --name-only "origin/${{ github.base_ref }}...HEAD" | xargs --no-run-if-empty npx prettier --check
+            changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
           else
-            git diff --name-only HEAD^ HEAD | xargs --no-run-if-empty npx prettier --check
+            changed="$(git diff --name-only HEAD^ HEAD)"
           fi
+          printf '%s\n' "$changed" | grep -E '\.(c?js|mjs|ts|tsx|json|md|ya?ml|css|html)$' | xargs --no-run-if-empty npx prettier --check
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
