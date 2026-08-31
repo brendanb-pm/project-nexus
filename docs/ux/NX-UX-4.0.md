@@ -6,24 +6,24 @@
 
 Nexus has appropriate security-operation primitives—assignments, clock events, activities, incidents, handoffs, credentials, and audit history—but presents them as isolated forms. The target experience is role-specific workspaces with **exceptions before routine information**.
 
-| Dogfood finding | Direction | Classification |
-|---|---|---|
-| ISO/offset scheduling language | Weekly day/time availability editor | Existing UX defect; richer recurrence needs backend work |
-| Alternating clock exception | Render only the server-authoritative next action | Existing UX defect |
-| Reporting undiscoverable | Guard Report hub and shift-close checklist | Missing UI over existing reporting; custom reports are new |
-| Ops surfaces overlap | Command Center, Review Queue, and history are distinct | Existing UX defect plus aggregate read models |
-| Close exceptions buried | Shift-close compliance becomes a priority queue | New aggregation capability |
-| Single-credential mental model | Policy definitions separate from employee credential records | New product capability |
+| Dogfood finding                | Direction                                                    | Classification                                             |
+| ------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------- |
+| ISO/offset scheduling language | Weekly day/time availability editor                          | Existing UX defect; richer recurrence needs backend work   |
+| Alternating clock exception    | Render only the server-authoritative next action             | Existing UX defect                                         |
+| Reporting undiscoverable       | Guard Report hub and shift-close checklist                   | Missing UI over existing reporting; custom reports are new |
+| Ops surfaces overlap           | Command Center, Review Queue, and history are distinct       | Existing UX defect plus aggregate read models              |
+| Close exceptions buried        | Shift-close compliance becomes a priority queue              | New aggregation capability                                 |
+| Single-credential mental model | Policy definitions separate from employee credential records | New product capability                                     |
 
 Research principles: use familiar calendar recurrence (frequency, interval, weekdays, start/end); identify recurring series; distinguish employee preferences from hard eligibility; show eligible open-shift candidates and their reasoning. Reference patterns: [Connecteam recurring shifts](https://help.connecteam.com/en/articles/6852015-job-schedule-how-to-create-repeating-shifts), [When I Work eligibility/conflicts](https://help.wheniwork.com/articles/scheduling-a-shift/), and [Outlook recurring events](https://support.microsoft.com/en-us/outlook/calendar/schedule-a-meeting-or-event-in-outlook).
 
 ## Role-based IA and action hierarchy
 
-| Role | Navigation | First-class actions |
-|---|---|---|
-| Guard, mobile-first | Home, Schedule, Report, More | Clock state; quick activity; incident; shift-close tasks |
-| Ops, desktop-first | Operations Center, Schedule, Coverage, Review Queue, Incidents, Compliance, Sites & Clients | Resolve uncovered work, review exceptions, acknowledge operational records |
-| Tenant Admin | People, Sites & Posts, Report Types, Incident Taxonomy, Credential Policies, AI Integration, Settings | Configure bounded policy/data, never generic form building |
+| Role                | Navigation                                                                                            | First-class actions                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Guard, mobile-first | Home, Schedule, Report, More                                                                          | Clock state; quick activity; incident; shift-close tasks                   |
+| Ops, desktop-first  | Operations Center, Schedule, Coverage, Review Queue, Incidents, Compliance, Sites & Clients           | Resolve uncovered work, review exceptions, acknowledge operational records |
+| Tenant Admin        | People, Sites & Posts, Report Types, Incident Taxonomy, Credential Policies, AI Integration, Settings | Configure bounded policy/data, never generic form building                 |
 
 Guard **Report** contains Activity/DAR, Incident, End-of-shift report, Handoff, and applicable tenant reports. Incident is a clear action but not the default Ops CTA. Admin configuration never appears in Guard navigation.
 
@@ -52,13 +52,13 @@ The server returns the authoritative clock state and permitted next action. Guar
 
 At shift start, Guard Home offers Quick activity and Report incident. In the close window it shows a checklist: Clock out, End-of-shift report, Handoff, required tenant report. Each item has explicit completion/exception state.
 
-| Workflow | UX |
-|---|---|
-| Activity/DAR | assignment-derived site/post; category, narrative, optional context/action/follow-up |
-| End-of-shift report | shift summary and unresolved work; references existing records rather than duplicating them |
-| Handoff | incoming-guard-facing unresolved items, equipment/keys, follow-up; one canonical Handoff surface |
-| Incident | structured canonical report, optional related activity, immutable original on submit |
-| Tenant report | active applicable type, instructions, large narrative body, required/optional label |
+| Workflow            | UX                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------ |
+| Activity/DAR        | assignment-derived site/post; category, narrative, optional context/action/follow-up             |
+| End-of-shift report | shift summary and unresolved work; references existing records rather than duplicating them      |
+| Handoff             | incoming-guard-facing unresolved items, equipment/keys, follow-up; one canonical Handoff surface |
+| Incident            | structured canonical report, optional related activity, immutable original on submit             |
+| Tenant report       | active applicable type, instructions, large narrative body, required/optional label              |
 
 Incident **core fields** are assignment-derived context, identifier, severity, narrative, actions, follow-up, submission and audit history. Configurable taxonomy controls include incident type, site/post applicability, active state, instructions, and governed severity labels. Admin cannot remove canonical context/audit fields; changes version labels for historical fidelity.
 
@@ -70,12 +70,12 @@ The first viewport answers: who is working, who is inbound, whether last shifts 
 
 **Needs Attention** is an actionable queue, not a feed. Each card has severity, age, affected site/post/shift/person, accountable owner, and one primary action.
 
-| Priority | Examples | Action |
-|---|---|---|
-| Critical | current site uncovered; missed clock-in with no coverage | Fill shift / escalate |
-| Urgent | unassigned imminent shift; close report missing; handoff overdue | Assign / request completion |
-| Review | incident awaiting acknowledgement; clock exception | Review / acknowledge |
-| Risk | credential fails before assigned shift | Resolve eligibility |
+| Priority | Examples                                                         | Action                      |
+| -------- | ---------------------------------------------------------------- | --------------------------- |
+| Critical | current site uncovered; missed clock-in with no coverage         | Fill shift / escalate       |
+| Urgent   | unassigned imminent shift; close report missing; handoff overdue | Assign / request completion |
+| Review   | incident awaiting acknowledgement; clock exception               | Review / acknowledge        |
+| Risk     | credential fails before assigned shift                           | Resolve eligibility         |
 
 Active Coverage is site/post-oriented: **Current**, **Inbound**, **Next coverage**. Example: “Cedar Plaza / North Lobby — Guard A, 16:00–00:00, clocked in; Guard B inbound 00:00–08:00; No gap.” An unassigned next shift is high-contrast with Fill shift.
 
@@ -100,39 +100,39 @@ Admin configures warning stages and recipients—employee, operational role, arb
 
 The trust model is explicit in every AI surface: deterministic Nexus eligibility → candidate pool → recommendation → Nexus revalidation → Ops review → apply.
 
-| Level | Interaction |
-|---|---|
-| Find Coverage | one open shift; ranked eligible candidates with hard eligibility, preferences, hours, conflicts, Assign/View detail |
-| Suggest Resolution | select several exceptions; review grouped proposed changes and apply selected only |
-| Build Draft Schedule | choose period/scope/priorities; create named Draft; compare and review before publish |
+| Level                | Interaction                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Find Coverage        | one open shift; ranked eligible candidates with hard eligibility, preferences, hours, conflicts, Assign/View detail |
+| Suggest Resolution   | select several exceptions; review grouped proposed changes and apply selected only                                  |
+| Build Draft Schedule | choose period/scope/priorities; create named Draft; compare and review before publish                               |
 
 Hard failures are excluded, never optimized around. Recommendations show freshness and become stale after availability, credential, coverage, or assignment change; Refresh is required before apply. Admin AI Integration uses provider-neutral Provider, Model, credential status, Test connection, access/audit status. Priorities are business settings—minimize overtime, balance hours, prefer site experience, minimize changes, honor preferences, minimize travel—not prompt engineering and not hard rules.
 
 ## System and responsive states
 
-| State | Required behavior |
-|---|---|
-| Loading | task-shaped skeleton; preserve known filters |
-| Empty | explain why nothing exists; show only permitted next action |
-| Validation | inline field-specific plain language; preserve input |
-| Permission denied | no existence leakage; route to allowed home |
-| Stale/conflict | identify changed record; refresh/review, never overwrite silently |
-| Failure/retry | plain outcome, safe retry, support reference; never raw backend text |
+| State             | Required behavior                                                    |
+| ----------------- | -------------------------------------------------------------------- |
+| Loading           | task-shaped skeleton; preserve known filters                         |
+| Empty             | explain why nothing exists; show only permitted next action          |
+| Validation        | inline field-specific plain language; preserve input                 |
+| Permission denied | no existence leakage; route to allowed home                          |
+| Stale/conflict    | identify changed record; refresh/review, never overwrite silently    |
+| Failure/retry     | plain outcome, safe retry, support reference; never raw backend text |
 
 Guard at 390×844: bottom navigation, one primary CTA above fold, 44px targets, stacked cards, full-screen report steps. Ops/Admin: dense desktop table-detail patterns at 1280px+, tablet collapses panels before hiding state. Do not shrink the Command Center into Guard mobile.
 
 ## Component/workflow handoff
 
-| Component | Required inputs/states | Role |
-|---|---|---|
-| Shift state card | assignment, authoritative next clock action, close checklist | Guard |
-| Weekly availability editor | day state/ranges, effective range, timezone | Guard |
-| Coverage timeline | requirement, occurrences, assignments, severity | Ops |
-| Exception card | type, priority, entity links, owner, action | Ops |
-| Shift close matrix | obligations, timing, completion evidence | Ops |
-| Report picker/form | applicable types, assignment context, submit state | Guard |
-| Credential policy/record | definition or employee evidence/history | Scoped |
-| Recommendation panel | eligibility, preferences, freshness, changes | Ops |
+| Component                  | Required inputs/states                                       | Role   |
+| -------------------------- | ------------------------------------------------------------ | ------ |
+| Shift state card           | assignment, authoritative next clock action, close checklist | Guard  |
+| Weekly availability editor | day state/ranges, effective range, timezone                  | Guard  |
+| Coverage timeline          | requirement, occurrences, assignments, severity              | Ops    |
+| Exception card             | type, priority, entity links, owner, action                  | Ops    |
+| Shift close matrix         | obligations, timing, completion evidence                     | Ops    |
+| Report picker/form         | applicable types, assignment context, submit state           | Guard  |
+| Credential policy/record   | definition or employee evidence/history                      | Scoped |
+| Recommendation panel       | eligibility, preferences, freshness, changes                 | Ops    |
 
 ## Story decomposition and scope
 
