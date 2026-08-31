@@ -31,6 +31,12 @@ export class ReportingService {
     const { context } = this.access;
     return { organizationId: context.organizationId, ...context.scope };
   }
+  canReview() {
+    return (
+      this.access.context.capabilities.has("VIEW_SITE_OPERATIONS") &&
+      this.access.context.visibility.has("SUPERVISOR")
+    );
+  }
   async listOwnAssignments() {
     const employeeId = this.access.context.scope.employeeId;
     if (!employeeId) throw new ResourceNotFoundError("Employee relationship");
@@ -77,6 +83,22 @@ export class ReportingService {
       ? [...this.access.context.visibility]
       : ["CLIENT_VISIBLE" as const];
     return this.repository.listIncidents(this.scope(), visibility, 25);
+  }
+  async listAuthorizedActivities() {
+    this.access.requireOrganization("VIEW_SITE_OPERATIONS");
+    return this.repository.listReviewActivities(
+      this.scope(),
+      [...this.access.context.visibility],
+      25,
+    );
+  }
+  async listAuthorizedHandoffs() {
+    this.access.requireOrganization("VIEW_SITE_OPERATIONS");
+    return this.repository.listReviewHandoffs(
+      this.scope(),
+      [...this.access.context.visibility],
+      25,
+    );
   }
   async getReviewRecord(
     entityType: "ActivityEntry" | "IncidentReport" | "Handoff",

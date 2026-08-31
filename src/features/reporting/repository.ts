@@ -98,6 +98,11 @@ export interface ReportingRepository {
     employeeId: string,
     limit: number,
   ): Promise<readonly ActivityEntrySummary[]>;
+  listReviewActivities(
+    scope: ReportingScope,
+    visibility: readonly VisibilityClassification[],
+    limit: number,
+  ): Promise<readonly ActivityEntrySummary[]>;
   createActivity(
     scope: ReportingScope,
     context: ActivityContext,
@@ -128,6 +133,11 @@ export interface ReportingRepository {
   listOwnHandoffs(
     scope: ReportingScope,
     employeeId: string,
+    limit: number,
+  ): Promise<readonly HandoffSummary[]>;
+  listReviewHandoffs(
+    scope: ReportingScope,
+    visibility: readonly VisibilityClassification[],
     limit: number,
   ): Promise<readonly HandoffSummary[]>;
   createHandoff(

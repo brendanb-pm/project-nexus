@@ -110,6 +110,9 @@ class Repo implements ReportingRepository {
   async listRecent() {
     return this.entries;
   }
+  async listReviewActivities() {
+    return this.entries;
+  }
   async createActivity(
     _scope: ReportingScope,
     value: ActivityContext,
@@ -192,6 +195,9 @@ class Repo implements ReportingRepository {
     return incident;
   }
   async listOwnHandoffs() {
+    return this.handoffs;
+  }
+  async listReviewHandoffs() {
     return this.handoffs;
   }
   async createHandoff(

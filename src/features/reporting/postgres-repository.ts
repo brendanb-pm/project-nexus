@@ -476,6 +476,32 @@ export class PostgresReportingRepository implements ReportingRepository {
       .limit(limit);
     return rows.map(dto);
   }
+  async listReviewActivities(
+    scope: ReportingScope,
+    visibility: readonly ActivityEntrySummary["visibility"][],
+    limit: number,
+  ) {
+    const rows = await this.database
+      .select(fields)
+      .from(activityEntries)
+      .innerJoin(
+        shiftAssignments,
+        eq(activityEntries.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(
+          scopePredicate(scope),
+          inArray(activityEntries.visibility, [...visibility]),
+        ),
+      )
+      .orderBy(desc(activityEntries.occurredAt), desc(activityEntries.id))
+      .limit(limit);
+    return rows.map(dto);
+  }
   async createActivity(
     scope: ReportingScope,
     context: ActivityContext,
@@ -723,6 +749,32 @@ export class PostgresReportingRepository implements ReportingRepository {
       .innerJoin(clients, eq(sites.clientId, clients.id))
       .where(
         and(scopePredicate(scope), eq(shiftAssignments.employeeId, employeeId)),
+      )
+      .orderBy(desc(handoffs.submittedAt), desc(handoffs.id))
+      .limit(limit);
+    return rows.map(handoffDto);
+  }
+  async listReviewHandoffs(
+    scope: ReportingScope,
+    visibility: readonly HandoffSummary["visibility"][],
+    limit: number,
+  ) {
+    const rows = await this.database
+      .select(handoffFields)
+      .from(handoffs)
+      .innerJoin(
+        shiftAssignments,
+        eq(handoffs.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(
+          scopePredicate(scope),
+          inArray(handoffs.visibility, [...visibility]),
+        ),
       )
       .orderBy(desc(handoffs.submittedAt), desc(handoffs.id))
       .limit(limit);

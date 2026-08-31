@@ -10,6 +10,21 @@ export async function loadReportingPage(
 ): Promise<ReportingPageState> {
   try {
     const service = await serviceOrPromise;
+    if (service.canReview()) {
+      const [recent, incidents, handoffs] = await Promise.all([
+        service.listAuthorizedActivities(),
+        service.listAuthorizedIncidents(),
+        service.listAuthorizedHandoffs(),
+      ]);
+      return {
+        kind: "ready",
+        assignments: [],
+        recent,
+        incidents,
+        handoffs,
+        reviewEnabled: true,
+      };
+    }
     try {
       const [assignments, recent, incidents, handoffs] = await Promise.all([
         service.listOwnAssignments(),
@@ -17,20 +32,32 @@ export async function loadReportingPage(
         service.listOwnIncidents(),
         service.listOwnHandoffs(),
       ]);
-      return { kind: "ready", assignments, recent, incidents, handoffs };
+      return {
+        kind: "ready",
+        assignments,
+        recent,
+        incidents,
+        handoffs,
+        reviewEnabled: service.canReview(),
+      };
     } catch (error) {
       if (
         !(error instanceof ResourceNotFoundError) &&
         !(error instanceof PermissionDeniedError)
       )
         throw error;
-      const incidents = await service.listAuthorizedIncidents();
+      const [recent, incidents, handoffs] = await Promise.all([
+        service.listAuthorizedActivities(),
+        service.listAuthorizedIncidents(),
+        service.listAuthorizedHandoffs(),
+      ]);
       return {
         kind: "ready",
         assignments: [],
-        recent: [],
+        recent,
         incidents,
-        handoffs: [],
+        handoffs,
+        reviewEnabled: service.canReview(),
       };
     }
   } catch (error) {
