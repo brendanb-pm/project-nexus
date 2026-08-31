@@ -7,6 +7,18 @@ const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
 const input =
   "mt-1 w-full rounded-lg border border-white/15 bg-[var(--background)] px-3 py-2";
 
+function assignmentTime(start: string, end: string, timezone: string) {
+  const format = new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+  return `${format.format(new Date(start))} → ${format.format(new Date(end))}`;
+}
+
 export type MyScheduleActions = {
   createAvailability(form: FormData): Promise<void>;
   clock(form: FormData): Promise<void>;
@@ -22,8 +34,10 @@ function ClockButton({
   action?: (form: FormData) => Promise<void>;
 }) {
   const [status, setStatus] = useState("");
+  const [pending, setPending] = useState(false);
   async function submit() {
-    if (!action) return;
+    if (!action || pending) return;
+    setPending(true);
     setStatus("Requesting one-time location…");
     const form = new FormData();
     form.set("shiftAssignmentId", assignmentId);
@@ -43,13 +57,20 @@ function ClockButton({
       );
     }
     setStatus("Recording…");
-    await action(form);
-    setStatus("Recorded.");
+    try {
+      await action(form);
+      setStatus("Recorded.");
+    } catch {
+      setStatus("Could not record the clock event. Try again safely.");
+    } finally {
+      setPending(false);
+    }
   }
   return (
     <div>
       <button
         className="min-h-11 rounded-lg bg-[var(--accent)] px-4 py-2 font-medium text-black"
+        disabled={pending}
         onClick={submit}
         type="button"
       >
@@ -104,19 +125,17 @@ export function MySchedule({
                   {assignment.shift.siteName} — {assignment.shift.postName}
                 </strong>
                 <p className="mb-3 text-sm text-[var(--text-muted)]">
-                  {new Date(assignment.shift.scheduledStart).toLocaleString()}{" "}
-                  to {new Date(assignment.shift.scheduledEnd).toLocaleString()}
+                  {assignmentTime(
+                    assignment.shift.scheduledStart,
+                    assignment.shift.scheduledEnd,
+                    assignment.shift.timezone,
+                  )}
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <ClockButton
                     action={actions?.clock}
                     assignmentId={assignment.id}
-                    eventType="CLOCK_IN"
-                  />
-                  <ClockButton
-                    action={actions?.clock}
-                    assignmentId={assignment.id}
-                    eventType="CLOCK_OUT"
+                    eventType={state.clockStates?.[assignment.id] ?? "CLOCK_IN"}
                   />
                 </div>
               </article>
@@ -134,23 +153,28 @@ export function MySchedule({
           action={actions?.createAvailability}
           className="mt-3 grid gap-3 md:grid-cols-4"
         >
+          <input
+            name="timezone"
+            type="hidden"
+            value={timezones[0] ?? "America/Los_Angeles"}
+          />
           <label>
-            <span className="text-sm">Timezone</span>
-            <select className={input} name="timezone">
-              {(timezones.length ? timezones : ["America/Los_Angeles"]).map(
-                (timezone) => (
-                  <option key={timezone}>{timezone}</option>
-                ),
-              )}
-            </select>
+            <span className="text-sm">Start</span>
+            <input
+              className={input}
+              name="startsAt"
+              required
+              type="datetime-local"
+            />
           </label>
           <label>
-            <span className="text-sm">Starts (ISO with offset)</span>
-            <input className={input} name="startsAt" required />
-          </label>
-          <label>
-            <span className="text-sm">Ends (ISO with offset)</span>
-            <input className={input} name="endsAt" required />
+            <span className="text-sm">End</span>
+            <input
+              className={input}
+              name="endsAt"
+              required
+              type="datetime-local"
+            />
           </label>
           <label>
             <span className="text-sm">Status</span>

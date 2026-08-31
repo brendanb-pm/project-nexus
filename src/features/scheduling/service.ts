@@ -276,6 +276,24 @@ export class SchedulingService {
     );
   }
 
+  async getOwnClockState(assignmentId: string) {
+    const context = await this.repository.getClockContext(
+      this.scope(),
+      assignmentId,
+    );
+    if (!context) throw new ResourceNotFoundError("Shift assignment");
+    this.access.requireHierarchical("CLOCK_OWN_SHIFT", {
+      organizationId: context.organizationId,
+      branchId: context.branchId,
+      clientId: context.clientId,
+      siteId: context.siteId,
+      employeeId: context.employeeId,
+    });
+    return context.events.at(-1)?.eventType === "CLOCK_IN"
+      ? "CLOCK_OUT"
+      : "CLOCK_IN";
+  }
+
   async clockOwnShift(raw: ClockEventInput) {
     const assignmentId =
       typeof raw.shiftAssignmentId === "string" ? raw.shiftAssignmentId : "";
