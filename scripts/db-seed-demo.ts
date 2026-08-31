@@ -51,7 +51,7 @@ async function main() {
       [ids.client, ids.organization, ids.branch],
     );
     await pool.query(
-      "INSERT INTO sites (id, client_id, name, address, timezone) VALUES ($1, $2, 'Cedar Plaza North', '{\"city\":\"Demo City\"}'::jsonb, 'America/Los_Angeles')",
+      'INSERT INTO sites (id, client_id, name, address, timezone) VALUES ($1, $2, \'Cedar Plaza North\', \'{"line1":"100 Cedar Plaza Way","city":"Demo City","region":"CA","postalCode":"90001","country":"US"}\'::jsonb, \'America/Los_Angeles\')',
       [ids.site, ids.client],
     );
     await pool.query(

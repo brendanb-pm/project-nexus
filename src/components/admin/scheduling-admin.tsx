@@ -5,6 +5,18 @@ const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
 const input =
   "mt-1 w-full rounded-lg border border-white/15 bg-[var(--background)] px-3 py-2";
 
+function shiftTime(start: string, end: string, timezone: string) {
+  const format = new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+  return `${format.format(new Date(start))} → ${format.format(new Date(end))}`;
+}
+
 export type SchedulingAdminActions = {
   createShift(form: FormData): Promise<void>;
   assignEmployee(form: FormData): Promise<void>;
@@ -31,8 +43,8 @@ export function SchedulingAdmin({
       <section className={panel}>
         <h1 className="text-2xl font-semibold">Shift scheduling</h1>
         <p className="mt-1 text-[var(--text-muted)]">
-          Times require an explicit UTC offset so daylight-saving transitions
-          are never guessed.
+          Times use the post&apos;s local timezone. Nexus preserves the
+          authoritative timestamp for scheduling and audit records.
         </p>
         <form
           action={actions?.createShift}
@@ -49,22 +61,22 @@ export function SchedulingAdmin({
             </select>
           </label>
           <label>
-            <span className="text-sm">Starts (ISO with offset)</span>
+            <span className="text-sm">Start</span>
             <input
               className={input}
               disabled={!enabled}
               name="scheduledStart"
-              placeholder="2026-11-01T01:30:00-08:00"
+              type="datetime-local"
               required
             />
           </label>
           <label>
-            <span className="text-sm">Ends (ISO with offset)</span>
+            <span className="text-sm">End</span>
             <input
               className={input}
               disabled={!enabled}
               name="scheduledEnd"
-              placeholder="2026-11-01T09:30:00-08:00"
+              type="datetime-local"
               required
             />
           </label>
@@ -105,9 +117,12 @@ export function SchedulingAdmin({
                   {shift.siteName} — {shift.postName}
                 </strong>
                 <p className="text-sm text-[var(--text-muted)]">
-                  {new Date(shift.scheduledStart).toLocaleString()} to{" "}
-                  {new Date(shift.scheduledEnd).toLocaleString()} ·{" "}
-                  {shift.assignedCount}/{shift.staffingRequirement} staffed ·{" "}
+                  {shiftTime(
+                    shift.scheduledStart,
+                    shift.scheduledEnd,
+                    shift.timezone,
+                  )}{" "}
+                  · {shift.assignedCount}/{shift.staffingRequirement} staffed ·{" "}
                   {shift.status}
                 </p>
                 <form

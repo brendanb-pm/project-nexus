@@ -48,7 +48,20 @@ export async function loadMySchedulePage(
       service.listOwnAssignments(),
       service.listOwnAvailability(),
     ]);
-    return { kind: "ready", assignments, availability };
+    const contexts = await Promise.all(
+      assignments.map((assignment) => service.getOwnClockState(assignment.id)),
+    );
+    return {
+      kind: "ready",
+      assignments,
+      availability,
+      clockStates: Object.fromEntries(
+        assignments.map((assignment, index) => [
+          assignment.id,
+          contexts[index]!,
+        ]),
+      ),
+    };
   } catch (error) {
     if (
       error instanceof AuthenticationRequiredError ||

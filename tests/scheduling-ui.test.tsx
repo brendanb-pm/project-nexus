@@ -75,7 +75,7 @@ describe("Sprint 2 scheduling UI", () => {
     expect(
       screen.getByRole("option", { name: /Alex Guard.*NPS-100/ }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/explicit UTC offset/i)).toBeInTheDocument();
+    expect(screen.getByText(/post's local timezone/i)).toBeInTheDocument();
   });
 
   it("renders stable permission-denied state", () => {
@@ -101,8 +101,8 @@ describe("Sprint 2 scheduling UI", () => {
       screen.getByRole("button", { name: "Clock in" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Clock out" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Clock out" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders an actionable empty assignment state", () => {

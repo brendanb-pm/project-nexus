@@ -172,4 +172,5 @@ export type MySchedulePageState =
       kind: "ready";
       assignments: readonly AssignmentSummary[];
       availability: readonly AvailabilitySummary[];
+      clockStates?: Readonly<Record<string, "CLOCK_IN" | "CLOCK_OUT">>;
     };
