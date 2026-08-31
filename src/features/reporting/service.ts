@@ -84,6 +84,22 @@ export class ReportingService {
       : ["CLIENT_VISIBLE" as const];
     return this.repository.listIncidents(this.scope(), visibility, 25);
   }
+  async listAuthorizedActivities() {
+    this.access.requireOrganization("VIEW_SITE_OPERATIONS");
+    return this.repository.listReviewActivities(
+      this.scope(),
+      [...this.access.context.visibility],
+      25,
+    );
+  }
+  async listAuthorizedHandoffs() {
+    this.access.requireOrganization("VIEW_SITE_OPERATIONS");
+    return this.repository.listReviewHandoffs(
+      this.scope(),
+      [...this.access.context.visibility],
+      25,
+    );
+  }
   async getReviewRecord(
     entityType: "ActivityEntry" | "IncidentReport" | "Handoff",
     recordId: string,
