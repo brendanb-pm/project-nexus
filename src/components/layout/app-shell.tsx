@@ -1,3 +1,6 @@
+import { isLocalDevelopmentAuthEnabled } from "@/auth/development";
+import { DevelopmentSignOut } from "@/components/auth/development-sign-out";
+
 export function AppShell({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -8,6 +11,7 @@ export function AppShell({
         <p className="mt-1 text-xs text-[var(--text-muted)]">
           Security Operations
         </p>
+        {isLocalDevelopmentAuthEnabled() ? <DevelopmentSignOut /> : null}
       </aside>
       <main className="p-4 md:p-8">{children}</main>
     </div>

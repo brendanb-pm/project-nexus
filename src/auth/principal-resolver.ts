@@ -1,6 +1,7 @@
 import "server-only";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { DEV_AUTH_COOKIE, verifyDevelopmentSession } from "./development";
 import { getAuth } from "./server";
 import { NEXUS_OIDC_PROVIDER_ID } from "./provider";
 import {
@@ -62,7 +63,29 @@ export class BetterAuthSessionVerifier implements ExternalSessionVerifier {
   }
 }
 
+export class DevelopmentSessionVerifier implements ExternalSessionVerifier {
+  constructor(private readonly session: string | undefined) {}
+
+  async verify(): Promise<VerifiedExternalSession | null> {
+    const session = verifyDevelopmentSession(this.session);
+    if (!session) return null;
+    return {
+      authUserId: session.authUserId,
+      sessionId: `development:${session.persona}`,
+      authenticatedAt: new Date().toISOString(),
+      provider: NEXUS_OIDC_PROVIDER_ID,
+    };
+  }
+}
+
 export async function createProductionPrincipalResolver(): Promise<NexusPrincipalResolver> {
+  const developmentSession = (await cookies()).get(DEV_AUTH_COOKIE)?.value;
+  if (verifyDevelopmentSession(developmentSession)) {
+    return new NexusPrincipalResolver(
+      new DevelopmentSessionVerifier(developmentSession),
+      new PostgresMembershipResolver(),
+    );
+  }
   return new NexusPrincipalResolver(
     new BetterAuthSessionVerifier(await headers()),
     new PostgresMembershipResolver(),
