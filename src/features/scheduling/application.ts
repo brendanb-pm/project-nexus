@@ -49,7 +49,9 @@ export async function loadMySchedulePage(
       service.listOwnAvailability(),
     ]);
     const contexts = await Promise.all(
-      assignments.map((assignment) => service.getOwnClockState(assignment.id)),
+      assignments.map((assignment) =>
+        service.getOwnClockContext(assignment.id),
+      ),
     );
     return {
       kind: "ready",
@@ -58,7 +60,15 @@ export async function loadMySchedulePage(
       clockStates: Object.fromEntries(
         assignments.map((assignment, index) => [
           assignment.id,
-          contexts[index]!,
+          contexts[index]!.events.at(-1)?.eventType === "CLOCK_IN"
+            ? "CLOCK_OUT"
+            : "CLOCK_IN",
+        ]),
+      ),
+      clockEvents: Object.fromEntries(
+        assignments.map((assignment, index) => [
+          assignment.id,
+          contexts[index]!.events,
         ]),
       ),
     };

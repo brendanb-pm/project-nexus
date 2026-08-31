@@ -15,6 +15,7 @@ export type ShiftSummary = {
   branchId: string;
   postName: string;
   siteName: string;
+  siteAddress?: string;
   timezone: string;
   scheduledStart: string;
   scheduledEnd: string;
@@ -173,4 +174,5 @@ export type MySchedulePageState =
       assignments: readonly AssignmentSummary[];
       availability: readonly AvailabilitySummary[];
       clockStates?: Readonly<Record<string, "CLOCK_IN" | "CLOCK_OUT">>;
+      clockEvents?: Readonly<Record<string, readonly ClockEventSummary[]>>;
     };

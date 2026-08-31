@@ -5,6 +5,7 @@ import {
   activityEntries,
   auditEvents,
   clients,
+  employees,
   incidentReports,
   handoffs,
   operationalRecordRevisions,
@@ -255,11 +256,16 @@ export class PostgresReportingRepository implements ReportingRepository {
       .select({
         revision: operationalRecordRevisions.revision,
         changedByUserId: operationalRecordRevisions.changedByUserId,
+        changedByProfile: employees.profile,
         changedAt: operationalRecordRevisions.changedAt,
         reason: operationalRecordRevisions.reason,
         snapshot: operationalRecordRevisions.snapshot,
       })
       .from(operationalRecordRevisions)
+      .leftJoin(
+        employees,
+        eq(employees.userId, operationalRecordRevisions.changedByUserId),
+      )
       .where(
         and(
           eq(operationalRecordRevisions.organizationId, scope.organizationId),
@@ -291,6 +297,19 @@ export class PostgresReportingRepository implements ReportingRepository {
         .map((item) => ({
           revision: item.revision,
           changedByUserId: item.changedByUserId,
+          ...(() => {
+            const profile =
+              item.changedByProfile && typeof item.changedByProfile === "object"
+                ? (item.changedByProfile as Record<string, unknown>)
+                : {};
+            const name =
+              typeof profile.name === "string"
+                ? profile.name
+                : typeof profile.displayName === "string"
+                  ? profile.displayName
+                  : "";
+            return name ? { changedByName: name } : {};
+          })(),
           changedAt: item.changedAt.toISOString(),
           reason: item.reason ?? "",
           snapshot: item.snapshot as Record<string, unknown>,

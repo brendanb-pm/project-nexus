@@ -98,6 +98,7 @@ export type OperationalRecordType = (typeof operationalRecordTypes)[number];
 export type OperationalRevision = {
   revision: number;
   changedByUserId: string;
+  changedByName?: string;
   changedAt: string;
   reason: string;
   snapshot: Record<string, unknown>;

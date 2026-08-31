@@ -175,7 +175,7 @@ export function ReportingWorkspace({
   }
   return (
     <div className="grid gap-6">
-      <section className={panel}>
+      <section className={state.reviewEnabled ? "hidden" : panel}>
         <h1 className="text-2xl font-semibold">Shift activity</h1>
         <p className="mt-1 text-[var(--text-muted)]">
           Record routine activity for your assigned site. Site, post, and
@@ -367,7 +367,7 @@ export function ReportingWorkspace({
                             {detail.history.map((item) => (
                               <li key={item.revision}>
                                 Revision {item.revision} ·{" "}
-                                {item.changedByUserId} ·{" "}
+                                {item.changedByName ?? "Authorized reviewer"} ·{" "}
                                 {new Date(item.changedAt).toLocaleString()} ·{" "}
                                 {item.reason}
                               </li>
@@ -391,7 +391,7 @@ export function ReportingWorkspace({
           )}
         </section>
       ) : null}
-      <section className={panel}>
+      <section className={state.reviewEnabled ? "hidden" : panel}>
         <h2 className="text-xl font-semibold">End-of-shift handoff</h2>
         <p className="mt-1 text-[var(--text-muted)]">
           Leave the next guard and supervisor an accurate record of unresolved
@@ -441,7 +441,7 @@ export function ReportingWorkspace({
           </p>
         )}
       </section>
-      <section className={panel}>
+      <section className={state.reviewEnabled ? "hidden" : panel}>
         <h2 className="text-xl font-semibold">Record activity</h2>
         {state.assignments.length ? (
           <form action={submit} className="mt-3 grid gap-3">
