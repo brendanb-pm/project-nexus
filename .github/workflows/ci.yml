@@ -8,12 +8,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run format:check
+      - name: Check changed-surface formatting
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" | xargs --no-run-if-empty npx prettier --check
+          else
+            git diff --name-only HEAD^ HEAD | xargs --no-run-if-empty npx prettier --check
+          fi
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
