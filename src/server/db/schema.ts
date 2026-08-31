@@ -457,6 +457,40 @@ export const shifts = pgTable(
     ),
   ],
 );
+
+export const coverageRequirements = pgTable(
+  "coverage_requirements",
+  {
+    id: id(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.id),
+    requiredCount: integer("required_count").notNull(),
+    weekdays: jsonb("weekdays").notNull(),
+    localStartTime: text("local_start_time").notNull(),
+    localEndTime: text("local_end_time").notNull(),
+    effectiveStart: date("effective_start").notNull(),
+    effectiveEnd: date("effective_end"),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("coverage_requirements_post_effective_idx").on(
+      t.postId,
+      t.effectiveStart,
+      t.effectiveEnd,
+    ),
+    check(
+      "coverage_requirements_count_check",
+      sql`${t.requiredCount} between 1 and 100`,
+    ),
+    check(
+      "coverage_requirements_effective_order_check",
+      sql`${t.effectiveEnd} is null or ${t.effectiveEnd} >= ${t.effectiveStart}`,
+    ),
+  ],
+);
 export const shiftAssignments = pgTable(
   "shift_assignments",
   {

@@ -99,6 +99,13 @@
       "when": 1788119281559,
       "tag": "0013_thick_synch",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788208125315,
+      "tag": "0014_quiet_winter_soldier",
+      "breakpoints": true
     }
   ]
 }
