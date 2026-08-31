@@ -6,8 +6,7 @@ export const operationsExceptionTypes = [
   "COVERAGE_GAP",
 ] as const;
 
-export type OperationsExceptionType =
-  (typeof operationsExceptionTypes)[number];
+export type OperationsExceptionType = (typeof operationsExceptionTypes)[number];
 
 export type OperationsExceptionSeverity = "CRITICAL" | "URGENT" | "REVIEW";
 

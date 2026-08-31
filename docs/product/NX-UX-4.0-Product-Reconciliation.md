@@ -12,35 +12,35 @@ Sprint 4 must not become a compliance rewrite, payroll, configurable reporting, 
 
 ## 2. Current product baseline
 
-| Area | Durable capability | Current presentation / limitation |
-| --- | --- | --- |
-| Scheduling | One-off, timezone-aware Shift; positive staffing requirement; authorized ShiftAssignment; draft/publish lifecycle | No coverage-template/recurrence model, open-shift state, or Ops exception view |
-| Availability | Employee-owned `AVAILABLE`/`UNAVAILABLE` half-open intervals; unavailable blocks; absence is `UNKNOWN` warning | Point-in-time interval entry only; no weekday pattern, exceptions, preference, or recurrence |
-| Eligibility | Active same-tenant employee, no overlap, post requirements, armed authorization, valid credential/certification checked on shift date | Current evaluator is deterministic but uses type-name requirements; no policy definitions or candidate/explanation read model |
-| Timekeeping | Server-authoritative append-only ClockEvents; corrections; derived TimeRecords; explicit approval | Guard Timecard exists; no Ops exception/period-review aggregate or export boundary |
-| Reporting | Assignment-bound Activity/DAR, incident gate, IncidentReport, Handoff; acknowledgement and immutable amendment history | Reporting workspace combines Guard submission and Ops review/history; no End-of-Shift Report record or close-obligation model |
-| Compliance | Multiple normalized credentials/certifications per employee, status, verification, renewal history, expiry | No credential definitions, jurisdiction/requirement policy, notification policy, or assignment-risk read model |
-| Guard UX | Current/upcoming schedule, human-readable local time, directions, authoritative clock CTA, Timecard, reporting/handoff | A cohesive Report hub and close checklist are still UI work |
+| Area         | Durable capability                                                                                                                    | Current presentation / limitation                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Scheduling   | One-off, timezone-aware Shift; positive staffing requirement; authorized ShiftAssignment; draft/publish lifecycle                     | No coverage-template/recurrence model, open-shift state, or Ops exception view                                                |
+| Availability | Employee-owned `AVAILABLE`/`UNAVAILABLE` half-open intervals; unavailable blocks; absence is `UNKNOWN` warning                        | Point-in-time interval entry only; no weekday pattern, exceptions, preference, or recurrence                                  |
+| Eligibility  | Active same-tenant employee, no overlap, post requirements, armed authorization, valid credential/certification checked on shift date | Current evaluator is deterministic but uses type-name requirements; no policy definitions or candidate/explanation read model |
+| Timekeeping  | Server-authoritative append-only ClockEvents; corrections; derived TimeRecords; explicit approval                                     | Guard Timecard exists; no Ops exception/period-review aggregate or export boundary                                            |
+| Reporting    | Assignment-bound Activity/DAR, incident gate, IncidentReport, Handoff; acknowledgement and immutable amendment history                | Reporting workspace combines Guard submission and Ops review/history; no End-of-Shift Report record or close-obligation model |
+| Compliance   | Multiple normalized credentials/certifications per employee, status, verification, renewal history, expiry                            | No credential definitions, jurisdiction/requirement policy, notification policy, or assignment-risk read model                |
+| Guard UX     | Current/upcoming schedule, human-readable local time, directions, authoritative clock CTA, Timecard, reporting/handoff                | A cohesive Report hub and close checklist are still UI work                                                                   |
 
 All new read paths must preserve the authenticated request boundary, capability/scope authorization, tenant predicates, bounded/stable collection reads, and append-only audit behavior for material actions.
 
 ## 3. NX-UX-4.0 assessment
 
-| UX recommendation | Classification | Existing support | Missing capability / dependency | Sprint recommendation | Risk |
-| --- | --- | --- | --- | --- | --- |
-| Guard authoritative clock card and recovery | B: existing capability/UI | Server clock context and one primary action exist | Consolidated card/recovery states | UI follow-up, not E4 gate | Low |
-| Guard Report hub and close checklist | C/D | Activity, Incident, Handoff exist | Canonical EOSR plus passdown delivery/read state | EOSR/passdown slice in NX4.4 | Medium |
-| Weekly availability editor | C/D | Point intervals, UNKNOWN/unavailable semantics | Recurring patterns, exceptions, DST persistence; preference semantics | Deferred after E4 | High |
-| Coverage requirement distinct from assignment | C/D | Shift stores staffing requirement only | CoverageRequirement/template, occurrence materialization and gap evaluator | E4 foundation | High |
-| Recurring schedule editing | C/D | Timezone/DST validation exists | Series, occurrence, effective range, edit semantics | Deferred supporting epic | High |
-| Ops Needs Attention / active coverage | D | Source records exist | Bounded aggregate/read model and explicit exception taxonomy | E4 | Medium |
-| Shift-close matrix | C/D | Clock, Handoff, activity/incident exist | EOSR obligation/evaluator and passdown availability | NX4.4 thin canonical close model | Medium |
-| Review Queue versus Recent Activity | B/D | Acknowledgement/amendment history exists | Role-specific read composition and filters | E4 | Low |
-| Credential policy and assignment risk | C | Credential/certification instances and eligibility exist | Definitions, jurisdiction/applicability, warning policy, recipients | Deferred compliance epic; prerequisite for advanced recommendations/AI | High |
-| Tenant report types | C/E | Canonical reports exist | Bounded ReportDefinition and submission model | Deferred | High |
-| Incident taxonomy labels | C/E | Canonical incident core exists | Versioned taxonomy configuration | Deferred; never replace canonical core | Medium |
-| Payroll/timecard export | C/E | Authoritative TimeRecord and approval exist | Period state, exceptions/locking policy, external IDs, export contract | Foundation discovery; delivery later | High |
-| AI coverage recommendation | C/E | Deterministic assignment validation exists | Candidate explanation/validation contract, provenance/staleness, provider boundary | AI-ready seam only; no AI feature in Sprint 4 | High |
+| UX recommendation                             | Classification            | Existing support                                         | Missing capability / dependency                                                    | Sprint recommendation                                                  | Risk   |
+| --------------------------------------------- | ------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------ |
+| Guard authoritative clock card and recovery   | B: existing capability/UI | Server clock context and one primary action exist        | Consolidated card/recovery states                                                  | UI follow-up, not E4 gate                                              | Low    |
+| Guard Report hub and close checklist          | C/D                       | Activity, Incident, Handoff exist                        | Canonical EOSR plus passdown delivery/read state                                   | EOSR/passdown slice in NX4.4                                           | Medium |
+| Weekly availability editor                    | C/D                       | Point intervals, UNKNOWN/unavailable semantics           | Recurring patterns, exceptions, DST persistence; preference semantics              | Deferred after E4                                                      | High   |
+| Coverage requirement distinct from assignment | C/D                       | Shift stores staffing requirement only                   | CoverageRequirement/template, occurrence materialization and gap evaluator         | E4 foundation                                                          | High   |
+| Recurring schedule editing                    | C/D                       | Timezone/DST validation exists                           | Series, occurrence, effective range, edit semantics                                | Deferred supporting epic                                               | High   |
+| Ops Needs Attention / active coverage         | D                         | Source records exist                                     | Bounded aggregate/read model and explicit exception taxonomy                       | E4                                                                     | Medium |
+| Shift-close matrix                            | C/D                       | Clock, Handoff, activity/incident exist                  | EOSR obligation/evaluator and passdown availability                                | NX4.4 thin canonical close model                                       | Medium |
+| Review Queue versus Recent Activity           | B/D                       | Acknowledgement/amendment history exists                 | Role-specific read composition and filters                                         | E4                                                                     | Low    |
+| Credential policy and assignment risk         | C                         | Credential/certification instances and eligibility exist | Definitions, jurisdiction/applicability, warning policy, recipients                | Deferred compliance epic; prerequisite for advanced recommendations/AI | High   |
+| Tenant report types                           | C/E                       | Canonical reports exist                                  | Bounded ReportDefinition and submission model                                      | Deferred                                                               | High   |
+| Incident taxonomy labels                      | C/E                       | Canonical incident core exists                           | Versioned taxonomy configuration                                                   | Deferred; never replace canonical core                                 | Medium |
+| Payroll/timecard export                       | C/E                       | Authoritative TimeRecord and approval exist              | Period state, exceptions/locking policy, external IDs, export contract             | Foundation discovery; delivery later                                   | High   |
+| AI coverage recommendation                    | C/E                       | Deterministic assignment validation exists               | Candidate explanation/validation contract, provenance/staleness, provider boundary | AI-ready seam only; no AI feature in Sprint 4                          | High   |
 
 Classification keys: A approved product requirement; B existing capability/UI-only; C new backend/domain capability; D Sprint 4 candidate; E deferred; F Product Owner decision required.
 
@@ -112,14 +112,14 @@ This is the minimum coherent increment that makes Ops intervention-oriented with
 
 ### NX-E4 — Operations Center and Coverage Foundation
 
-| Key | Title | Priority | Estimate | Sprint |
-| --- | --- | --- | --- | --- |
-| NX4.1 | Operations exception contract and capability boundary | P0 | M | 4 |
-| NX4.2 | Operations Center current/inbound and Needs Attention | P0 | M | 4 |
-| NX4.3 | Coverage requirement and occurrence/gap foundation | P0 | L | 4 |
-| NX4.4 | EOSR, passdown, and shift-close compliance | P0 | L | 4 |
-| NX4.5 | Review Queue, history separation, and deep-link workflow | P1 | M | 4 |
-| NX4.6 | Site/Post operational scorecards | P1 | M | 4 |
+| Key   | Title                                                    | Priority | Estimate | Sprint |
+| ----- | -------------------------------------------------------- | -------- | -------- | ------ |
+| NX4.1 | Operations exception contract and capability boundary    | P0       | M        | 4      |
+| NX4.2 | Operations Center current/inbound and Needs Attention    | P0       | M        | 4      |
+| NX4.3 | Coverage requirement and occurrence/gap foundation       | P0       | L        | 4      |
+| NX4.4 | EOSR, passdown, and shift-close compliance               | P0       | L        | 4      |
+| NX4.5 | Review Queue, history separation, and deep-link workflow | P1       | M        | 4      |
+| NX4.6 | Site/Post operational scorecards                         | P1       | M        | 4      |
 
 ### NX4.1 — Operations exception contract and capability boundary
 
@@ -226,16 +226,16 @@ Credential policy expansion is a dependency for any AI or advanced recommendatio
 
 ## 12. Product Owner decision register
 
-| ID | Decision | Why it matters / options | Recommendation | Consequence of deferral |
-| --- | --- | --- | --- | --- |
-| PO-DEC-E4-01 | EOSR / Handoff | **APPROVED:** EOSR is the canonical end-of-shift record. Handoff/passdown is a section within EOSR and is surfaced automatically to the incoming Guard as a dismissible, contextual notification. | New EOSR with linked/compatible passdown data; preserve historical Handoffs. | Resolved; enables NX4.4. |
-| PO-DEC-E4-02 | CoverageRequirement recurrence | **APPROVED:** weekly selected weekdays, site-local time, required Guard count, overnight support, effective start date, optional end date. Complex recurrence and series edits are deferred. | Implement only the approved weekly boundary in NX4.3. | Resolved; enables coverage foundation. |
-| D3 | Is availability preference an approved soft signal? | Keep available/unavailable/unknown only; add persisted preference | Keep current hard semantics in Sprint 4; decide preference later | Weekly editor cannot include preference as durable data |
-| D4 | Are Guards allowed to claim open work? | No claim; interest/request; qualified self-claim | No claim in Sprint 4 | No impact on Ops-managed gap visibility |
-| D5 | Compliance policy minimum before recommendation | Current type-name evaluator; add definitions/jurisdictions/site requirements | Expand compliance before AI/advanced recommendations, not before E4 visibility | AI and automated suggestions remain blocked |
-| D6 | Time-period approval/lock and export placement | Sprint 4 foundation; Sprint 5; no export | Specify foundation now; deliver export after period policy, likely Sprint 5 | No safe export acceptance criteria |
-| D7 | AI V1 level and autonomy | No AI; find coverage; multi-conflict; draft schedule | No AI feature in Sprint 4; future Level 1 only after eligibility policy | Provider/configuration work remains deferred |
-| D8 | Custom reporting configuration timing | Sprint 4; later bounded reporting epic | Defer; preserve canonical workflows | Guard Report hub lists only existing canonical reports |
+| ID           | Decision                                            | Why it matters / options                                                                                                                                                                          | Recommendation                                                                 | Consequence of deferral                                 |
+| ------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| PO-DEC-E4-01 | EOSR / Handoff                                      | **APPROVED:** EOSR is the canonical end-of-shift record. Handoff/passdown is a section within EOSR and is surfaced automatically to the incoming Guard as a dismissible, contextual notification. | New EOSR with linked/compatible passdown data; preserve historical Handoffs.   | Resolved; enables NX4.4.                                |
+| PO-DEC-E4-02 | CoverageRequirement recurrence                      | **APPROVED:** weekly selected weekdays, site-local time, required Guard count, overnight support, effective start date, optional end date. Complex recurrence and series edits are deferred.      | Implement only the approved weekly boundary in NX4.3.                          | Resolved; enables coverage foundation.                  |
+| D3           | Is availability preference an approved soft signal? | Keep available/unavailable/unknown only; add persisted preference                                                                                                                                 | Keep current hard semantics in Sprint 4; decide preference later               | Weekly editor cannot include preference as durable data |
+| D4           | Are Guards allowed to claim open work?              | No claim; interest/request; qualified self-claim                                                                                                                                                  | No claim in Sprint 4                                                           | No impact on Ops-managed gap visibility                 |
+| D5           | Compliance policy minimum before recommendation     | Current type-name evaluator; add definitions/jurisdictions/site requirements                                                                                                                      | Expand compliance before AI/advanced recommendations, not before E4 visibility | AI and automated suggestions remain blocked             |
+| D6           | Time-period approval/lock and export placement      | Sprint 4 foundation; Sprint 5; no export                                                                                                                                                          | Specify foundation now; deliver export after period policy, likely Sprint 5    | No safe export acceptance criteria                      |
+| D7           | AI V1 level and autonomy                            | No AI; find coverage; multi-conflict; draft schedule                                                                                                                                              | No AI feature in Sprint 4; future Level 1 only after eligibility policy        | Provider/configuration work remains deferred            |
+| D8           | Custom reporting configuration timing               | Sprint 4; later bounded reporting epic                                                                                                                                                            | Defer; preserve canonical workflows                                            | Guard Report hub lists only existing canonical reports  |
 
 ## 13. Deferred backlog
 
@@ -248,35 +248,35 @@ Credential policy expansion is a dependency for any AI or advanced recommendatio
 
 ## 14. Risk and failure-mode analysis
 
-| Risk | Failure mode | Control |
-| --- | --- | --- |
-| Duplicate coverage concepts | Requirement and Shift/assignment become competing truth | Document demand/occurrence/assignment ownership; one evaluator |
-| False close failures | UI treats absent, undefined report as late/missing | Policy-backed tri-state obligation evaluation |
-| Tenant/PII leakage | Ops aggregate joins expose employee/compliance data outside scope | Request-boundary scope, minimal DTOs, denied-path tests |
-| Recurrence/DST corruption | Copying instants alters site-local intent | Local-time rule plus explicit DST resolution; never copy clock history |
-| Unsafe AI | LLM substitutes for legal eligibility | Deterministic candidate pool and revalidation only |
-| Payroll overreach | Worked time becomes wage/tax calculation | Export authoritative evidence only; no calculation rules |
-| Aggregate performance | Command Center issues per-card queries | Set-based projections, bounded horizon/cursors, representative measurement |
+| Risk                        | Failure mode                                                      | Control                                                                    |
+| --------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Duplicate coverage concepts | Requirement and Shift/assignment become competing truth           | Document demand/occurrence/assignment ownership; one evaluator             |
+| False close failures        | UI treats absent, undefined report as late/missing                | Policy-backed tri-state obligation evaluation                              |
+| Tenant/PII leakage          | Ops aggregate joins expose employee/compliance data outside scope | Request-boundary scope, minimal DTOs, denied-path tests                    |
+| Recurrence/DST corruption   | Copying instants alters site-local intent                         | Local-time rule plus explicit DST resolution; never copy clock history     |
+| Unsafe AI                   | LLM substitutes for legal eligibility                             | Deterministic candidate pool and revalidation only                         |
+| Payroll overreach           | Worked time becomes wage/tax calculation                          | Export authoritative evidence only; no calculation rules                   |
+| Aggregate performance       | Command Center issues per-card queries                            | Set-based projections, bounded horizon/cursors, representative measurement |
 
 ## 15. Traceability matrix
 
-| Dogfood finding | NX-UX-4.0 recommendation | Product requirement | Proposed disposition/story |
-| --- | --- | --- | --- |
-| Ops surfaces overlap | Command Center, Review Queue, history separated | Actionable exceptions before generic activity | NX4.1, NX4.2, NX4.5 |
-| Close exceptions buried | EOSR/passdown and shift-close priority queue | PO-DEC-E4-01: EOSR canonical; passdown contextual to incoming Guard | NX4.4, NX4.1, NX4.2 |
-| Staffing gap invisible | Active coverage/open shifts/coverage health | PO-DEC-E4-02: weekly CoverageRequirement distinct from assignment | NX4.3, NX4.2, NX4.6 |
-| Schedule availability is technical | Weekly local-time editor | Preserve unavailable/available/unknown and hard conflicts | Deferred NX-E5; D3 required |
-| Single credential mental model | Definitions separate from employee records | Policy-driven multi-jurisdiction eligibility | Deferred NX-E6; blocks AI recommendations |
-| Reporting is undiscoverable | Guard Report hub/close checklist | Canonical report separation and bounded custom reports | UI follow-up; D1/D8; NX-E7 deferred |
-| Timecard needs external use | Review/resolve/approve/export | Authoritative time export, not payroll | Deferred NX-E8; D6 required |
-| Future optimization desired | Deterministic pool -> recommendation -> revalidate | AI never decides hard eligibility | AI-ready seam only; NX-E9 deferred |
+| Dogfood finding                    | NX-UX-4.0 recommendation                           | Product requirement                                                 | Proposed disposition/story                |
+| ---------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------- |
+| Ops surfaces overlap               | Command Center, Review Queue, history separated    | Actionable exceptions before generic activity                       | NX4.1, NX4.2, NX4.5                       |
+| Close exceptions buried            | EOSR/passdown and shift-close priority queue       | PO-DEC-E4-01: EOSR canonical; passdown contextual to incoming Guard | NX4.4, NX4.1, NX4.2                       |
+| Staffing gap invisible             | Active coverage/open shifts/coverage health        | PO-DEC-E4-02: weekly CoverageRequirement distinct from assignment   | NX4.3, NX4.2, NX4.6                       |
+| Schedule availability is technical | Weekly local-time editor                           | Preserve unavailable/available/unknown and hard conflicts           | Deferred NX-E5; D3 required               |
+| Single credential mental model     | Definitions separate from employee records         | Policy-driven multi-jurisdiction eligibility                        | Deferred NX-E6; blocks AI recommendations |
+| Reporting is undiscoverable        | Guard Report hub/close checklist                   | Canonical report separation and bounded custom reports              | UI follow-up; D1/D8; NX-E7 deferred       |
+| Timecard needs external use        | Review/resolve/approve/export                      | Authoritative time export, not payroll                              | Deferred NX-E8; D6 required               |
+| Future optimization desired        | Deterministic pool -> recommendation -> revalidate | AI never decides hard eligibility                                   | AI-ready seam only; NX-E9 deferred        |
 
 ## 16. Recommended next execution sequence
 
 1. Create a technical discovery note validating E4 aggregate sources, selected coverage horizon, EOSR/Handoff compatibility migration, and data migration contract.
 2. Approve NX-E4 and execute NX4.1 through NX4.6 in dependency order.
-4. Reassess E4 metrics and close-compliance usefulness with representative tenant data before scheduling E5/E6.
-5. Do not schedule AI, provider credentials, custom reporting, payroll export, or claimable shifts without their separate approved product decisions.
+3. Reassess E4 metrics and close-compliance usefulness with representative tenant data before scheduling E5/E6.
+4. Do not schedule AI, provider credentials, custom reporting, payroll export, or claimable shifts without their separate approved product decisions.
 
 ## Approval status
 
