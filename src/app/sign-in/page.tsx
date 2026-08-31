@@ -1,4 +1,6 @@
 import { SignInButton } from "@/components/auth/sign-in-button";
+import { isLocalDevelopmentAuthEnabled } from "@/auth/development";
+import { DevelopmentSignIn } from "@/components/auth/development-sign-in";
 
 export default function SignInPage() {
   return (
@@ -13,6 +15,7 @@ export default function SignInPage() {
           does not grant access without an active Nexus membership.
         </p>
         <SignInButton />
+        {isLocalDevelopmentAuthEnabled() ? <DevelopmentSignIn /> : null}
       </section>
     </main>
   );

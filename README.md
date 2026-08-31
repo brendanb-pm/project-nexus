@@ -20,11 +20,17 @@ Requires Node.js 22+ and npm.
 
 ```bash
 cp .env.example .env.local
+docker compose up -d
 npm ci
+npm run db:migrate
+npm run db:demo:reset
 npm run dev
 ```
 
-Open `http://localhost:3000`. Configure the OIDC callback as `http://localhost:3000/api/auth/callback/nexus-oidc`. Never commit `.env.local` or credentials. Only browser-safe values may use the `NEXT_PUBLIC_` prefix; keep authentication, database, and provider secrets server-only. See [authentication and membership](docs/authentication.md).
+Open `http://localhost:3000`. The local database is `nexus-postgres` on `127.0.0.1:5434`, with separate `nexus_dev` and resettable `nexus_demo` databases. `db:demo:reset` refuses non-local or non-`nexus_demo` targets. Set `NEXUS_DEV_AUTH=true` only in `.env.local` to expose the localhost-only Guard A and Operations Manager B sign-in choices; production OIDC remains unchanged. Never commit `.env.local` or credentials. Use `docker compose down` to stop the database and `docker compose down -v` only when intentionally removing Nexus local data.
+
+See [local-development.md](docs/local-development.md) for the local runtime,
+demo identities, troubleshooting, and teardown details.
 
 ## Commands
 
