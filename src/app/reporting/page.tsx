@@ -9,7 +9,6 @@ import {
   acknowledgeOperationalRecord,
   amendOperationalRecord,
   createActivity,
-  createHandoff,
   createIncident,
   getOperationalRecord,
 } from "./actions";
@@ -27,7 +26,6 @@ export default async function Page() {
           acknowledgeOperationalRecord,
           amendOperationalRecord,
           createActivity,
-          createHandoff,
           createIncident,
           getOperationalRecord,
         }}

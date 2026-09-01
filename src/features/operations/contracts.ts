@@ -4,6 +4,7 @@ export const operationsExceptionTypes = [
   "CLOCK_EXCEPTION",
   "UNASSIGNED_SHIFT",
   "COVERAGE_GAP",
+  "SHIFT_CLOSE_INCOMPLETE",
 ] as const;
 
 export type OperationsExceptionType = (typeof operationsExceptionTypes)[number];

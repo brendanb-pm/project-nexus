@@ -671,6 +671,67 @@ export const dailyActivityReports = pgTable("daily_activity_reports", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+export const endOfShiftReports = pgTable(
+  "end_of_shift_reports",
+  {
+    id: id(),
+    shiftAssignmentId: uuid("shift_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    submittedByUserId: uuid("submitted_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    summary: text("summary").notNull(),
+    unresolvedIssues: jsonb("unresolved_issues").notNull().default([]),
+    equipmentAccessStatus: text("equipment_access_status")
+      .notNull()
+      .default(""),
+    followUpItems: jsonb("follow_up_items").notNull().default([]),
+    unusualConditions: text("unusual_conditions").notNull().default(""),
+    submissionKey: text("submission_key").notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
+    acknowledgedByUserId: uuid("acknowledged_by_user_id").references(
+      () => users.id,
+    ),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("eosr_assignment_submission_uidx").on(
+      t.shiftAssignmentId,
+      t.submissionKey,
+    ),
+    uniqueIndex("eosr_assignment_uidx").on(t.shiftAssignmentId),
+    index("eosr_submitted_at_idx").on(t.submittedAt, t.id),
+  ],
+);
+
+export const eosrPassdownDismissals = pgTable(
+  "eosr_passdown_dismissals",
+  {
+    id: id(),
+    endOfShiftReportId: uuid("end_of_shift_report_id")
+      .notNull()
+      .references(() => endOfShiftReports.id),
+    incomingAssignmentId: uuid("incoming_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    dismissedByUserId: uuid("dismissed_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull(),
+    reopenedAt: timestamp("reopened_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("eosr_passdown_dismissal_user_assignment_uidx").on(
+      t.endOfShiftReportId,
+      t.incomingAssignmentId,
+      t.dismissedByUserId,
+    ),
+    index("eosr_passdown_incoming_assignment_idx").on(t.incomingAssignmentId),
+  ],
+);
 export const incidentReports = pgTable(
   "incident_reports",
   {

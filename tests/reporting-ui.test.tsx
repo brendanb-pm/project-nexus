@@ -26,7 +26,6 @@ describe("NX-3.1 reporting UI", () => {
         actions={{
           createActivity: vi.fn(),
           createIncident: vi.fn(),
-          createHandoff: vi.fn(),
         }}
         state={ready}
       />,
@@ -36,7 +35,7 @@ describe("NX-3.1 reporting UI", () => {
     ).toBeInTheDocument();
     expect(
       screen.getAllByRole("option", { name: /Cedar Plaza.*Lobby/ }),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Record activity" }),
     ).toBeInTheDocument();
@@ -44,8 +43,8 @@ describe("NX-3.1 reporting UI", () => {
       screen.getByRole("button", { name: "Submit incident report" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Submit handoff" }),
-    ).toBeInTheDocument();
+      screen.getByRole("link", { name: "Open end-of-shift report" }),
+    ).toHaveAttribute("href", "/eosr");
   });
 
   it("renders an actionable empty state and stable denial state", () => {
@@ -122,7 +121,6 @@ describe("NX-3.5 supervisor review UI", () => {
         actions={{
           createActivity: vi.fn(),
           createIncident: vi.fn(),
-          createHandoff: vi.fn(),
           acknowledgeOperationalRecord: acknowledge,
           getOperationalRecord: getRecord,
         }}
@@ -151,7 +149,6 @@ describe("NX-3.5 supervisor review UI", () => {
         actions={{
           createActivity: vi.fn(),
           createIncident: vi.fn(),
-          createHandoff: vi.fn(),
           amendOperationalRecord: amend,
         }}
       />,
