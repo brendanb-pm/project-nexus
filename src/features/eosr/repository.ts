@@ -32,6 +32,7 @@ export interface EndOfShiftReportRepository {
     scope: ReportingScope,
     employeeId: string,
     actorUserId: string,
+    now: string,
     limit: number,
   ): Promise<readonly IncomingPassdown[]>;
   setPassdownDismissal(
@@ -44,6 +45,7 @@ export interface EndOfShiftReportRepository {
   ): Promise<IncomingPassdown>;
   listShiftClose(
     scope: ReportingScope,
+    now: string,
     limit: number,
   ): Promise<readonly ShiftCloseStatus[]>;
 }

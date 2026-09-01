@@ -65,6 +65,7 @@ export class EndOfShiftReportService {
       this.scope(),
       employeeId,
       this.access.context.actor.userId,
+      this.now().toISOString(),
       Math.min(Math.max(limit, 1), 100),
     );
   }
@@ -86,6 +87,7 @@ export class EndOfShiftReportService {
     this.access.requireOrganization("VIEW_SITE_OPERATIONS");
     return this.repository.listShiftClose(
       this.scope(),
+      this.now().toISOString(),
       Math.min(Math.max(limit, 1), 100),
     );
   }

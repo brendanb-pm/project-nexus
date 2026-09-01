@@ -66,6 +66,7 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
         </label>
       </section>
       <section className="grid gap-3" aria-live="polite">
+        <h2 className="text-xl font-semibold">Needs Attention</h2>
         {items.length ? (
           items.map((item) => (
             <a

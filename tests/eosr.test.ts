@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
 import { AuthorizedDataAccess } from "@/server/request/boundary";
 import { createAuthenticatedRequestContext } from "@/server/request/context";
@@ -22,6 +23,7 @@ const context: ActivityContext = {
 };
 class Repo implements EndOfShiftReportRepository {
   reports: any[] = [];
+  passdowns: any[] = [];
   async getAssignment(_: any, id: string) {
     return id === context.id ? context : null;
   }
@@ -42,7 +44,7 @@ class Repo implements EndOfShiftReportRepository {
     return report;
   }
   async listIncomingPassdowns() {
-    return [];
+    return this.passdowns;
   }
   async setPassdownDismissal(
     _: any,
@@ -110,5 +112,24 @@ describe("NX4.4 EOSR", () => {
         submissionKey: "forged",
       }),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+  it("dismisses and reopens only an authorized incoming passdown", async () => {
+    const { repo, service: value } = await service();
+    repo.passdowns = [
+      {
+        id: "eosr-incoming",
+        incomingAssignmentId: "incoming-1",
+        dismissed: false,
+      },
+    ];
+    await expect(value.dismissPassdown("unrelated", true)).rejects.toThrow(
+      /Passdown/i,
+    );
+    await expect(
+      value.dismissPassdown("eosr-incoming", true),
+    ).resolves.toMatchObject({ dismissed: true });
+    await expect(
+      value.dismissPassdown("eosr-incoming", false),
+    ).resolves.toMatchObject({ dismissed: false });
   });
 });

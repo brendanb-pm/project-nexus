@@ -1,4 +1,15 @@
-import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { NexusDatabase } from "@/server/db/client";
 import {
@@ -134,10 +145,12 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
     scope: ReportingScope,
     employeeId: string,
     actorUserId: string,
+    now: string,
     limit: number,
   ) {
     const outgoingAssignments = alias(shiftAssignments, "outgoing_assignments");
     const outgoingShifts = alias(shifts, "outgoing_shifts");
+    const newerOutgoingShifts = alias(shifts, "newer_outgoing_shifts");
     const rows = await this.database
       .select({
         report: endOfShiftReports,
@@ -174,14 +187,36 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
           eq(eosrPassdownDismissals.dismissedByUserId, actorUserId),
         ),
       )
-      .where(and(predicate(scope), eq(shiftAssignments.employeeId, employeeId)))
-      .orderBy(asc(outgoingShifts.scheduledEnd), asc(endOfShiftReports.id))
-      .limit(limit);
-    return rows.map((row) => ({
-      ...dto(row.report, row.siteName, row.postName),
-      incomingAssignmentId: row.incomingId,
-      dismissed: Boolean(row.dismissal && !row.dismissal.reopenedAt),
-    }));
+      .where(
+        and(
+          predicate(scope),
+          eq(shiftAssignments.employeeId, employeeId),
+          ne(shiftAssignments.status, "cancelled"),
+          ne(outgoingAssignments.status, "cancelled"),
+          gte(shifts.scheduledEnd, new Date(now)),
+          sql`not exists (
+            select 1 from ${newerOutgoingShifts}
+            where ${newerOutgoingShifts.postId} = ${shifts.postId}
+              and ${newerOutgoingShifts.scheduledEnd} <= ${shifts.scheduledStart}
+              and ${newerOutgoingShifts.scheduledEnd} > ${outgoingShifts.scheduledEnd}
+          )`,
+        ),
+      )
+      .orderBy(asc(shifts.scheduledStart), desc(outgoingShifts.scheduledEnd))
+      .limit(Math.min(limit * 10, 1000));
+    const seen = new Set<string>();
+    return rows
+      .filter((row) => {
+        if (seen.has(row.incomingId)) return false;
+        seen.add(row.incomingId);
+        return true;
+      })
+      .slice(0, limit)
+      .map((row) => ({
+        ...dto(row.report, row.siteName, row.postName),
+        incomingAssignmentId: row.incomingId,
+        dismissed: Boolean(row.dismissal && !row.dismissal.reopenedAt),
+      }));
   }
   async setPassdownDismissal(
     _scope: ReportingScope,
@@ -221,7 +256,8 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
     });
     return { ...passdown, dismissed };
   }
-  async listShiftClose(scope: ReportingScope, limit: number) {
+  async listShiftClose(scope: ReportingScope, now: string, limit: number) {
+    const incomingShifts = alias(shifts, "incoming_shifts");
     const rows = await this.database
       .select({
         shiftId: shifts.id,
@@ -234,6 +270,8 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
         equipment: endOfShiftReports.equipmentAccessStatus,
         followUps: endOfShiftReports.followUpItems,
         unusual: endOfShiftReports.unusualConditions,
+        acknowledgedAt: endOfShiftReports.acknowledgedAt,
+        incomingCount: sql<number>`(select count(*) from ${incomingShifts} where ${incomingShifts.postId} = ${shifts.postId} and ${incomingShifts.scheduledStart} >= ${shifts.scheduledEnd})`,
         clockOut: sql<number>`count(${clockEvents.id}) filter (where ${clockEvents.eventType} = 'CLOCK_OUT')`,
       })
       .from(shifts)
@@ -249,7 +287,7 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
         clockEvents,
         eq(clockEvents.shiftAssignmentId, shiftAssignments.id),
       )
-      .where(and(predicate(scope), lte(shifts.scheduledEnd, new Date())))
+      .where(and(predicate(scope), lte(shifts.scheduledEnd, new Date(now))))
       .groupBy(
         shifts.id,
         shiftAssignments.id,
@@ -267,12 +305,21 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
       scheduledEnd: row.scheduledEnd.toISOString(),
       clockOutComplete: Number(row.clockOut) > 0,
       eosrComplete: Boolean(row.eosrId),
-      passdownPresent: Boolean(
+      passdownState: (Boolean(
         (Array.isArray(row.unresolvedIssues) && row.unresolvedIssues.length) ||
         (Array.isArray(row.followUps) && row.followUps.length) ||
         row.equipment ||
         row.unusual,
-      ),
+      )
+        ? "PRESENT"
+        : Number(row.incomingCount) > 0
+          ? "NOT_INCLUDED"
+          : "NO_INCOMING_ASSIGNMENT") as ShiftCloseStatus["passdownState"],
+      reviewState: (!row.eosrId
+        ? "NOT_SUBMITTED"
+        : row.acknowledgedAt
+          ? "ACKNOWLEDGED"
+          : "AWAITING_REVIEW") as ShiftCloseStatus["reviewState"],
     }));
   }
 }

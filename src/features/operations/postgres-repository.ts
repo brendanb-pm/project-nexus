@@ -6,6 +6,7 @@ import {
   activityEntries,
   clients,
   clockEvents,
+  endOfShiftReports,
   incidentReports,
   posts,
   shiftAssignments,
@@ -36,7 +37,7 @@ export class PostgresOperationsRepository implements OperationsRepository {
       eq(sites.clientId, clients.id),
       scopePredicate(scope),
     ];
-    const [incidents, activities, clocks] = await Promise.all([
+    const [incidents, shiftCloses, activities, clocks] = await Promise.all([
       this.database
         .select({
           id: incidentReports.id,
@@ -64,6 +65,50 @@ export class PostgresOperationsRepository implements OperationsRepository {
           ),
         )
         .orderBy(asc(incidentReports.occurredAt), asc(incidentReports.id))
+        .limit(limit),
+      this.database
+        .select({
+          assignmentId: shiftAssignments.id,
+          shiftId: shifts.id,
+          scheduledEnd: shifts.scheduledEnd,
+          eosrId: endOfShiftReports.id,
+          clockOutCount: sql<number>`count(${clockEvents.id}) filter (where ${clockEvents.eventType} = 'CLOCK_OUT')`,
+          siteId: sites.id,
+          postId: posts.id,
+          siteName: sites.name,
+          postName: posts.name,
+          clientId: clients.id,
+          branchId: clients.branchId,
+        })
+        .from(shiftAssignments)
+        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+        .innerJoin(posts, eq(shifts.postId, posts.id))
+        .innerJoin(sites, eq(posts.siteId, sites.id))
+        .innerJoin(clients, eq(sites.clientId, clients.id))
+        .leftJoin(
+          endOfShiftReports,
+          eq(endOfShiftReports.shiftAssignmentId, shiftAssignments.id),
+        )
+        .leftJoin(
+          clockEvents,
+          eq(clockEvents.shiftAssignmentId, shiftAssignments.id),
+        )
+        .where(
+          and(
+            scopePredicate(scope),
+            sql`${shifts.scheduledEnd} <= ${new Date(_now)}`,
+            sql`${shiftAssignments.status} <> 'cancelled'`,
+          ),
+        )
+        .groupBy(
+          shiftAssignments.id,
+          shifts.id,
+          sites.id,
+          posts.id,
+          clients.id,
+          endOfShiftReports.id,
+        )
+        .orderBy(asc(shifts.scheduledEnd), asc(shiftAssignments.id))
         .limit(limit),
       this.database
         .select({
@@ -185,6 +230,34 @@ export class PostgresOperationsRepository implements OperationsRepository {
         title: "Clock exception requires review",
         detail: "Review the timekeeping exception.",
       })),
+      ...shiftCloses
+        .filter((r) => !r.eosrId || Number(r.clockOutCount) === 0)
+        .map((r) => {
+          const missing = [
+            ...(!r.eosrId ? ["EOSR"] : []),
+            ...(Number(r.clockOutCount) === 0 ? ["clock-out"] : []),
+          ];
+          return {
+            id: `shift-close:${r.assignmentId}`,
+            type: "SHIFT_CLOSE_INCOMPLETE" as const,
+            severity: "URGENT" as const,
+            effectiveAt: r.scheduledEnd.toISOString(),
+            organizationId: scope.organizationId,
+            branchId: r.branchId!,
+            clientId: r.clientId,
+            siteId: r.siteId,
+            postId: r.postId,
+            shiftId: r.shiftId,
+            assignmentId: r.assignmentId,
+            source: {
+              entityType: "ShiftAssignment",
+              entityId: r.assignmentId,
+              href: `/admin/scheduling?assignmentId=${r.assignmentId}`,
+            },
+            title: "Shift close incomplete",
+            detail: `${r.siteName} / ${r.postName}: missing ${missing.join(" and ")}.`,
+          };
+        }),
     ]
       .sort(
         (a, b) =>

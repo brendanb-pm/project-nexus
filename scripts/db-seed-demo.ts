@@ -21,25 +21,32 @@ const ids = {
   site: "00000000-0000-4000-8000-000000000030",
   post: "00000000-0000-4000-8000-000000000040",
   guardUser: "00000000-0000-4000-8000-000000000050",
+  incomingGuardUser: "00000000-0000-4000-8000-000000000051",
   operationsUser: "00000000-0000-4000-8000-000000000052",
   guardEmployee: "00000000-0000-4000-8000-000000000060",
+  incomingGuardEmployee: "00000000-0000-4000-8000-000000000061",
   operationsEmployee: "00000000-0000-4000-8000-000000000062",
   shift: "00000000-0000-4000-8000-000000000080",
   assignment: "00000000-0000-4000-8000-000000000090",
+  incomingShift: "00000000-0000-4000-8000-000000000081",
+  incomingAssignment: "00000000-0000-4000-8000-000000000094",
   activity: "00000000-0000-4000-8000-000000000091",
   incident: "00000000-0000-4000-8000-000000000092",
   handoff: "00000000-0000-4000-8000-000000000093",
+  eosr: "00000000-0000-4000-8000-000000000095",
+  clockOut: "00000000-0000-4000-8000-000000000096",
 } as const;
 
 async function main() {
   process.loadEnvFile(".env.local");
   const pool = new Pool({ connectionString: localDemoDatabaseUrl() });
   const now = new Date();
-  const startsAt = new Date(now.valueOf() - 60 * 60 * 1000);
-  const endsAt = new Date(now.valueOf() + 7 * 60 * 60 * 1000);
+  const startsAt = new Date(now.valueOf() - 9 * 60 * 60 * 1000);
+  const endsAt = new Date(now.valueOf() - 60 * 60 * 1000);
+  const incomingEndsAt = new Date(now.valueOf() + 7 * 60 * 60 * 1000);
   try {
     await pool.query(
-      "TRUNCATE TABLE operational_record_revisions, audit_events, handoffs, incident_reports, activity_entries, clock_events, time_records, shift_assignments, shifts, employee_roles, employees, user_memberships, external_identities, users, auth_accounts, auth_sessions, auth_verifications, auth_users, posts, sites, clients, branches, organizations RESTART IDENTITY CASCADE",
+      "TRUNCATE TABLE eosr_passdown_dismissals, end_of_shift_reports, operational_record_revisions, audit_events, handoffs, incident_reports, activity_entries, clock_events, time_records, shift_assignments, shifts, employee_roles, employees, user_memberships, external_identities, users, auth_accounts, auth_sessions, auth_verifications, auth_users, posts, sites, clients, branches, organizations RESTART IDENTITY CASCADE",
     );
     await pool.query(
       "INSERT INTO organizations (id, name, status) VALUES ($1, 'Northstar Protective Services', 'active')",
@@ -62,38 +69,60 @@ async function main() {
       [ids.post, ids.site],
     );
     await pool.query(
-      "INSERT INTO auth_users (id, name, email, email_verified) VALUES ($1, 'Guard A', 'guard.a@nexus.demo.invalid', true), ($2, 'Operations Manager B', 'operations.b@nexus.demo.invalid', true)",
-      ["nexus-dev-auth-guard-a", "nexus-dev-auth-operations-manager-b"],
+      "INSERT INTO auth_users (id, name, email, email_verified) VALUES ($1, 'Guard A', 'guard.a@nexus.demo.invalid', true), ($2, 'Operations Manager B', 'operations.b@nexus.demo.invalid', true), ($3, 'Incoming Guard B', 'guard.b@nexus.demo.invalid', true)",
+      [
+        "nexus-dev-auth-guard-a",
+        "nexus-dev-auth-operations-manager-b",
+        "nexus-dev-auth-guard-b",
+      ],
     );
     await pool.query(
-      "INSERT INTO users (id, organization_id, email, status) VALUES ($1, $2, 'guard.a@nexus.demo.invalid', 'active'), ($3, $2, 'operations.b@nexus.demo.invalid', 'active')",
-      [ids.guardUser, ids.organization, ids.operationsUser],
+      "INSERT INTO users (id, organization_id, email, status) VALUES ($1, $2, 'guard.a@nexus.demo.invalid', 'active'), ($3, $2, 'operations.b@nexus.demo.invalid', 'active'), ($4, $2, 'guard.b@nexus.demo.invalid', 'active')",
+      [
+        ids.guardUser,
+        ids.organization,
+        ids.operationsUser,
+        ids.incomingGuardUser,
+      ],
     );
     await pool.query(
-      "INSERT INTO external_identities (issuer, subject, user_id) VALUES ('local-dev://nexus', 'guard-a', $1), ('local-dev://nexus', 'operations-manager-b', $2)",
-      [ids.guardUser, ids.operationsUser],
+      "INSERT INTO external_identities (issuer, subject, user_id) VALUES ('local-dev://nexus', 'guard-a', $1), ('local-dev://nexus', 'operations-manager-b', $2), ('local-dev://nexus', 'guard-b', $3)",
+      [ids.guardUser, ids.operationsUser, ids.incomingGuardUser],
     );
     await pool.query(
-      "INSERT INTO auth_accounts (id, issuer, account_id, provider_id, user_id) VALUES ('nexus-dev-account-guard-a', 'local-dev://nexus', 'guard-a', 'nexus-oidc', 'nexus-dev-auth-guard-a'), ('nexus-dev-account-operations-manager-b', 'local-dev://nexus', 'operations-manager-b', 'nexus-oidc', 'nexus-dev-auth-operations-manager-b')",
+      "INSERT INTO auth_accounts (id, issuer, account_id, provider_id, user_id) VALUES ('nexus-dev-account-guard-a', 'local-dev://nexus', 'guard-a', 'nexus-oidc', 'nexus-dev-auth-guard-a'), ('nexus-dev-account-operations-manager-b', 'local-dev://nexus', 'operations-manager-b', 'nexus-oidc', 'nexus-dev-auth-operations-manager-b'), ('nexus-dev-account-guard-b', 'local-dev://nexus', 'guard-b', 'nexus-oidc', 'nexus-dev-auth-guard-b')",
     );
     await pool.query(
-      "INSERT INTO user_memberships (user_id, organization_id, status) VALUES ($1, $3, 'active'), ($2, $3, 'active')",
-      [ids.guardUser, ids.operationsUser, ids.organization],
+      "INSERT INTO user_memberships (user_id, organization_id, status) VALUES ($1, $4, 'active'), ($2, $4, 'active'), ($3, $4, 'active')",
+      [
+        ids.guardUser,
+        ids.operationsUser,
+        ids.incomingGuardUser,
+        ids.organization,
+      ],
     );
     await pool.query(
-      "INSERT INTO employees (id, organization_id, user_id, employee_number, employment_status, primary_branch_id, profile) VALUES ($1, $3, $4, 'NPS-100', 'active', $5, '{\"name\":\"Guard A\"}'::jsonb), ($2, $3, $6, 'NPS-200', 'active', $5, '{\"name\":\"Operations Manager B\"}'::jsonb)",
+      "INSERT INTO employees (id, organization_id, user_id, employee_number, employment_status, primary_branch_id, profile) VALUES ($1, $4, $5, 'NPS-100', 'active', $6, '{\"name\":\"Guard A\"}'::jsonb), ($2, $4, $7, 'NPS-200', 'active', $6, '{\"name\":\"Operations Manager B\"}'::jsonb), ($3, $4, $8, 'NPS-101', 'active', $6, '{\"name\":\"Incoming Guard B\"}'::jsonb)",
       [
         ids.guardEmployee,
         ids.operationsEmployee,
+        ids.incomingGuardEmployee,
         ids.organization,
         ids.guardUser,
         ids.branch,
         ids.operationsUser,
+        ids.incomingGuardUser,
       ],
     );
     await pool.query(
-      "INSERT INTO employee_roles (employee_id, role, branch_id, site_id) VALUES ($1, 'GUARD', $3, $4), ($2, 'OPERATIONS_MANAGER', $3, NULL)",
-      [ids.guardEmployee, ids.operationsEmployee, ids.branch, ids.site],
+      "INSERT INTO employee_roles (employee_id, role, branch_id, site_id) VALUES ($1, 'GUARD', $4, $5), ($2, 'OPERATIONS_MANAGER', $4, NULL), ($3, 'GUARD', $4, $5)",
+      [
+        ids.guardEmployee,
+        ids.operationsEmployee,
+        ids.incomingGuardEmployee,
+        ids.branch,
+        ids.site,
+      ],
     );
     await pool.query(
       "INSERT INTO shifts (id, post_id, scheduled_start, scheduled_end, status, staffing_requirement, timezone) VALUES ($1, $2, $3, $4, 'PUBLISHED', 1, 'America/Los_Angeles')",
@@ -102,6 +131,22 @@ async function main() {
     await pool.query(
       "INSERT INTO shift_assignments (id, shift_id, employee_id, status, assigned_at) VALUES ($1, $2, $3, 'assigned', NOW())",
       [ids.assignment, ids.shift, ids.guardEmployee],
+    );
+    await pool.query(
+      "INSERT INTO shifts (id, post_id, scheduled_start, scheduled_end, status, staffing_requirement, timezone) VALUES ($1, $2, $3, $4, 'PUBLISHED', 1, 'America/Los_Angeles')",
+      [ids.incomingShift, ids.post, endsAt, incomingEndsAt],
+    );
+    await pool.query(
+      "INSERT INTO shift_assignments (id, shift_id, employee_id, status, assigned_at) VALUES ($1, $2, $3, 'assigned', NOW())",
+      [ids.incomingAssignment, ids.incomingShift, ids.incomingGuardEmployee],
+    );
+    await pool.query(
+      "INSERT INTO clock_events (id, shift_assignment_id, event_type, occurred_at, effective_at, recorded_by_user_id, verification_status, exception_reasons) VALUES ($1, $2, 'CLOCK_OUT', $3, $3, $4, 'NORMAL', '[]'::jsonb)",
+      [ids.clockOut, ids.assignment, endsAt, ids.guardUser],
+    );
+    await pool.query(
+      "INSERT INTO end_of_shift_reports (id, shift_assignment_id, submitted_by_user_id, summary, unresolved_issues, equipment_access_status, follow_up_items, unusual_conditions, submission_key, submitted_at) VALUES ($1, $2, $3, 'North Lobby shift completed; passdown prepared.', '[\"Door closer service remains pending.\"]'::jsonb, 'Keys accounted for; radio charging.', '[\"Confirm maintenance arrival.\"]'::jsonb, '', 'demo-eosr', $4)",
+      [ids.eosr, ids.assignment, ids.guardUser, endsAt],
     );
     await pool.query(
       "INSERT INTO activity_entries (id, shift_assignment_id, occurred_at, category, post_id, description, action_taken, follow_up_required, incident_related, incident_gate, submission_key, visibility, status) VALUES ($1, $2, $3, 'OBSERVATION', $4, $5::jsonb, $6, false, false, 'ROUTINE', 'demo-routine-activity', 'INTERNAL', 'SUBMITTED')",

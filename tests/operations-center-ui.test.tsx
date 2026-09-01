@@ -38,6 +38,9 @@ describe("Operations Center", () => {
       screen.getByRole("heading", { name: "Operations Center" }),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("heading", { name: "Needs Attention" }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("link", { name: /open source record/i }),
     ).toHaveAttribute("href", "/admin/scheduling");
   });

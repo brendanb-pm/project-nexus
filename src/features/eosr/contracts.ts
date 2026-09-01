@@ -37,5 +37,6 @@ export type ShiftCloseStatus = {
   scheduledEnd: string;
   clockOutComplete: boolean;
   eosrComplete: boolean;
-  passdownPresent: boolean;
+  passdownState: "PRESENT" | "NOT_INCLUDED" | "NO_INCOMING_ASSIGNMENT";
+  reviewState: "NOT_SUBMITTED" | "AWAITING_REVIEW" | "ACKNOWLEDGED";
 };

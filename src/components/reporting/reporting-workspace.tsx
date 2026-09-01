@@ -2,7 +2,6 @@
 import { useState } from "react";
 import type {
   ActivityEntrySummary,
-  HandoffSummary,
   IncidentReportSummary,
   ReportingPageState,
   ReviewRecord,
@@ -19,7 +18,6 @@ export function ReportingWorkspace({
   actions?: {
     createActivity(form: FormData): Promise<ActivityEntrySummary>;
     createIncident(form: FormData): Promise<IncidentReportSummary>;
-    createHandoff(form: FormData): Promise<HandoffSummary>;
     acknowledgeOperationalRecord?(form: FormData): Promise<ReviewRecord>;
     amendOperationalRecord?(form: FormData): Promise<ReviewRecord>;
     getOperationalRecord?(form: FormData): Promise<ReviewRecord>;
@@ -28,7 +26,6 @@ export function ReportingWorkspace({
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submittingIncident, setSubmittingIncident] = useState(false);
-  const [submittingHandoff, setSubmittingHandoff] = useState(false);
   const [reviewBusy, setReviewBusy] = useState("");
   const [reviewMessage, setReviewMessage] = useState("");
   const [history, setHistory] = useState<Record<string, ReviewRecord>>({});
@@ -48,11 +45,6 @@ export function ReportingWorkspace({
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
       : "incident-report",
-  );
-  const [handoffSubmissionKey] = useState(() =>
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : "handoff",
   );
   if (state.kind !== "ready")
     return (
@@ -91,19 +83,6 @@ export function ReportingWorkspace({
       );
     } finally {
       setSubmittingIncident(false);
-    }
-  }
-  async function submitHandoff(form: FormData) {
-    if (!actions || submittingHandoff) return;
-    setSubmittingHandoff(true);
-    setMessage("Submitting handoff…");
-    try {
-      await actions.createHandoff(form);
-      setMessage("Handoff submitted for the next shift.");
-    } catch {
-      setMessage("Your handoff was not submitted. Review it and try again.");
-    } finally {
-      setSubmittingHandoff(false);
     }
   }
   async function loadHistory(entityType: string, recordId: string) {
@@ -392,54 +371,18 @@ export function ReportingWorkspace({
         </section>
       ) : null}
       <section className={state.reviewEnabled ? "hidden" : panel}>
-        <h2 className="text-xl font-semibold">End-of-shift handoff</h2>
+        <h2 className="text-xl font-semibold">End-of-shift report</h2>
         <p className="mt-1 text-[var(--text-muted)]">
-          Leave the next guard and supervisor an accurate record of unresolved
-          issues, equipment or key status, and follow-up work.
+          EOSR is the canonical close workflow and includes the passdown for the
+          incoming Guard. Historical Handoffs remain available in reporting
+          history.
         </p>
-        {state.assignments.length ? (
-          <form action={submitHandoff} className="mt-3 grid gap-3">
-            <label>
-              <span className="text-sm">Current assignment</span>
-              <select className={input} name="shiftAssignmentId" required>
-                {state.assignments.map((assignment) => (
-                  <option key={assignment.id} value={assignment.id}>
-                    {assignment.siteName} — {assignment.postName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <input
-              name="submissionKey"
-              type="hidden"
-              value={handoffSubmissionKey}
-            />
-            <input name="visibility" type="hidden" value="INTERNAL" />
-            <label>
-              <span className="text-sm">Unresolved issues (one per line)</span>
-              <textarea className={input} name="unresolvedIssues" rows={3} />
-            </label>
-            <label>
-              <span className="text-sm">Equipment and key status</span>
-              <textarea className={input} name="equipmentKeyStatus" rows={3} />
-            </label>
-            <label>
-              <span className="text-sm">Follow-up items (one per line)</span>
-              <textarea className={input} name="followUpItems" rows={3} />
-            </label>
-            <button
-              className="min-h-11 rounded-lg bg-[var(--accent)] px-4 py-2 font-medium text-black disabled:opacity-60"
-              disabled={submittingHandoff}
-              type="submit"
-            >
-              {submittingHandoff ? "Submitting…" : "Submit handoff"}
-            </button>
-          </form>
-        ) : (
-          <p className="mt-3 text-[var(--text-muted)]">
-            An active assignment is required to submit a handoff.
-          </p>
-        )}
+        <a
+          className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-[var(--accent)] px-4 py-2 font-medium text-black"
+          href="/eosr"
+        >
+          Open end-of-shift report
+        </a>
       </section>
       <section className={state.reviewEnabled ? "hidden" : panel}>
         <h2 className="text-xl font-semibold">Record activity</h2>
