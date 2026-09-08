@@ -1,18 +1,23 @@
 import "server-only";
 
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, gt, or, sql } from "drizzle-orm";
 import type { NexusDatabase } from "@/server/db/client";
 import {
   clients,
   clockEvents,
+  coverageRequirements,
   endOfShiftReports,
+  incidentReports,
   posts,
   shiftAssignments,
   shifts,
   sites,
+  timeRecords,
 } from "@/server/db/schema";
 import type { OperationsException } from "./contracts";
 import type { OperationsRepository, OperationsScope } from "./repository";
+import { buildOperationalScorecards } from "./scorecards";
+import type { CoverageRequirement } from "@/features/coverage/contracts";
 
 function scopePredicate(scope: OperationsScope) {
   const tenant = eq(clients.organizationId, scope.organizationId);
@@ -166,5 +171,197 @@ export class PostgresOperationsRepository implements OperationsRepository {
       )
       .slice(0, limit);
     return { items, hasMore: items.length === limit };
+  }
+
+  async listScorecards(
+    scope: OperationsScope,
+    window: Parameters<OperationsRepository["listScorecards"]>[1],
+  ) {
+    const start = new Date(window.startsAt);
+    const end = new Date(window.endsAt);
+    const [postRows, assignmentRows, incidentRows] = await Promise.all([
+      this.database
+        .select({
+          siteId: sites.id,
+          siteName: sites.name,
+          timezone: sites.timezone,
+          clientId: clients.id,
+          branchId: clients.branchId,
+          postId: posts.id,
+          postName: posts.name,
+          requirement: coverageRequirements,
+        })
+        .from(posts)
+        .innerJoin(sites, eq(posts.siteId, sites.id))
+        .innerJoin(clients, eq(sites.clientId, clients.id))
+        .leftJoin(
+          coverageRequirements,
+          eq(coverageRequirements.postId, posts.id),
+        )
+        .where(
+          and(
+            scopePredicate(scope),
+            eq(sites.active, true),
+            eq(posts.active, true),
+          ),
+        )
+        .orderBy(
+          asc(sites.name),
+          asc(sites.id),
+          asc(posts.name),
+          asc(posts.id),
+          asc(coverageRequirements.effectiveStart),
+          asc(coverageRequirements.id),
+        )
+        .limit(1000),
+      this.database
+        .select({
+          id: shiftAssignments.id,
+          postId: shifts.postId,
+          startsAt: shifts.scheduledStart,
+          endsAt: shifts.scheduledEnd,
+          eosrId: endOfShiftReports.id,
+          clockOutCount: sql<number>`count(${clockEvents.id}) filter (where ${clockEvents.eventType} = 'CLOCK_OUT')`,
+          actualStartsAt: timeRecords.startsAt,
+          actualEndsAt: timeRecords.endsAt,
+          actualSeconds: timeRecords.secondsWorked,
+        })
+        .from(shiftAssignments)
+        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+        .innerJoin(posts, eq(shifts.postId, posts.id))
+        .innerJoin(sites, eq(posts.siteId, sites.id))
+        .innerJoin(clients, eq(sites.clientId, clients.id))
+        .leftJoin(
+          endOfShiftReports,
+          eq(endOfShiftReports.shiftAssignmentId, shiftAssignments.id),
+        )
+        .leftJoin(
+          clockEvents,
+          eq(clockEvents.shiftAssignmentId, shiftAssignments.id),
+        )
+        .leftJoin(
+          timeRecords,
+          eq(timeRecords.shiftAssignmentId, shiftAssignments.id),
+        )
+        .where(
+          and(
+            scopePredicate(scope),
+            lt(shifts.scheduledStart, end),
+            gt(shifts.scheduledEnd, start),
+            sql`${shifts.status} in ('PUBLISHED', 'COMPLETED')`,
+            sql`${shiftAssignments.status} in ('assigned', 'confirmed')`,
+          ),
+        )
+        .groupBy(
+          shiftAssignments.id,
+          shifts.id,
+          endOfShiftReports.id,
+          timeRecords.id,
+        )
+        .orderBy(asc(shifts.scheduledStart), asc(shiftAssignments.id))
+        .limit(1000),
+      this.database
+        .select({
+          id: incidentReports.id,
+          siteId: incidentReports.siteId,
+          postId: shifts.postId,
+          occurredAt: incidentReports.occurredAt,
+        })
+        .from(incidentReports)
+        .leftJoin(
+          shiftAssignments,
+          eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+        )
+        .leftJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+        .innerJoin(sites, eq(incidentReports.siteId, sites.id))
+        .innerJoin(clients, eq(sites.clientId, clients.id))
+        .where(
+          and(
+            scopePredicate(scope),
+            lt(incidentReports.occurredAt, end),
+            gt(incidentReports.occurredAt, start),
+          ),
+        )
+        .orderBy(desc(incidentReports.occurredAt), desc(incidentReports.id))
+        .limit(1000),
+    ]);
+    const siteMap = new Map(
+      postRows.map((row) => [
+        row.siteId,
+        {
+          id: row.siteId,
+          clientId: row.clientId,
+          branchId: row.branchId ?? "",
+          name: row.siteName,
+          timezone: row.timezone,
+        },
+      ]),
+    );
+    const postMap = new Map(
+      postRows.map((row) => [
+        row.postId,
+        { id: row.postId, siteId: row.siteId, name: row.postName },
+      ]),
+    );
+    const requirements: CoverageRequirement[] = postRows.flatMap((row) =>
+      row.requirement
+        ? [
+            {
+              id: row.requirement.id,
+              postId: row.postId,
+              siteId: row.siteId,
+              clientId: row.clientId,
+              branchId: row.branchId ?? "",
+              timezone: row.timezone,
+              requiredCount: row.requirement.requiredCount,
+              weekdays: Array.isArray(row.requirement.weekdays)
+                ? row.requirement.weekdays.filter(
+                    (v): v is CoverageRequirement["weekdays"][number] =>
+                      typeof v === "string",
+                  )
+                : [],
+              localStartTime: row.requirement.localStartTime,
+              localEndTime: row.requirement.localEndTime,
+              effectiveStart: row.requirement.effectiveStart,
+              ...(row.requirement.effectiveEnd
+                ? { effectiveEnd: row.requirement.effectiveEnd }
+                : {}),
+              active: row.requirement.active,
+              updatedAt: row.requirement.updatedAt.toISOString(),
+            },
+          ]
+        : [],
+    );
+    return buildOperationalScorecards(
+      {
+        sites: [...siteMap.values()],
+        posts: [...postMap.values()],
+        requirements,
+        assignments: assignmentRows.map((row) => ({
+          id: row.id,
+          postId: row.postId,
+          startsAt: row.startsAt.toISOString(),
+          endsAt: row.endsAt.toISOString(),
+          ...(row.eosrId ? { eosrId: row.eosrId } : {}),
+          clockOut: Number(row.clockOutCount) > 0,
+          ...(row.actualStartsAt
+            ? { actualStartsAt: row.actualStartsAt.toISOString() }
+            : {}),
+          ...(row.actualEndsAt
+            ? { actualEndsAt: row.actualEndsAt.toISOString() }
+            : {}),
+          ...(row.actualSeconds !== null
+            ? { actualSeconds: row.actualSeconds }
+            : {}),
+        })),
+        incidents: incidentRows.map((row) => ({
+          id: row.id,
+          siteId: row.siteId,
+          ...(row.postId ? { postId: row.postId } : {}),
+          occurredAt: row.occurredAt.toISOString(),
+        })),
+      },
+      window,
+    );
   }
 }

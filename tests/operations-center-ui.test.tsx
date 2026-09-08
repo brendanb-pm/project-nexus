@@ -31,6 +31,14 @@ describe("Operations Center", () => {
               },
             ],
           },
+          scorecards: {
+            window: {
+              startsAt: "2026-08-31T12:00:00.000Z",
+              endsAt: "2026-09-01T12:00:00.000Z",
+              asOf: "2026-09-01T00:00:00.000Z",
+            },
+            sites: [],
+          },
           recordWorkflow: {
             reviewQueue: [],
             history: [

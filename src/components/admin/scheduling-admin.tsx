@@ -25,9 +25,11 @@ export type SchedulingAdminActions = {
 export function SchedulingAdmin({
   state,
   actions,
+  selectedPostId,
 }: {
   state: SchedulingAdminPageState;
   actions?: SchedulingAdminActions;
+  selectedPostId?: string;
 }) {
   if (state.kind !== "ready") {
     return (
@@ -41,6 +43,12 @@ export function SchedulingAdmin({
   return (
     <div className="grid gap-6">
       <section className={panel}>
+        <a
+          href="/operations"
+          className="mb-3 inline-block min-h-11 py-2 text-sm underline"
+        >
+          ← Return to Operations
+        </a>
         <h1 className="text-2xl font-semibold">Shift scheduling</h1>
         <p className="mt-1 text-[var(--text-muted)]">
           Times use the post&apos;s local timezone. Nexus preserves the
@@ -52,7 +60,19 @@ export function SchedulingAdmin({
         >
           <label>
             <span className="text-sm">Post</span>
-            <select className={input} disabled={!enabled} name="post" required>
+            <select
+              className={input}
+              defaultValue={
+                selectedPostId
+                  ? state.posts.find((post) => post.id === selectedPostId)
+                    ? `${selectedPostId}|${state.posts.find((post) => post.id === selectedPostId)!.timezone}`
+                    : undefined
+                  : undefined
+              }
+              disabled={!enabled}
+              name="post"
+              required
+            >
               {state.posts.map((post) => (
                 <option key={post.id} value={`${post.id}|${post.timezone}`}>
                   {post.siteName} — {post.name} ({post.timezone})

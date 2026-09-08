@@ -19,6 +19,7 @@ const principal = (
 });
 const repository: OperationsRepository = {
   listExceptions: async () => ({ items: [], hasMore: false }),
+  listScorecards: async (_scope, window) => ({ window, sites: [] }),
 };
 
 async function service(role: AuthenticatedPrincipal["roles"][number]) {
@@ -45,6 +46,15 @@ describe("operations exception boundary", () => {
     ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(
       (await service("CLIENT_USER")).listExceptions(),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it("applies the same capability boundary to operational scorecards", async () => {
+    await expect(
+      (await service("OPERATIONS_MANAGER")).listScorecards(),
+    ).resolves.toMatchObject({ sites: [] });
+    await expect(
+      (await service("GUARD")).listScorecards(),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 });

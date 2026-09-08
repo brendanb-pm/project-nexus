@@ -1,4 +1,7 @@
-import type { OperationsExceptionPage } from "./contracts";
+import type {
+  OperationalScorecards,
+  OperationsExceptionPage,
+} from "./contracts";
 
 export type OperationsScope = {
   organizationId: string;
@@ -14,4 +17,8 @@ export interface OperationsRepository {
     now: string,
     limit: number,
   ): Promise<OperationsExceptionPage>;
+  listScorecards(
+    scope: OperationsScope,
+    window: OperationalScorecards["window"],
+  ): Promise<OperationalScorecards>;
 }

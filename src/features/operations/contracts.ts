@@ -63,6 +63,67 @@ export type OperationsRecordWorkflow = {
   history: readonly OperationalRecordCard[];
 };
 
+export type ScorecardSourceState = "AVAILABLE" | "PARTIAL" | "UNAVAILABLE";
+export type ScorecardMetric = {
+  seconds: number | null;
+  sourceState: ScorecardSourceState;
+  sourceLabel: string;
+};
+export type CoverageGapSummary = {
+  requirementId: string;
+  startsAt: string;
+  endsAt: string;
+  uncoveredSeconds: number;
+  state: "CURRENT" | "UPCOMING";
+};
+export type ShiftCloseSummary = {
+  due: number;
+  complete: number;
+  incomplete: number;
+};
+export type OperationalPostScorecard = {
+  id: string;
+  siteId: string;
+  name: string;
+  status: "CRITICAL" | "ATTENTION" | "UPCOMING" | "HEALTHY" | "NO_REQUIREMENT";
+  required: ScorecardMetric;
+  scheduled: ScorecardMetric;
+  actual: ScorecardMetric;
+  coveragePercent: number | null;
+  uncovered: ScorecardMetric;
+  currentGaps: readonly CoverageGapSummary[];
+  upcomingGaps: readonly CoverageGapSummary[];
+  activeStaffing: { required: number; assigned: number };
+  shiftClose: ShiftCloseSummary;
+  incidentCount: number;
+  latestIncidentHref?: string;
+  schedulingHref: string;
+  href: string;
+};
+export type OperationalSiteScorecard = {
+  id: string;
+  clientId: string;
+  branchId: string;
+  name: string;
+  timezone: string;
+  status: OperationalPostScorecard["status"];
+  required: ScorecardMetric;
+  scheduled: ScorecardMetric;
+  actual: ScorecardMetric;
+  coveragePercent: number | null;
+  uncovered: ScorecardMetric;
+  currentGapCount: number;
+  upcomingGapCount: number;
+  shiftClose: ShiftCloseSummary;
+  incidentCount: number;
+  posts: readonly OperationalPostScorecard[];
+  href: string;
+};
+export type OperationalScorecards = {
+  window: { startsAt: string; endsAt: string; asOf: string };
+  sites: readonly OperationalSiteScorecard[];
+};
+
 export function isOperationalRecordFamily(
   value: string,
 ): value is OperationalRecordFamily {

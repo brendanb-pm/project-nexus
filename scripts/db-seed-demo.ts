@@ -38,17 +38,46 @@ const ids = {
   incident: "00000000-0000-4000-8000-000000000092",
   handoff: "00000000-0000-4000-8000-000000000093",
   eosr: "00000000-0000-4000-8000-000000000095",
+  timeRecord: "00000000-0000-4000-8000-000000000099",
+  coverageNorth: "00000000-0000-4000-8000-000000000070",
+  coverageNorthUpcoming: "00000000-0000-4000-8000-000000000071",
+  coverageSouth: "00000000-0000-4000-8000-000000000072",
+  clockIn: "00000000-0000-4000-8000-000000000073",
+  clockOut: "00000000-0000-4000-8000-000000000074",
 } as const;
+
+function localDescriptor(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    weekday: "long",
+  }).formatToParts(value);
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return {
+    date: `${read("year")}-${read("month")}-${read("day")}`,
+    time: `${read("hour")}:${read("minute")}:00`,
+    weekday: read("weekday").toUpperCase(),
+  };
+}
 
 async function main() {
   if (existsSync(".env.local")) process.loadEnvFile(".env.local");
   const pool = new Pool({ connectionString: localDemoDatabaseUrl() });
-  const now = new Date();
+  const now = new Date(Math.floor(Date.now() / 60000) * 60000);
   const startsAt = new Date(now.valueOf() - 7 * 60 * 60 * 1000);
   const endsAt = new Date(now.valueOf() + 60 * 60 * 1000);
   const incomingEndsAt = new Date(now.valueOf() + 9 * 60 * 60 * 1000);
   const incompleteStartsAt = new Date(now.valueOf() - 10 * 60 * 60 * 1000);
   const incompleteEndsAt = new Date(now.valueOf() - 2 * 60 * 60 * 1000);
+  const southRequirementEndsAt = new Date(now.valueOf() + 4 * 60 * 60 * 1000);
+  const upcomingStartsAt = new Date(now.valueOf() + 10 * 60 * 60 * 1000);
+  const upcomingEndsAt = new Date(now.valueOf() + 11 * 60 * 60 * 1000);
   try {
     await pool.query(
       "TRUNCATE TABLE eosr_passdown_dismissals, end_of_shift_reports, operational_record_revisions, audit_events, handoffs, incident_reports, activity_entries, clock_events, time_records, shift_assignments, shifts, employee_roles, employees, user_memberships, external_identities, users, auth_accounts, auth_sessions, auth_verifications, auth_users, posts, sites, clients, branches, organizations RESTART IDENTITY CASCADE",
@@ -76,6 +105,34 @@ async function main() {
     await pool.query(
       "INSERT INTO posts (id, site_id, name, description, service_type, armed_requirement) VALUES ($1, $2, 'South Gate', 'Synthetic incomplete-close demo post', 'access_control', 'unarmed')",
       [ids.incompletePost, ids.site],
+    );
+    const northStart = localDescriptor(startsAt);
+    const northEnd = localDescriptor(incomingEndsAt);
+    const southStart = localDescriptor(incompleteStartsAt);
+    const southEnd = localDescriptor(southRequirementEndsAt);
+    const upcomingStart = localDescriptor(upcomingStartsAt);
+    const upcomingEnd = localDescriptor(upcomingEndsAt);
+    await pool.query(
+      "INSERT INTO coverage_requirements (id, post_id, required_count, weekdays, local_start_time, local_end_time, effective_start, active) VALUES ($1, $2, 1, $3::jsonb, $4, $5, $6, true), ($7, $2, 1, $8::jsonb, $9, $10, $11, true), ($12, $13, 1, $14::jsonb, $15, $16, $17, true)",
+      [
+        ids.coverageNorth,
+        ids.post,
+        JSON.stringify([northStart.weekday]),
+        northStart.time,
+        northEnd.time,
+        northStart.date,
+        ids.coverageNorthUpcoming,
+        JSON.stringify([upcomingStart.weekday]),
+        upcomingStart.time,
+        upcomingEnd.time,
+        upcomingStart.date,
+        ids.coverageSouth,
+        ids.incompletePost,
+        JSON.stringify([southStart.weekday]),
+        southStart.time,
+        southEnd.time,
+        southStart.date,
+      ],
     );
     await pool.query(
       "INSERT INTO auth_users (id, name, email, email_verified) VALUES ($1, 'Guard A', 'guard.a@nexus.demo.invalid', true), ($2, 'Operations Manager B', 'operations.b@nexus.demo.invalid', true), ($3, 'Incoming Guard B', 'guard.b@nexus.demo.invalid', true)",
@@ -161,6 +218,23 @@ async function main() {
     await pool.query(
       "INSERT INTO shift_assignments (id, shift_id, employee_id, status, assigned_at) VALUES ($1, $2, $3, 'assigned', NOW())",
       [ids.incompleteAssignment, ids.incompleteShift, ids.guardEmployee],
+    );
+    await pool.query(
+      "INSERT INTO clock_events (id, shift_assignment_id, event_type, occurred_at, effective_at, recorded_by_user_id, verification_status) VALUES ($1, $2, 'CLOCK_IN', $3, $3, $4, 'NORMAL'), ($5, $2, 'CLOCK_OUT', $6, $6, $4, 'NORMAL')",
+      [ids.clockIn, ids.assignment, startsAt, ids.guardUser, ids.clockOut, now],
+    );
+    await pool.query(
+      "INSERT INTO time_records (id, shift_assignment_id, starts_at, ends_at, minutes_worked, seconds_worked, pairs, status, approved_by_user_id, approved_at) VALUES ($1, $2, $3, $4, 420, 25200, $5::jsonb, 'APPROVED', $6, $4)",
+      [
+        ids.timeRecord,
+        ids.assignment,
+        startsAt,
+        now,
+        JSON.stringify([
+          { startsAt: startsAt.toISOString(), endsAt: now.toISOString() },
+        ]),
+        ids.operationsUser,
+      ],
     );
     await pool.query(
       "INSERT INTO activity_entries (id, shift_assignment_id, occurred_at, category, post_id, description, action_taken, follow_up_required, incident_related, incident_gate, submission_key, visibility, status) VALUES ($1, $2, $3, 'OBSERVATION', $4, $5::jsonb, $6, false, false, 'ROUTINE', 'demo-routine-activity', 'INTERNAL', 'SUBMITTED')",
