@@ -53,6 +53,24 @@ export function ReportingWorkspace({
         <p className="mt-2 text-[var(--text-muted)]">{state.message}</p>
       </section>
     );
+  if (state.reviewEnabled)
+    return (
+      <section className={panel} aria-label="Supervisor and operations review">
+        <h1 className="text-2xl font-semibold">
+          Supervisor / operations review
+        </h1>
+        <p className="mt-2 text-[var(--text-muted)]">
+          Actionable review work and informational history are separated in
+          Operations. Reporting remains the canonical Guard authoring surface.
+        </p>
+        <a
+          className="mt-4 inline-flex min-h-11 items-center rounded-lg border border-white/20 px-4 py-2 font-medium"
+          href="/operations"
+        >
+          Open Operations Center
+        </a>
+      </section>
+    );
   async function submit(form: FormData) {
     if (!actions || submitting) return;
     setSubmitting(true);

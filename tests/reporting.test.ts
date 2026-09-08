@@ -626,4 +626,18 @@ describe("NX-3.5 supervisor acknowledgement and amendments", () => {
       }),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
+  it("denies unauthorized and cross-tenant canonical record reads", async () => {
+    await expect(
+      (await reviewer("GUARD")).service.getReviewRecord(
+        "ActivityEntry",
+        "activity-1",
+      ),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(
+      (await reviewer("SUPERVISOR", "org-2")).service.getReviewRecord(
+        "ActivityEntry",
+        "activity-1",
+      ),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
 });

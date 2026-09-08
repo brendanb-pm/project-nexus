@@ -9,6 +9,7 @@ export type EndOfShiftReport = {
   followUpItems: readonly string[];
   unusualConditions: string;
   submittedByUserId: string;
+  submittedByName?: string;
   submittedAt: string;
   acknowledgedByUserId?: string;
   acknowledgedAt?: string;

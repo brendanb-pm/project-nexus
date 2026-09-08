@@ -1,6 +1,14 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { OperationalRecordDetail } from "@/components/operations/operational-record-detail";
 import { ReportingWorkspace } from "@/components/reporting/reporting-workspace";
+import type { OperationalRecordDetailState } from "@/features/operations/record-detail";
 import type { ReportingPageState } from "@/features/reporting/contracts";
 
 const ready: ReportingPageState = {
@@ -18,6 +26,8 @@ const ready: ReportingPageState = {
   incidents: [],
   handoffs: [],
 };
+
+afterEach(cleanup);
 
 describe("NX-3.1 reporting UI", () => {
   it("uses human-readable authoritative assignment context", () => {
@@ -82,7 +92,68 @@ describe("NX-3.5 supervisor review UI", () => {
       },
     ],
   };
-  it("shows acknowledge/amend/history controls and prevents double submit", async () => {
+  it("routes supervisor review work to the canonical Operations surface", () => {
+    render(<ReportingWorkspace state={reviewState} />);
+    expect(
+      screen.getByRole("heading", { name: /supervisor \/ operations review/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open Operations Center" }),
+    ).toHaveAttribute("href", "/operations");
+    expect(
+      screen.queryByRole("button", { name: "Acknowledge" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record amendment" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not expose supervisor review controls when review is disabled", () => {
+    const { container } = render(
+      <ReportingWorkspace state={{ ...reviewState, reviewEnabled: false }} />,
+    );
+    expect(
+      container.querySelector(
+        '[aria-label="Supervisor and operations review"]',
+      ),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("NX4.5 canonical operational record detail", () => {
+  const detailState: OperationalRecordDetailState = {
+    kind: "ready",
+    record: {
+      key: "activity:activity-1",
+      family: "activity",
+      id: "activity-1",
+      typeLabel: "Activity / DAR",
+      siteName: "Cedar Plaza",
+      postName: "Lobby",
+      timestamp: "2026-08-29T12:00:00.000Z",
+      actorName: "Guard A",
+      status: "AWAITING ACKNOWLEDGEMENT",
+      summary: "Original guard entry",
+      href: "/operations/records/activity/activity-1",
+      actionable: true,
+      reviewReason: "Supervisor acknowledgement is pending.",
+    },
+    fields: [{ label: "Narrative", value: "Original guard entry" }],
+    review: {
+      entityType: "ActivityEntry",
+      id: "activity-1",
+      organizationId: "org-1",
+      branchId: "branch-1",
+      clientId: "client-1",
+      siteId: "site-1",
+      visibility: "INTERNAL",
+      revision: 0,
+      snapshot: { authoredByUserId: "guard-1" },
+      history: [],
+    },
+  };
+
+  it("shows progression, acknowledges once, and keeps history understandable", async () => {
     const acknowledge = vi.fn(async () => ({
       entityType: "ActivityEntry" as const,
       id: "activity-1",
@@ -93,18 +164,9 @@ describe("NX-3.5 supervisor review UI", () => {
       visibility: "INTERNAL" as const,
       revision: 0,
       snapshot: {},
-      history: [],
-    }));
-    const getRecord = vi.fn(async () => ({
-      entityType: "ActivityEntry" as const,
-      id: "activity-1",
-      organizationId: "org-1",
-      branchId: "branch-1",
-      clientId: "client-1",
-      siteId: "site-1",
-      visibility: "INTERNAL" as const,
-      revision: 1,
-      snapshot: { authoredByUserId: "guard-1" },
+      acknowledgedByUserId: "supervisor-1",
+      acknowledgedByName: "Operations Manager B",
+      acknowledgedAt: "2026-08-30T12:00:00.000Z",
       history: [
         {
           revision: 1,
@@ -116,55 +178,48 @@ describe("NX-3.5 supervisor review UI", () => {
       ],
     }));
     render(
-      <ReportingWorkspace
-        state={reviewState}
+      <OperationalRecordDetail
+        state={detailState}
         actions={{
-          createActivity: vi.fn(),
-          createIncident: vi.fn(),
-          acknowledgeOperationalRecord: acknowledge,
-          getOperationalRecord: getRecord,
+          acknowledge,
+          amend: vi.fn(),
         }}
       />,
     );
     expect(
-      screen.getByRole("heading", { name: /supervisor \/ operations review/i }),
+      screen.getByRole("heading", {
+        name: "Acknowledgement & amendment history",
+      }),
     ).toBeInTheDocument();
-    const button = screen.getByRole("button", { name: "Acknowledge" });
+    expect(
+      screen.getByText(/Original values remain unchanged/i),
+    ).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "Acknowledge record" });
     fireEvent.click(button);
     fireEvent.click(button);
     await waitFor(() => expect(acknowledge).toHaveBeenCalledTimes(1));
     await waitFor(() =>
-      expect(screen.getByText("Acknowledged")).toBeInTheDocument(),
+      expect(screen.getAllByText("Acknowledged").length).toBeGreaterThan(0),
     );
-    fireEvent.click(screen.getByRole("button", { name: "View history" }));
-    await waitFor(() =>
-      expect(screen.getByText(/Clarifies sequence/)).toBeInTheDocument(),
-    );
+    expect(screen.getByText(/Operations Manager B/)).toBeInTheDocument();
+    expect(screen.getByText(/Clarifies sequence/)).toBeInTheDocument();
   });
-  it("requires an amendment reason and does not expose controls when review is disabled", async () => {
+
+  it("requires amendment reason and corrected detail before appending", () => {
     const amend = vi.fn();
     render(
-      <ReportingWorkspace
-        state={reviewState}
+      <OperationalRecordDetail
+        state={detailState}
         actions={{
-          createActivity: vi.fn(),
-          createIncident: vi.fn(),
-          amendOperationalRecord: amend,
+          acknowledge: vi.fn(),
+          amend,
         }}
       />,
     );
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Record amendment" })[0],
+    fireEvent.click(screen.getByRole("button", { name: "Record amendment" }));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /Enter a reason and corrected detail/i,
     );
-    expect(screen.getAllByText(/Amendment reason/i).length).toBeGreaterThan(0);
     expect(amend).not.toHaveBeenCalled();
-    const { container } = render(
-      <ReportingWorkspace state={{ ...reviewState, reviewEnabled: false }} />,
-    );
-    expect(
-      container.querySelector(
-        '[aria-label="Supervisor and operations review"]',
-      ),
-    ).not.toBeInTheDocument();
   });
 });

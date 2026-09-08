@@ -33,6 +33,8 @@ export type ActivityEntrySummary = {
   status: "SUBMITTED";
   createdAt: string;
   incidentGate: IncidentGateOutcome;
+  authorUserId?: string;
+  authorName?: string;
   acknowledgedByUserId?: string;
   acknowledgedAt?: string;
 };
@@ -59,6 +61,8 @@ export type IncidentReportSummary = {
   shiftAssignmentId: string;
   originatingActivityEntryId?: string;
   incidentNumber: string;
+  siteName?: string;
+  postName?: string;
   classification: IncidentClassification;
   severity: IncidentSeverity;
   occurredAt: string;
@@ -69,6 +73,8 @@ export type IncidentReportSummary = {
   status: "SUBMITTED";
   visibility: VisibilityClassification;
   createdAt: string;
+  authorUserId?: string;
+  authorName?: string;
   acknowledgedByUserId?: string;
   acknowledgedAt?: string;
 };
@@ -85,6 +91,8 @@ export type HandoffSummary = {
   status: "SUBMITTED";
   visibility: VisibilityClassification;
   createdAt: string;
+  authorUserId?: string;
+  authorName?: string;
   acknowledgedByUserId?: string;
   acknowledgedAt?: string;
 };
@@ -112,6 +120,7 @@ export type ReviewRecord = {
   siteId: string;
   visibility: VisibilityClassification;
   acknowledgedByUserId?: string;
+  acknowledgedByName?: string;
   acknowledgedAt?: string;
   revision: number;
   snapshot: Record<string, unknown>;

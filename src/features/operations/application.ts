@@ -4,14 +4,14 @@ import {
 } from "@/server/request/errors";
 import type { OperationsService } from "./service";
 import type { EndOfShiftReportService } from "@/features/eosr/service";
+import type { ReportingService } from "@/features/reporting/service";
+import { buildOperationsRecordWorkflow } from "./record-workflow";
 
 export type OperationsCenterState =
   | {
       kind: "ready";
       exceptions: Awaited<ReturnType<OperationsService["listExceptions"]>>;
-      completedReports: Awaited<
-        ReturnType<EndOfShiftReportService["listCompletedReports"]>
-      >;
+      recordWorkflow: ReturnType<typeof buildOperationsRecordWorkflow>;
     }
   | { kind: "permission-denied"; message: string }
   | { kind: "error"; message: string; retryable: boolean };
@@ -20,20 +20,31 @@ export async function loadOperationsCenter(
   serviceOrPromise: OperationsService | Promise<OperationsService>,
   eosrServiceOrPromise:
     EndOfShiftReportService | Promise<EndOfShiftReportService>,
+  reportingServiceOrPromise: ReportingService | Promise<ReportingService>,
 ): Promise<OperationsCenterState> {
   try {
-    const [service, eosrService] = await Promise.all([
+    const [service, eosrService, reportingService] = await Promise.all([
       serviceOrPromise,
       eosrServiceOrPromise,
+      reportingServiceOrPromise,
     ]);
-    const [exceptions, completedReports] = await Promise.all([
-      service.listExceptions(),
-      eosrService.listCompletedReports(),
-    ]);
+    const [exceptions, completedReports, activities, incidents, handoffs] =
+      await Promise.all([
+        service.listExceptions(),
+        eosrService.listCompletedReports(),
+        reportingService.listAuthorizedActivities(),
+        reportingService.listAuthorizedIncidents(),
+        reportingService.listAuthorizedHandoffs(),
+      ]);
     return {
       kind: "ready",
       exceptions,
-      completedReports,
+      recordWorkflow: buildOperationsRecordWorkflow({
+        activities,
+        incidents,
+        reports: completedReports,
+        handoffs,
+      }),
     };
   } catch (error) {
     if (
