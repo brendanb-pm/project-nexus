@@ -1,9 +1,10 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { existsSync } from "node:fs";
 
 async function main() {
-  process.loadEnvFile(".env.local");
+  if (existsSync(".env.local")) process.loadEnvFile(".env.local");
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is required.");
   const pool = new Pool({ connectionString });

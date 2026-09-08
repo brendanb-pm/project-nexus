@@ -33,4 +33,5 @@ export async function setPassdownDismissal(form: FormData) {
     )
   ).dismissPassdown(id, dismissed === "true");
   revalidatePath("/eosr");
+  revalidatePath("/schedule");
 }

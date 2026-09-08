@@ -91,4 +91,11 @@ export class EndOfShiftReportService {
       Math.min(Math.max(limit, 1), 100),
     );
   }
+  async listCompletedReports(limit = 25) {
+    this.access.requireOrganization("VIEW_SITE_OPERATIONS");
+    return this.repository.listCompletedReports(
+      this.scope(),
+      Math.min(Math.max(limit, 1), 100),
+    );
+  }
 }

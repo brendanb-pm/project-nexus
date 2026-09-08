@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { IncomingPassdownCards } from "@/components/eosr/incoming-passdown-cards";
+import type { IncomingPassdown } from "@/features/eosr/contracts";
 import type { MySchedulePageState } from "@/features/scheduling/contracts";
 
 const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
@@ -40,6 +42,7 @@ function durationLabel(seconds: number) {
 export type MyScheduleActions = {
   createAvailability(form: FormData): Promise<void>;
   clock(form: FormData): Promise<void>;
+  setPassdownDismissal?(form: FormData): Promise<void>;
 };
 
 function ClockButton({
@@ -107,9 +110,11 @@ function ClockButton({
 export function MySchedule({
   state,
   actions,
+  passdowns = [],
 }: {
   state: MySchedulePageState;
   actions?: MyScheduleActions;
+  passdowns?: readonly IncomingPassdown[];
 }) {
   if (state.kind !== "ready")
     return (
@@ -129,7 +134,19 @@ export function MySchedule({
           Location is requested only when you press a clock button. Nexus does
           not track location continuously.
         </p>
+        <a
+          className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-white/20 px-4 py-2 font-medium"
+          href="/reporting"
+        >
+          Open reporting
+        </a>
       </section>
+      {actions?.setPassdownDismissal ? (
+        <IncomingPassdownCards
+          passdowns={passdowns}
+          setPassdownDismissal={actions.setPassdownDismissal}
+        />
+      ) : null}
       <section className={panel}>
         <h2 className="text-xl font-semibold">Assignments</h2>
         {state.assignments.length ? (

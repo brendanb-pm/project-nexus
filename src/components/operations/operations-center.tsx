@@ -100,6 +100,71 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
           </div>
         )}
       </section>
+      <section className={panel} aria-labelledby="completed-eosr-heading">
+        <h2 id="completed-eosr-heading" className="text-xl font-semibold">
+          Completed EOSR review history
+        </h2>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
+          Completed reports are informational records, not Needs Attention
+          exceptions.
+        </p>
+        {state.completedReports.length ? (
+          <div className="mt-3 grid gap-3">
+            {state.completedReports.map((report) => (
+              <article
+                className="rounded-lg border border-white/10 p-4"
+                id={`eosr-${report.id}`}
+                key={report.id}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <strong>
+                    {report.siteName} — {report.postName}
+                  </strong>
+                  <span className="text-xs text-[var(--text-muted)]">
+                    {new Date(report.submittedAt).toLocaleString()}
+                  </span>
+                </div>
+                <p className="mt-2">{report.summary}</p>
+                <div className="mt-2 grid gap-1 text-sm text-[var(--text-muted)]">
+                  <p>
+                    Passdown:{" "}
+                    {report.unresolvedIssues.length ||
+                    report.followUpItems.length ||
+                    report.equipmentAccessStatus ||
+                    report.unusualConditions
+                      ? "Included"
+                      : "Not included"}
+                  </p>
+                  {report.unresolvedIssues.length ? (
+                    <p>Unresolved: {report.unresolvedIssues.join(" · ")}</p>
+                  ) : null}
+                  {report.equipmentAccessStatus ? (
+                    <p>Equipment/access: {report.equipmentAccessStatus}</p>
+                  ) : null}
+                  {report.followUpItems.length ? (
+                    <p>Follow-up: {report.followUpItems.join(" · ")}</p>
+                  ) : null}
+                  <p>
+                    Review:{" "}
+                    {report.acknowledgedAt ? "Acknowledged" : "Awaiting review"}
+                  </p>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--text-muted)]">
+            No completed end-of-shift reports are available in your authorized
+            scope.
+          </p>
+        )}
+        <a
+          className="mt-4 inline-flex min-h-11 items-center underline"
+          href="/reporting"
+        >
+          Open reporting and historical handoffs
+        </a>
+      </section>
     </div>
   );
 }

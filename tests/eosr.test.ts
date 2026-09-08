@@ -57,6 +57,9 @@ class Repo implements EndOfShiftReportRepository {
   async listShiftClose() {
     return [];
   }
+  async listCompletedReports() {
+    return this.reports;
+  }
 }
 async function service(employeeId = "employee-1", role = "GUARD") {
   const request = await createAuthenticatedRequestContext(
@@ -119,6 +122,8 @@ describe("NX4.4 EOSR", () => {
       {
         id: "eosr-incoming",
         incomingAssignmentId: "incoming-1",
+        incomingScheduledStart: "2026-09-01T12:00:00.000Z",
+        incomingScheduledEnd: "2026-09-01T20:00:00.000Z",
         dismissed: false,
       },
     ];
@@ -131,5 +136,15 @@ describe("NX4.4 EOSR", () => {
     await expect(
       value.dismissPassdown("eosr-incoming", false),
     ).resolves.toMatchObject({ dismissed: false });
+  });
+  it("restricts completed EOSR history to site-operations roles", async () => {
+    await expect(
+      (await service("employee-1", "GUARD")).service.listCompletedReports(),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(
+      (
+        await service("employee-1", "OPERATIONS_MANAGER")
+      ).service.listCompletedReports(),
+    ).resolves.toEqual([]);
   });
 });

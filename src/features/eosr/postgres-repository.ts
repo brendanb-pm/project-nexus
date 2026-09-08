@@ -1,12 +1,15 @@
 import {
   and,
   asc,
+  countDistinct,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   lte,
   ne,
+  notExists,
   or,
   sql,
 } from "drizzle-orm";
@@ -151,10 +154,23 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
     const outgoingAssignments = alias(shiftAssignments, "outgoing_assignments");
     const outgoingShifts = alias(shifts, "outgoing_shifts");
     const newerOutgoingShifts = alias(shifts, "newer_outgoing_shifts");
+    const newerOutgoing = this.database
+      .select({ id: newerOutgoingShifts.id })
+      .from(newerOutgoingShifts)
+      .where(
+        and(
+          eq(newerOutgoingShifts.postId, shifts.postId),
+          lte(newerOutgoingShifts.scheduledEnd, shifts.scheduledStart),
+          gt(newerOutgoingShifts.scheduledEnd, outgoingShifts.scheduledEnd),
+        ),
+      )
+      .limit(1);
     const rows = await this.database
       .select({
         report: endOfShiftReports,
         incomingId: shiftAssignments.id,
+        incomingScheduledStart: shifts.scheduledStart,
+        incomingScheduledEnd: shifts.scheduledEnd,
         siteName: sites.name,
         postName: posts.name,
         dismissal: eosrPassdownDismissals,
@@ -194,12 +210,7 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
           ne(shiftAssignments.status, "cancelled"),
           ne(outgoingAssignments.status, "cancelled"),
           gte(shifts.scheduledEnd, new Date(now)),
-          sql`not exists (
-            select 1 from ${newerOutgoingShifts}
-            where ${newerOutgoingShifts.postId} = ${shifts.postId}
-              and ${newerOutgoingShifts.scheduledEnd} <= ${shifts.scheduledStart}
-              and ${newerOutgoingShifts.scheduledEnd} > ${outgoingShifts.scheduledEnd}
-          )`,
+          notExists(newerOutgoing),
         ),
       )
       .orderBy(asc(shifts.scheduledStart), desc(outgoingShifts.scheduledEnd))
@@ -215,6 +226,8 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
       .map((row) => ({
         ...dto(row.report, row.siteName, row.postName),
         incomingAssignmentId: row.incomingId,
+        incomingScheduledStart: row.incomingScheduledStart.toISOString(),
+        incomingScheduledEnd: row.incomingScheduledEnd.toISOString(),
         dismissed: Boolean(row.dismissal && !row.dismissal.reopenedAt),
       }));
   }
@@ -271,8 +284,8 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
         followUps: endOfShiftReports.followUpItems,
         unusual: endOfShiftReports.unusualConditions,
         acknowledgedAt: endOfShiftReports.acknowledgedAt,
-        incomingCount: sql<number>`(select count(*) from ${incomingShifts} where ${incomingShifts.postId} = ${shifts.postId} and ${incomingShifts.scheduledStart} >= ${shifts.scheduledEnd})`,
-        clockOut: sql<number>`count(${clockEvents.id}) filter (where ${clockEvents.eventType} = 'CLOCK_OUT')`,
+        incomingCount: countDistinct(incomingShifts.id),
+        clockOut: sql<number>`count(distinct ${clockEvents.id}) filter (where ${clockEvents.eventType} = 'CLOCK_OUT')`,
       })
       .from(shifts)
       .innerJoin(shiftAssignments, eq(shiftAssignments.shiftId, shifts.id))
@@ -286,6 +299,13 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
       .leftJoin(
         clockEvents,
         eq(clockEvents.shiftAssignmentId, shiftAssignments.id),
+      )
+      .leftJoin(
+        incomingShifts,
+        and(
+          eq(incomingShifts.postId, shifts.postId),
+          gte(incomingShifts.scheduledStart, shifts.scheduledEnd),
+        ),
       )
       .where(and(predicate(scope), lte(shifts.scheduledEnd, new Date(now))))
       .groupBy(
@@ -321,6 +341,27 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
           ? "ACKNOWLEDGED"
           : "AWAITING_REVIEW") as ShiftCloseStatus["reviewState"],
     }));
+  }
+  async listCompletedReports(scope: ReportingScope, limit: number) {
+    const rows = await this.database
+      .select({
+        report: endOfShiftReports,
+        siteName: sites.name,
+        postName: posts.name,
+      })
+      .from(endOfShiftReports)
+      .innerJoin(
+        shiftAssignments,
+        eq(endOfShiftReports.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(predicate(scope))
+      .orderBy(desc(endOfShiftReports.submittedAt), desc(endOfShiftReports.id))
+      .limit(limit);
+    return rows.map((row) => dto(row.report, row.siteName, row.postName));
   }
 }
 function dto(
