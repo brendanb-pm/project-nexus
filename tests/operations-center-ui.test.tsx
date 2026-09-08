@@ -31,6 +31,21 @@ describe("Operations Center", () => {
               },
             ],
           },
+          completedReports: [
+            {
+              id: "eosr-1",
+              shiftAssignmentId: "assignment-1",
+              siteName: "Cedar Plaza",
+              postName: "Lobby",
+              summary: "Shift secured.",
+              unresolvedIssues: ["Door closer service pending"],
+              equipmentAccessStatus: "Keys accounted for",
+              followUpItems: ["Confirm maintenance"],
+              unusualConditions: "",
+              submittedByUserId: "guard-1",
+              submittedAt: "2026-09-01T01:00:00.000Z",
+            },
+          ],
         }}
       />,
     );
@@ -43,5 +58,13 @@ describe("Operations Center", () => {
     expect(
       screen.getByRole("link", { name: /open source record/i }),
     ).toHaveAttribute("href", "/admin/scheduling");
+    expect(
+      screen.getByRole("heading", { name: "Completed EOSR review history" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Shift secured.")).toBeInTheDocument();
+    expect(screen.getByText(/Door closer service pending/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /historical handoffs/i }),
+    ).toHaveAttribute("href", "/reporting");
   });
 });

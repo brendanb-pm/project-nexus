@@ -10,7 +10,7 @@ export const developmentPersonas = {
   },
   "guard-b": {
     authUserId: "nexus-dev-auth-guard-b",
-    callbackPath: "/eosr",
+    callbackPath: "/schedule",
   },
   "operations-manager-b": {
     authUserId: "nexus-dev-auth-operations-manager-b",

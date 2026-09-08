@@ -6,6 +6,8 @@ const passdown = {
   id: "eosr-1",
   shiftAssignmentId: "outgoing-1",
   incomingAssignmentId: "incoming-1",
+  incomingScheduledStart: "2026-09-01T08:00:00.000Z",
+  incomingScheduledEnd: "2026-09-01T16:00:00.000Z",
   siteName: "Cedar Plaza",
   postName: "North Lobby",
   summary: "Lobby secured.",
@@ -56,6 +58,7 @@ describe("EOSR Guard workflow", () => {
     expect(
       screen.getByRole("button", { name: "Reopen passdown" }),
     ).toBeVisible();
-    expect(screen.getByText("Lobby secured.")).toBeVisible();
+    expect(screen.queryByText("Lobby secured.")).not.toBeInTheDocument();
+    expect(screen.getByText(/Passdown dismissed/i)).toBeVisible();
   });
 });

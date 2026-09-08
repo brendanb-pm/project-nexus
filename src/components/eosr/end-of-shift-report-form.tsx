@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { ActivityAssignment } from "@/features/reporting/contracts";
 import type { IncomingPassdown } from "@/features/eosr/contracts";
+import { IncomingPassdownCards } from "./incoming-passdown-cards";
 const input =
   "mt-1 w-full rounded-lg border border-white/15 bg-[var(--background)] px-3 py-2";
 export function EndOfShiftReportForm({
@@ -37,33 +38,10 @@ export function EndOfShiftReportForm({
   }
   return (
     <div className="grid gap-4">
-      {passdowns.map((item) => (
-        <section
-          key={item.id}
-          className="rounded-xl border border-amber-400/50 bg-amber-400/10 p-4"
-        >
-          <p className="font-semibold">
-            Incoming passdown · {item.siteName} / {item.postName}
-          </p>
-          <p className="mt-2 text-sm">{item.summary}</p>
-          {item.unresolvedIssues.length ? (
-            <p className="mt-2 text-sm">
-              Unresolved: {item.unresolvedIssues.join(" · ")}
-            </p>
-          ) : null}
-          <form action={setPassdownDismissal} className="mt-3">
-            <input type="hidden" name="id" value={item.id} />
-            <input
-              type="hidden"
-              name="dismissed"
-              value={item.dismissed ? "false" : "true"}
-            />
-            <button className="min-h-11 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium">
-              {item.dismissed ? "Reopen passdown" : "Dismiss passdown"}
-            </button>
-          </form>
-        </section>
-      ))}
+      <IncomingPassdownCards
+        passdowns={passdowns}
+        setPassdownDismissal={setPassdownDismissal}
+      />
       {!assignments.length ? (
         <section className="rounded-xl border border-white/10 bg-[var(--card)] p-5">
           <h1 className="text-xl font-semibold">End-of-shift report</h1>

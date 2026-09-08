@@ -48,4 +48,8 @@ export interface EndOfShiftReportRepository {
     now: string,
     limit: number,
   ): Promise<readonly ShiftCloseStatus[]>;
+  listCompletedReports(
+    scope: ReportingScope,
+    limit: number,
+  ): Promise<readonly EndOfShiftReport[]>;
 }

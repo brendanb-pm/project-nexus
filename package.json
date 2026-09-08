@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:postgres": "vitest run tests/eosr-postgres.integration.test.ts",
     "performance:summarize": "tsx scripts/summarize-performance.ts",
     "performance:run": "tsx --tsconfig scripts/tsconfig.performance.json scripts/measure-sprint-1.ts",
     "db:generate": "drizzle-kit generate",

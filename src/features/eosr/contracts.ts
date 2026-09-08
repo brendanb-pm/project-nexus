@@ -26,6 +26,8 @@ export type CreateEndOfShiftReportInput = {
 
 export type IncomingPassdown = EndOfShiftReport & {
   incomingAssignmentId: string;
+  incomingScheduledStart: string;
+  incomingScheduledEnd: string;
   dismissed: boolean;
 };
 

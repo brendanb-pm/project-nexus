@@ -6,6 +6,25 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://nexus_app:nexus_local_only@127.0.0.1:5432/nexus_demo
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      BETTER_AUTH_SECRET: nexus-ci-only-secret-at-least-32-characters
+      NEXUS_DEV_AUTH: "true"
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: nexus_demo
+          POSTGRES_USER: nexus_app
+          POSTGRES_PASSWORD: nexus_local_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus_app -d nexus_demo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -15,6 +34,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run db:migrate
+      - run: npm run db:demo:reset
       - name: Check changed-surface formatting
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -26,6 +47,9 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: NEXUS_POSTGRES_TEST=true npm run test:postgres
       - run: npm run db:check
       - run: npm run db:seed:validate
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

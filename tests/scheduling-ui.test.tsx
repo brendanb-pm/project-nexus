@@ -1,11 +1,13 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SchedulingAdmin } from "@/components/admin/scheduling-admin";
 import { MySchedule } from "@/components/schedule/my-schedule";
 import type {
   AssignmentSummary,
   SchedulingAdminPageState,
 } from "@/features/scheduling/contracts";
+
+afterEach(cleanup);
 
 const shift = {
   id: "shift-1",
@@ -114,5 +116,45 @@ describe("Sprint 2 scheduling UI", () => {
     expect(
       screen.getByText(/No assignments are currently scheduled/i),
     ).toBeInTheDocument();
+  });
+
+  it("renders the matching incoming passdown in schedule context", () => {
+    render(
+      <MySchedule
+        actions={{
+          createAvailability: vi.fn(),
+          clock: vi.fn(),
+          setPassdownDismissal: vi.fn(),
+        }}
+        passdowns={[
+          {
+            id: "eosr-1",
+            shiftAssignmentId: "outgoing-1",
+            incomingAssignmentId: assignment.id,
+            incomingScheduledStart: assignment.shift.scheduledStart,
+            incomingScheduledEnd: assignment.shift.scheduledEnd,
+            siteName: "Cedar Plaza",
+            postName: "Lobby",
+            summary: "Lobby secured.",
+            unresolvedIssues: ["Door closer service pending"],
+            equipmentAccessStatus: "Keys accounted for",
+            followUpItems: [],
+            unusualConditions: "",
+            submittedByUserId: "guard-2",
+            submittedAt: "2026-11-08T05:45:00.000Z",
+            dismissed: false,
+          },
+        ]}
+        state={{ kind: "ready", assignments: [assignment], availability: [] }}
+      />,
+    );
+    expect(
+      screen.getByRole("region", {
+        name: /Incoming passdown for Cedar Plaza Lobby/i,
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Open reporting" }),
+    ).toHaveAttribute("href", "/reporting");
   });
 });
