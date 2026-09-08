@@ -3,11 +3,9 @@ import "server-only";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { NexusDatabase } from "@/server/db/client";
 import {
-  activityEntries,
   clients,
   clockEvents,
   endOfShiftReports,
-  incidentReports,
   posts,
   shiftAssignments,
   shifts,
@@ -37,35 +35,7 @@ export class PostgresOperationsRepository implements OperationsRepository {
       eq(sites.clientId, clients.id),
       scopePredicate(scope),
     ];
-    const [incidents, shiftCloses, activities, clocks] = await Promise.all([
-      this.database
-        .select({
-          id: incidentReports.id,
-          occurredAt: incidentReports.occurredAt,
-          severity: incidentReports.severity,
-          siteId: sites.id,
-          postId: shifts.postId,
-          clientId: clients.id,
-          branchId: clients.branchId,
-        })
-        .from(incidentReports)
-        .innerJoin(sites, eq(incidentReports.siteId, sites.id))
-        .innerJoin(clients, eq(sites.clientId, clients.id))
-        .leftJoin(
-          shiftAssignments,
-          eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
-        )
-        .leftJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
-        .leftJoin(posts, eq(shifts.postId, posts.id))
-        .where(
-          and(
-            eq(incidentReports.status, "SUBMITTED"),
-            sql`${incidentReports.acknowledgedAt} is null`,
-            scopePredicate(scope),
-          ),
-        )
-        .orderBy(asc(incidentReports.occurredAt), asc(incidentReports.id))
-        .limit(limit),
+    const [shiftCloses, clocks] = await Promise.all([
       this.database
         .select({
           assignmentId: shiftAssignments.id,
@@ -112,33 +82,6 @@ export class PostgresOperationsRepository implements OperationsRepository {
         .limit(limit),
       this.database
         .select({
-          id: activityEntries.id,
-          occurredAt: activityEntries.occurredAt,
-          siteId: sites.id,
-          postId: shifts.postId,
-          clientId: clients.id,
-          branchId: clients.branchId,
-        })
-        .from(activityEntries)
-        .innerJoin(
-          shiftAssignments,
-          eq(activityEntries.shiftAssignmentId, shiftAssignments.id),
-        )
-        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
-        .innerJoin(posts, eq(shifts.postId, posts.id))
-        .innerJoin(sites, eq(posts.siteId, sites.id))
-        .innerJoin(clients, eq(sites.clientId, clients.id))
-        .where(
-          and(
-            eq(activityEntries.followUpRequired, true),
-            sql`${activityEntries.acknowledgedAt} is null`,
-            ...base,
-          ),
-        )
-        .orderBy(asc(activityEntries.occurredAt), asc(activityEntries.id))
-        .limit(limit),
-      this.database
-        .select({
           id: clockEvents.id,
           effectiveAt: clockEvents.effectiveAt,
           assignmentId: shiftAssignments.id,
@@ -167,49 +110,6 @@ export class PostgresOperationsRepository implements OperationsRepository {
         .limit(limit),
     ]);
     const items: OperationsException[] = [
-      ...incidents
-        .filter((r) => r.postId && r.branchId)
-        .map((r) => ({
-          id: `incident:${r.id}`,
-          type: "INCIDENT_AWAITING_REVIEW" as const,
-          severity:
-            r.severity === "CRITICAL" || r.severity === "HIGH"
-              ? ("URGENT" as const)
-              : ("REVIEW" as const),
-          effectiveAt: r.occurredAt.toISOString(),
-          organizationId: scope.organizationId,
-          branchId: r.branchId!,
-          clientId: r.clientId,
-          siteId: r.siteId,
-          postId: r.postId!,
-          source: {
-            entityType: "IncidentReport",
-            entityId: r.id,
-            href: "/reporting",
-          },
-          title: "Incident awaiting review",
-          detail: "Review the submitted incident.",
-        })),
-      ...activities
-        .filter((r) => r.branchId)
-        .map((r) => ({
-          id: `activity:${r.id}`,
-          type: "OPERATIONAL_RECORD_AWAITING_REVIEW" as const,
-          severity: "REVIEW" as const,
-          effectiveAt: r.occurredAt.toISOString(),
-          organizationId: scope.organizationId,
-          branchId: r.branchId!,
-          clientId: r.clientId,
-          siteId: r.siteId,
-          postId: r.postId,
-          source: {
-            entityType: "ActivityEntry",
-            entityId: r.id,
-            href: "/reporting",
-          },
-          title: "Activity follow-up awaiting review",
-          detail: "Review the submitted activity.",
-        })),
       ...clocks.map((r) => ({
         id: `clock:${r.id}`,
         type: "CLOCK_EXCEPTION" as const,

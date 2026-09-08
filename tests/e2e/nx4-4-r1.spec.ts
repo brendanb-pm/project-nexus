@@ -57,7 +57,9 @@ test("walks Guard EOSR, incoming passdown, and Operations history through local 
   await page.getByRole("button", { name: "Sign out of local demo" }).click();
 
   await signIn(page, "Operations Manager B");
-  await expect(page.getByText(/Handoff · Cedar Plaza North/)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Supervisor / operations review" }),
+  ).toBeVisible();
   await page.getByRole("link", { name: "Open Operations Center" }).click();
   await expect(
     page.getByRole("heading", { name: "Needs Attention" }),
@@ -66,13 +68,17 @@ test("walks Guard EOSR, incoming passdown, and Operations history through local 
     page.getByRole("heading", { name: "Shift close incomplete" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Completed EOSR review history" }),
+    page.getByRole("heading", { name: "History / Recent Activity" }),
   ).toBeVisible();
   await expect(page.getByText("North Lobby shift completed.")).toBeVisible();
+  await page.getByRole("link", { name: /open canonical eosr record/i }).click();
   await expect(
     page.getByText(/Door closer service remains pending/),
   ).toBeVisible();
+  await page.getByRole("link", { name: "Operations" }).click();
   await expect(
-    page.getByRole("link", { name: /historical handoffs/i }),
+    page.getByRole("link", {
+      name: /open canonical historical handoff record/i,
+    }),
   ).toBeVisible();
 });

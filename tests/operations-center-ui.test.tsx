@@ -31,21 +31,25 @@ describe("Operations Center", () => {
               },
             ],
           },
-          completedReports: [
-            {
-              id: "eosr-1",
-              shiftAssignmentId: "assignment-1",
-              siteName: "Cedar Plaza",
-              postName: "Lobby",
-              summary: "Shift secured.",
-              unresolvedIssues: ["Door closer service pending"],
-              equipmentAccessStatus: "Keys accounted for",
-              followUpItems: ["Confirm maintenance"],
-              unusualConditions: "",
-              submittedByUserId: "guard-1",
-              submittedAt: "2026-09-01T01:00:00.000Z",
-            },
-          ],
+          recordWorkflow: {
+            reviewQueue: [],
+            history: [
+              {
+                key: "eosr:eosr-1",
+                family: "eosr",
+                id: "eosr-1",
+                typeLabel: "EOSR",
+                siteName: "Cedar Plaza",
+                postName: "Lobby",
+                timestamp: "2026-09-01T01:00:00.000Z",
+                actorName: "Guard A",
+                status: "COMPLETED",
+                summary: "Shift secured.",
+                href: "/operations/records/eosr/eosr-1",
+                actionable: false,
+              },
+            ],
+          },
         }}
       />,
     );
@@ -59,12 +63,11 @@ describe("Operations Center", () => {
       screen.getByRole("link", { name: /open source record/i }),
     ).toHaveAttribute("href", "/admin/scheduling");
     expect(
-      screen.getByRole("heading", { name: "Completed EOSR review history" }),
+      screen.getByRole("heading", { name: "History / Recent Activity" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Shift secured.")).toBeInTheDocument();
-    expect(screen.getByText(/Door closer service pending/)).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /historical handoffs/i }),
-    ).toHaveAttribute("href", "/reporting");
+      screen.getByRole("link", { name: /open canonical eosr record/i }),
+    ).toHaveAttribute("href", "/operations/records/eosr/eosr-1");
   });
 });

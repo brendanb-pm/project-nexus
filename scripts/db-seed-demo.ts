@@ -37,6 +37,7 @@ const ids = {
   activity: "00000000-0000-4000-8000-000000000091",
   incident: "00000000-0000-4000-8000-000000000092",
   handoff: "00000000-0000-4000-8000-000000000093",
+  eosr: "00000000-0000-4000-8000-000000000095",
 } as const;
 
 async function main() {
@@ -187,7 +188,7 @@ async function main() {
       ],
     );
     await pool.query(
-      "INSERT INTO handoffs (id, shift_assignment_id, unresolved_issues, equipment_key_status, follow_up_items, submitted_at, submission_key, status, visibility) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, 'demo-handoff', 'SUBMITTED', 'INTERNAL')",
+      "INSERT INTO handoffs (id, shift_assignment_id, unresolved_issues, equipment_key_status, follow_up_items, submitted_at, submission_key, status, visibility, acknowledged_by_user_id, acknowledged_at) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, 'demo-handoff', 'SUBMITTED', 'INTERNAL', $7, $6)",
       [
         ids.handoff,
         ids.assignment,
@@ -195,8 +196,20 @@ async function main() {
         JSON.stringify({
           summary: "North lobby keys and radio accounted for.",
         }),
-        JSON.stringify(["Operations acknowledgement pending."]),
+        JSON.stringify(["Operations review completed."]),
         endsAt,
+        ids.operationsUser,
+      ],
+    );
+    await pool.query(
+      "INSERT INTO end_of_shift_reports (id, shift_assignment_id, submitted_by_user_id, summary, unresolved_issues, equipment_access_status, follow_up_items, unusual_conditions, submission_key, submitted_at) VALUES ($1, $2, $3, 'North Lobby shift completed.', $4::jsonb, 'Keys accounted for; radio charging.', $5::jsonb, '', 'demo-eosr', $6)",
+      [
+        ids.eosr,
+        ids.assignment,
+        ids.guardUser,
+        JSON.stringify(["Door closer service remains pending."]),
+        JSON.stringify(["Confirm maintenance arrival."]),
+        now,
       ],
     );
     console.log("Nexus demo data reset and seeded.");

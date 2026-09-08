@@ -73,7 +73,7 @@ export class ReportingService {
     });
     return this.repository.listOwnHandoffs(this.scope(), employeeId, 25);
   }
-  async listAuthorizedIncidents() {
+  async listAuthorizedIncidents(limit = 25) {
     this.access.requireAny(["VIEW_SITE_OPERATIONS", "VIEW_CLIENT_INCIDENTS"], {
       organizationId: this.access.context.organizationId,
     });
@@ -82,22 +82,26 @@ export class ReportingService {
     )
       ? [...this.access.context.visibility]
       : ["CLIENT_VISIBLE" as const];
-    return this.repository.listIncidents(this.scope(), visibility, 25);
+    return this.repository.listIncidents(
+      this.scope(),
+      visibility,
+      Math.min(Math.max(limit, 1), 100),
+    );
   }
-  async listAuthorizedActivities() {
+  async listAuthorizedActivities(limit = 25) {
     this.access.requireOrganization("VIEW_SITE_OPERATIONS");
     return this.repository.listReviewActivities(
       this.scope(),
       [...this.access.context.visibility],
-      25,
+      Math.min(Math.max(limit, 1), 100),
     );
   }
-  async listAuthorizedHandoffs() {
+  async listAuthorizedHandoffs(limit = 25) {
     this.access.requireOrganization("VIEW_SITE_OPERATIONS");
     return this.repository.listReviewHandoffs(
       this.scope(),
       [...this.access.context.visibility],
-      25,
+      Math.min(Math.max(limit, 1), 100),
     );
   }
   async getReviewRecord(

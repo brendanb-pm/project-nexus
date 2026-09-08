@@ -1,5 +1,6 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { NexusDatabase } from "@/server/db/client";
 import {
   activityEntries,
@@ -60,6 +61,10 @@ const fields = {
   createdAt: activityEntries.createdAt,
   siteName: sites.name,
   postName: posts.name,
+  authorUserId: employees.userId,
+  authorProfile: employees.profile,
+  acknowledgedByUserId: activityEntries.acknowledgedByUserId,
+  acknowledgedAt: activityEntries.acknowledgedAt,
 };
 type ActivityRow = {
   id: string;
@@ -76,7 +81,22 @@ type ActivityRow = {
   createdAt: Date;
   siteName: string;
   postName: string;
+  authorUserId: string | null;
+  authorProfile: unknown;
+  acknowledgedByUserId: string | null;
+  acknowledgedAt: Date | null;
 };
+function profileName(value: unknown) {
+  const profile =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  return typeof profile.name === "string"
+    ? profile.name
+    : typeof profile.displayName === "string"
+      ? profile.displayName
+      : undefined;
+}
 function dto(row: ActivityRow): ActivityEntrySummary {
   const description =
     row.description && typeof row.description === "object"
@@ -100,6 +120,16 @@ function dto(row: ActivityRow): ActivityEntrySummary {
     status: "SUBMITTED",
     createdAt: row.createdAt.toISOString(),
     incidentGate: row.incidentGate as ActivityEntrySummary["incidentGate"],
+    ...(row.authorUserId ? { authorUserId: row.authorUserId } : {}),
+    ...(profileName(row.authorProfile)
+      ? { authorName: profileName(row.authorProfile) }
+      : {}),
+    ...(row.acknowledgedByUserId
+      ? { acknowledgedByUserId: row.acknowledgedByUserId }
+      : {}),
+    ...(row.acknowledgedAt
+      ? { acknowledgedAt: row.acknowledgedAt.toISOString() }
+      : {}),
   };
 }
 
@@ -118,6 +148,12 @@ const incidentFields = {
   status: incidentReports.status,
   visibility: incidentReports.visibility,
   createdAt: incidentReports.createdAt,
+  siteName: sites.name,
+  postName: posts.name,
+  authorUserId: incidentReports.reportedByUserId,
+  authorProfile: employees.profile,
+  acknowledgedByUserId: incidentReports.acknowledgedByUserId,
+  acknowledgedAt: incidentReports.acknowledgedAt,
 };
 type IncidentRow = {
   id: string;
@@ -134,6 +170,12 @@ type IncidentRow = {
   status: string;
   visibility: IncidentReportSummary["visibility"];
   createdAt: Date;
+  siteName: string;
+  postName: string;
+  authorUserId: string | null;
+  authorProfile: unknown;
+  acknowledgedByUserId: string | null;
+  acknowledgedAt: Date | null;
 };
 function incidentDto(row: IncidentRow): IncidentReportSummary {
   if (!row.shiftAssignmentId)
@@ -145,6 +187,8 @@ function incidentDto(row: IncidentRow): IncidentReportSummary {
       ? { originatingActivityEntryId: row.originatingActivityEntryId }
       : {}),
     incidentNumber: row.incidentNumber,
+    siteName: row.siteName,
+    postName: row.postName,
     classification:
       row.classification as IncidentReportSummary["classification"],
     severity: row.severity as IncidentReportSummary["severity"],
@@ -158,6 +202,16 @@ function incidentDto(row: IncidentRow): IncidentReportSummary {
     status: "SUBMITTED",
     visibility: row.visibility,
     createdAt: row.createdAt.toISOString(),
+    ...(row.authorUserId ? { authorUserId: row.authorUserId } : {}),
+    ...(profileName(row.authorProfile)
+      ? { authorName: profileName(row.authorProfile) }
+      : {}),
+    ...(row.acknowledgedByUserId
+      ? { acknowledgedByUserId: row.acknowledgedByUserId }
+      : {}),
+    ...(row.acknowledgedAt
+      ? { acknowledgedAt: row.acknowledgedAt.toISOString() }
+      : {}),
   };
 }
 
@@ -173,6 +227,10 @@ const handoffFields = {
   createdAt: handoffs.createdAt,
   siteName: sites.name,
   postName: posts.name,
+  authorUserId: employees.userId,
+  authorProfile: employees.profile,
+  acknowledgedByUserId: handoffs.acknowledgedByUserId,
+  acknowledgedAt: handoffs.acknowledgedAt,
 };
 type HandoffRow = {
   id: string;
@@ -186,6 +244,10 @@ type HandoffRow = {
   createdAt: Date;
   siteName: string;
   postName: string;
+  authorUserId: string | null;
+  authorProfile: unknown;
+  acknowledgedByUserId: string | null;
+  acknowledgedAt: Date | null;
 };
 function stringList(value: unknown) {
   return Array.isArray(value)
@@ -211,6 +273,16 @@ function handoffDto(row: HandoffRow): HandoffSummary {
     status: "SUBMITTED",
     visibility: row.visibility,
     createdAt: row.createdAt.toISOString(),
+    ...(row.authorUserId ? { authorUserId: row.authorUserId } : {}),
+    ...(profileName(row.authorProfile)
+      ? { authorName: profileName(row.authorProfile) }
+      : {}),
+    ...(row.acknowledgedByUserId
+      ? { acknowledgedByUserId: row.acknowledgedByUserId }
+      : {}),
+    ...(row.acknowledgedAt
+      ? { acknowledgedAt: row.acknowledgedAt.toISOString() }
+      : {}),
   };
 }
 
@@ -222,6 +294,7 @@ export class PostgresReportingRepository implements ReportingRepository {
     id: string,
     historyLimit: number,
   ): Promise<ReviewRecord | null> {
+    const acknowledgingEmployees = alias(employees, "acknowledging_employees");
     const table =
       entityType === "ActivityEntry"
         ? activityEntries
@@ -233,6 +306,7 @@ export class PostgresReportingRepository implements ReportingRepository {
         id: table.id,
         visibility: table.visibility,
         acknowledgedByUserId: table.acknowledgedByUserId,
+        acknowledgedByProfile: acknowledgingEmployees.profile,
         acknowledgedAt: table.acknowledgedAt,
         branchId: clients.branchId,
         clientId: clients.id,
@@ -248,6 +322,10 @@ export class PostgresReportingRepository implements ReportingRepository {
       .innerJoin(posts, eq(shifts.postId, posts.id))
       .innerJoin(sites, eq(posts.siteId, sites.id))
       .innerJoin(clients, eq(sites.clientId, clients.id))
+      .leftJoin(
+        acknowledgingEmployees,
+        eq(table.acknowledgedByUserId, acknowledgingEmployees.userId),
+      )
       .where(and(scopePredicate(scope), eq(table.id, id)))
       .limit(1);
     const row = rows[0];
@@ -285,6 +363,9 @@ export class PostgresReportingRepository implements ReportingRepository {
       visibility: row.visibility,
       ...(row.acknowledgedByUserId
         ? { acknowledgedByUserId: row.acknowledgedByUserId }
+        : {}),
+      ...(profileName(row.acknowledgedByProfile)
+        ? { acknowledgedByName: profileName(row.acknowledgedByProfile) }
         : {}),
       ...(row.acknowledgedAt
         ? { acknowledgedAt: row.acknowledgedAt.toISOString() }
@@ -484,6 +565,7 @@ export class PostgresReportingRepository implements ReportingRepository {
         shiftAssignments,
         eq(activityEntries.shiftAssignmentId, shiftAssignments.id),
       )
+      .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
       .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
       .innerJoin(posts, eq(shifts.postId, posts.id))
       .innerJoin(sites, eq(posts.siteId, sites.id))
@@ -507,6 +589,7 @@ export class PostgresReportingRepository implements ReportingRepository {
         shiftAssignments,
         eq(activityEntries.shiftAssignmentId, shiftAssignments.id),
       )
+      .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
       .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
       .innerJoin(posts, eq(shifts.postId, posts.id))
       .innerJoin(sites, eq(posts.siteId, sites.id))
@@ -535,6 +618,7 @@ export class PostgresReportingRepository implements ReportingRepository {
           shiftAssignments,
           eq(activityEntries.shiftAssignmentId, shiftAssignments.id),
         )
+        .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
         .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
         .innerJoin(posts, eq(shifts.postId, posts.id))
         .innerJoin(sites, eq(posts.siteId, sites.id))
@@ -593,6 +677,7 @@ export class PostgresReportingRepository implements ReportingRepository {
           shiftAssignments,
           eq(activityEntries.shiftAssignmentId, shiftAssignments.id),
         )
+        .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
         .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
         .innerJoin(posts, eq(shifts.postId, posts.id))
         .innerJoin(sites, eq(posts.siteId, sites.id))
@@ -613,6 +698,10 @@ export class PostgresReportingRepository implements ReportingRepository {
       .innerJoin(
         shiftAssignments,
         eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+      )
+      .leftJoin(
+        employees,
+        eq(incidentReports.reportedByUserId, employees.userId),
       )
       .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
       .innerJoin(posts, eq(shifts.postId, posts.id))
@@ -636,6 +725,10 @@ export class PostgresReportingRepository implements ReportingRepository {
       .innerJoin(
         shiftAssignments,
         eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+      )
+      .leftJoin(
+        employees,
+        eq(incidentReports.reportedByUserId, employees.userId),
       )
       .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
       .innerJoin(posts, eq(shifts.postId, posts.id))
@@ -663,6 +756,7 @@ export class PostgresReportingRepository implements ReportingRepository {
         shiftAssignments,
         eq(activityEntries.shiftAssignmentId, shiftAssignments.id),
       )
+      .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
       .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
       .innerJoin(posts, eq(shifts.postId, posts.id))
       .innerJoin(sites, eq(posts.siteId, sites.id))
@@ -690,6 +784,10 @@ export class PostgresReportingRepository implements ReportingRepository {
         .innerJoin(
           shiftAssignments,
           eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+        )
+        .leftJoin(
+          employees,
+          eq(incidentReports.reportedByUserId, employees.userId),
         )
         .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
         .innerJoin(posts, eq(shifts.postId, posts.id))
@@ -745,6 +843,18 @@ export class PostgresReportingRepository implements ReportingRepository {
       const created = await tx
         .select(incidentFields)
         .from(incidentReports)
+        .innerJoin(
+          shiftAssignments,
+          eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+        )
+        .leftJoin(
+          employees,
+          eq(incidentReports.reportedByUserId, employees.userId),
+        )
+        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+        .innerJoin(posts, eq(shifts.postId, posts.id))
+        .innerJoin(sites, eq(posts.siteId, sites.id))
+        .innerJoin(clients, eq(sites.clientId, clients.id))
         .where(eq(incidentReports.id, id))
         .limit(1);
       return incidentDto(created[0]!);
@@ -762,6 +872,7 @@ export class PostgresReportingRepository implements ReportingRepository {
         shiftAssignments,
         eq(handoffs.shiftAssignmentId, shiftAssignments.id),
       )
+      .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
       .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
       .innerJoin(posts, eq(shifts.postId, posts.id))
       .innerJoin(sites, eq(posts.siteId, sites.id))
@@ -785,6 +896,7 @@ export class PostgresReportingRepository implements ReportingRepository {
         shiftAssignments,
         eq(handoffs.shiftAssignmentId, shiftAssignments.id),
       )
+      .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
       .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
       .innerJoin(posts, eq(shifts.postId, posts.id))
       .innerJoin(sites, eq(posts.siteId, sites.id))
@@ -813,6 +925,7 @@ export class PostgresReportingRepository implements ReportingRepository {
           shiftAssignments,
           eq(handoffs.shiftAssignmentId, shiftAssignments.id),
         )
+        .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
         .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
         .innerJoin(posts, eq(shifts.postId, posts.id))
         .innerJoin(sites, eq(posts.siteId, sites.id))
@@ -862,6 +975,7 @@ export class PostgresReportingRepository implements ReportingRepository {
           shiftAssignments,
           eq(handoffs.shiftAssignmentId, shiftAssignments.id),
         )
+        .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
         .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
         .innerJoin(posts, eq(shifts.postId, posts.id))
         .innerJoin(sites, eq(posts.siteId, sites.id))

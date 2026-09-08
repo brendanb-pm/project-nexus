@@ -21,6 +21,7 @@ import {
   clockEvents,
   endOfShiftReports,
   eosrPassdownDismissals,
+  employees,
   posts,
   shiftAssignments,
   shifts,
@@ -96,12 +97,7 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
       const existing = await tx
         .select()
         .from(endOfShiftReports)
-        .where(
-          and(
-            eq(endOfShiftReports.shiftAssignmentId, context.id),
-            eq(endOfShiftReports.submissionKey, input.submissionKey),
-          ),
-        )
+        .where(eq(endOfShiftReports.shiftAssignmentId, context.id))
         .limit(1);
       if (existing[0]) return existing[0];
       const inserted = await tx
@@ -348,6 +344,7 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
         report: endOfShiftReports,
         siteName: sites.name,
         postName: posts.name,
+        submittedByProfile: employees.profile,
       })
       .from(endOfShiftReports)
       .innerJoin(
@@ -358,16 +355,28 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
       .innerJoin(posts, eq(shifts.postId, posts.id))
       .innerJoin(sites, eq(posts.siteId, sites.id))
       .innerJoin(clients, eq(sites.clientId, clients.id))
+      .leftJoin(
+        employees,
+        eq(endOfShiftReports.submittedByUserId, employees.userId),
+      )
       .where(predicate(scope))
       .orderBy(desc(endOfShiftReports.submittedAt), desc(endOfShiftReports.id))
       .limit(limit);
-    return rows.map((row) => dto(row.report, row.siteName, row.postName));
+    return rows.map((row) =>
+      dto(
+        row.report,
+        row.siteName,
+        row.postName,
+        profileName(row.submittedByProfile),
+      ),
+    );
   }
 }
 function dto(
   row: typeof endOfShiftReports.$inferSelect,
   siteName: string,
   postName: string,
+  submittedByName?: string,
 ): EndOfShiftReport {
   return {
     id: row.id,
@@ -388,6 +397,7 @@ function dto(
       : [],
     unusualConditions: row.unusualConditions,
     submittedByUserId: row.submittedByUserId,
+    ...(submittedByName ? { submittedByName } : {}),
     submittedAt: row.submittedAt.toISOString(),
     ...(row.acknowledgedByUserId
       ? { acknowledgedByUserId: row.acknowledgedByUserId }
@@ -396,4 +406,16 @@ function dto(
       ? { acknowledgedAt: row.acknowledgedAt.toISOString() }
       : {}),
   };
+}
+
+function profileName(value: unknown) {
+  const profile =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  return typeof profile.name === "string"
+    ? profile.name
+    : typeof profile.displayName === "string"
+      ? profile.displayName
+      : undefined;
 }

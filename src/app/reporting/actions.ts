@@ -84,6 +84,7 @@ export async function acknowledgeOperationalRecord(form: FormData) {
         recordId: form.get("recordId"),
       });
       revalidatePath("/reporting");
+      revalidatePath("/operations");
       return record;
     },
   );
@@ -107,6 +108,7 @@ export async function amendOperationalRecord(form: FormData) {
       idempotencyKey: form.get("idempotencyKey"),
     });
     revalidatePath("/reporting");
+    revalidatePath("/operations");
     return record;
   });
 }
