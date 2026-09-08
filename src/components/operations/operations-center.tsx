@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { OperationsCenterState } from "@/features/operations/application";
 import type { OperationalRecordCard } from "@/features/operations/contracts";
+import { SiteScorecard } from "./scorecards";
 
 const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
 const severity = {
@@ -88,6 +89,31 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
         <p className="mt-2 text-[var(--text-muted)]">
           What requires my attention, and what has already happened?
         </p>
+      </section>
+
+      <section className="grid gap-3" aria-labelledby="scorecards-heading">
+        <div>
+          <h2 id="scorecards-heading" className="text-xl font-semibold">
+            Site / Post operational scorecards
+          </h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Required coverage → scheduled coverage → actual worked coverage →
+            exception.
+          </p>
+        </div>
+        {state.scorecards.sites.length ? (
+          state.scorecards.sites.map((site) => (
+            <SiteScorecard key={site.id} site={site} />
+          ))
+        ) : (
+          <div className={panel}>
+            <h3 className="font-semibold">No authorized Sites</h3>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Scorecards appear when active Sites and Posts are available in
+              your scope.
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="grid gap-3" aria-labelledby="needs-attention-heading">

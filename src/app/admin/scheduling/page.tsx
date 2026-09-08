@@ -5,7 +5,12 @@ import { createSchedulingService } from "@/features/scheduling/server";
 import { measureRequest } from "@/server/performance/telemetry";
 import * as actions from "./actions";
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ postId?: string }>;
+}) {
+  const { postId } = await searchParams;
   const state = await measureRequest("scheduling-admin.page", async () =>
     loadSchedulingAdminPage(
       createSchedulingService(
@@ -14,5 +19,7 @@ export default async function Page() {
       ),
     ),
   );
-  return <SchedulingAdmin actions={actions} state={state} />;
+  return (
+    <SchedulingAdmin actions={actions} state={state} selectedPostId={postId} />
+  );
 }

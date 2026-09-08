@@ -11,6 +11,7 @@ export type OperationsCenterState =
   | {
       kind: "ready";
       exceptions: Awaited<ReturnType<OperationsService["listExceptions"]>>;
+      scorecards: Awaited<ReturnType<OperationsService["listScorecards"]>>;
       recordWorkflow: ReturnType<typeof buildOperationsRecordWorkflow>;
     }
   | { kind: "permission-denied"; message: string }
@@ -28,17 +29,25 @@ export async function loadOperationsCenter(
       eosrServiceOrPromise,
       reportingServiceOrPromise,
     ]);
-    const [exceptions, completedReports, activities, incidents, handoffs] =
-      await Promise.all([
-        service.listExceptions(),
-        eosrService.listCompletedReports(),
-        reportingService.listAuthorizedActivities(),
-        reportingService.listAuthorizedIncidents(),
-        reportingService.listAuthorizedHandoffs(),
-      ]);
+    const [
+      exceptions,
+      scorecards,
+      completedReports,
+      activities,
+      incidents,
+      handoffs,
+    ] = await Promise.all([
+      service.listExceptions(),
+      service.listScorecards(),
+      eosrService.listCompletedReports(),
+      reportingService.listAuthorizedActivities(),
+      reportingService.listAuthorizedIncidents(),
+      reportingService.listAuthorizedHandoffs(),
+    ]);
     return {
       kind: "ready",
       exceptions,
+      scorecards,
       recordWorkflow: buildOperationsRecordWorkflow({
         activities,
         incidents,

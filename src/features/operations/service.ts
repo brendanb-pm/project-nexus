@@ -21,4 +21,14 @@ export class OperationsService {
       Math.min(Math.max(limit, 1), 100),
     );
   }
+
+  async listScorecards() {
+    this.access.requireOrganization("VIEW_SITE_OPERATIONS");
+    const asOf = this.now();
+    return this.repository.listScorecards(this.scope(), {
+      startsAt: new Date(asOf.valueOf() - 12 * 60 * 60 * 1000).toISOString(),
+      endsAt: new Date(asOf.valueOf() + 12 * 60 * 60 * 1000).toISOString(),
+      asOf: asOf.toISOString(),
+    });
+  }
 }
