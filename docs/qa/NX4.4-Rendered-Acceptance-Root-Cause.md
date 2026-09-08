@@ -16,15 +16,15 @@ This assessment made no product-code, schema, seed, migration, or configuration 
 
 ## Rendered reproduction
 
-| Flow / evidence | Result |
-| --- | --- |
-| Guard A local sign-in; current shift, directions link, upcoming schedule, and Timecard | PASS. The reset data rendered the expected Cedar Plaza North / North Lobby assignment and existing clock-out. Clock buttons were not pressed because location permission is intentionally requested at that point. |
-| Guard A Reporting page | PARTIAL. It visibly contains **End-of-shift report** and **Open end-of-shift report** to `/eosr`. Thus the originally observed missing entrypoint is not reproduced on current `main`. |
-| Guard A opens `/eosr` from that visible link | FAIL. Next’s rendered error overlay reports `relation "newer_outgoing_shifts" does not exist` from `PostgresEndOfShiftReportRepository.listIncomingPassdowns` at `src/features/eosr/postgres-repository.ts:154`. |
-| EOSR form and passdown inputs | FAIL. They are unreachable because the route fails before the form renders. |
-| Incoming Guard B schedule | PARTIAL. Its same-post, immediately following assignment renders, but the schedule has no contextual incoming-passdown card. Direct `/eosr` fails with the same server error. |
-| Operations Manager B Reporting | PARTIAL. Legacy Handoff, activity, and incident review render; no EOSR record/review item renders. |
-| Operations Center | PARTIAL. The seeded completed close correctly produces no incomplete-close exception, but the page shows only the unrelated incident card; it has no EOSR-complete/passdown/review matrix or completed-close history. |
+| Flow / evidence                                                                        | Result                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Guard A local sign-in; current shift, directions link, upcoming schedule, and Timecard | PASS. The reset data rendered the expected Cedar Plaza North / North Lobby assignment and existing clock-out. Clock buttons were not pressed because location permission is intentionally requested at that point.    |
+| Guard A Reporting page                                                                 | PARTIAL. It visibly contains **End-of-shift report** and **Open end-of-shift report** to `/eosr`. Thus the originally observed missing entrypoint is not reproduced on current `main`.                                |
+| Guard A opens `/eosr` from that visible link                                           | FAIL. Next’s rendered error overlay reports `relation "newer_outgoing_shifts" does not exist` from `PostgresEndOfShiftReportRepository.listIncomingPassdowns` at `src/features/eosr/postgres-repository.ts:154`.      |
+| EOSR form and passdown inputs                                                          | FAIL. They are unreachable because the route fails before the form renders.                                                                                                                                           |
+| Incoming Guard B schedule                                                              | PARTIAL. Its same-post, immediately following assignment renders, but the schedule has no contextual incoming-passdown card. Direct `/eosr` fails with the same server error.                                         |
+| Operations Manager B Reporting                                                         | PARTIAL. Legacy Handoff, activity, and incident review render; no EOSR record/review item renders.                                                                                                                    |
+| Operations Center                                                                      | PARTIAL. The seeded completed close correctly produces no incomplete-close exception, but the page shows only the unrelated incident card; it has no EOSR-complete/passdown/review matrix or completed-close history. |
 
 ### Reconciliation of the user-observed missing entrypoint
 
