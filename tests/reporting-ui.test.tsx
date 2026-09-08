@@ -41,7 +41,7 @@ describe("NX-3.1 reporting UI", () => {
       />,
     );
     expect(
-      screen.getByRole("heading", { name: "Shift activity" }),
+      screen.getByRole("heading", { name: /^Report$/ }),
     ).toBeInTheDocument();
     expect(
       screen.getAllByRole("option", { name: /Cedar Plaza.*Lobby/ }),

@@ -67,6 +67,15 @@ describe("Operations Center", () => {
     expect(
       screen.getByRole("heading", { name: "Needs Attention" }),
     ).toBeInTheDocument();
+    const headings = screen
+      .getAllByRole("heading")
+      .map((heading) => heading.textContent);
+    expect(headings.indexOf("Needs Attention")).toBeLessThan(
+      headings.indexOf("Review Queue"),
+    );
+    expect(headings.indexOf("Review Queue")).toBeLessThan(
+      headings.indexOf("Site / Post operational scorecards"),
+    );
     expect(
       screen.getByRole("link", { name: /open source record/i }),
     ).toHaveAttribute("href", "/admin/scheduling");

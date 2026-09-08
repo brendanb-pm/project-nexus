@@ -173,11 +173,40 @@ export function ReportingWorkspace({
   return (
     <div className="grid gap-6">
       <section className={state.reviewEnabled ? "hidden" : panel}>
-        <h1 className="text-2xl font-semibold">Shift activity</h1>
+        <h1 className="text-2xl font-semibold">Report</h1>
         <p className="mt-1 text-[var(--text-muted)]">
-          Record routine activity for your assigned site. Site, post, and
+          Choose the record that matches what happened. Site, post, and
           assignment are confirmed by Nexus.
         </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <a
+            className="min-h-24 rounded-lg border border-white/15 p-4 hover:border-white/30"
+            href="#activity"
+          >
+            <strong>Activity / DAR</strong>
+            <span className="mt-1 block text-sm text-[var(--text-muted)]">
+              Routine operational activity.
+            </span>
+          </a>
+          <a
+            className="min-h-24 rounded-lg border border-white/15 p-4 hover:border-white/30"
+            href="#incident"
+          >
+            <strong>Incident</strong>
+            <span className="mt-1 block text-sm text-[var(--text-muted)]">
+              Security, safety, access, or property event.
+            </span>
+          </a>
+          <a
+            className="min-h-24 rounded-lg border border-white/15 p-4 hover:border-white/30"
+            href="/eosr"
+          >
+            <strong>End-of-shift report</strong>
+            <span className="mt-1 block text-sm text-[var(--text-muted)]">
+              Shift close and passdown.
+            </span>
+          </a>
+        </div>
       </section>
       {state.reviewEnabled ? (
         <section
@@ -408,7 +437,7 @@ export function ReportingWorkspace({
           Open end-of-shift report
         </a>
       </section>
-      <section className={state.reviewEnabled ? "hidden" : panel}>
+      <section className={state.reviewEnabled ? "hidden" : panel} id="activity">
         <h2 className="text-xl font-semibold">Record activity</h2>
         {state.assignments.length ? (
           <form action={submit} className="mt-3 grid gap-3">
@@ -503,7 +532,7 @@ export function ReportingWorkspace({
           </p>
         )}
       </section>
-      <section className={panel}>
+      <section className={panel} id="incident">
         <h2 className="text-xl font-semibold">Recent activity</h2>
         {state.recent.length ? (
           <div className="mt-3 grid gap-3">
