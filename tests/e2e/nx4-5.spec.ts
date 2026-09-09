@@ -48,7 +48,7 @@ test("walks Operations review queue and history into canonical records", async (
 
   await expect(
     page.getByRole("link", { name: /open canonical incident record/i }),
-  ).toContainText("ACKNOWLEDGED");
+  ).toContainText("Resolved");
   await page
     .getByRole("link", { name: /open canonical activity \/ dar record/i })
     .click();

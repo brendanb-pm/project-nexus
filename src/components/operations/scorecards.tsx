@@ -18,6 +18,16 @@ function hours(metric: ScorecardMetric) {
   return `${(metric.seconds / 3600).toFixed(1)}h`;
 }
 
+function guidance(post: OperationalPostScorecard) {
+  if (post.currentGaps.length)
+    return "Action required now: required coverage is currently uncovered. Inspect the Post scorecard.";
+  if (post.shiftClose.incomplete)
+    return "Action required: a completed shift still needs clock-out or EOSR close.";
+  if (post.upcomingGaps.length)
+    return "Next: an upcoming coverage gap is scheduled. Review the Post before it becomes current.";
+  return "On track: no current coverage or shift-close exception is represented in this scorecard window.";
+}
+
 function Metric({
   label,
   metric,
@@ -86,6 +96,31 @@ export function PostScorecard({
           </>
         ) : null}
       </dl>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-red-300/20 bg-red-300/5 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            Now
+          </p>
+          <p className="mt-1 text-sm">
+            {post.currentGaps.length
+              ? `${post.currentGaps.length} current coverage gap${post.currentGaps.length === 1 ? "" : "s"}`
+              : "No current coverage gap"}
+          </p>
+        </div>
+        <div className="rounded-lg border border-sky-300/20 bg-sky-300/5 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            Next
+          </p>
+          <p className="mt-1 text-sm">
+            {post.upcomingGaps.length
+              ? `${post.upcomingGaps.length} upcoming coverage gap${post.upcomingGaps.length === 1 ? "" : "s"}`
+              : "No upcoming coverage gap"}
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 rounded-lg border border-white/10 p-3 text-sm text-[var(--text-muted)]">
+        {guidance(post)}
+      </p>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
         <p>
           <span className="text-[var(--text-muted)]">Staffed now</span>
@@ -165,6 +200,28 @@ export function SiteScorecard({
           <Metric label="Actual worked" metric={site.actual} />
           <Metric label="Uncovered" metric={site.uncovered} />
         </dl>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-red-300/20 bg-red-300/5 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              Now
+            </p>
+            <p className="mt-1 text-sm">
+              {site.currentGapCount
+                ? `${site.currentGapCount} current coverage gap${site.currentGapCount === 1 ? "" : "s"}`
+                : "No current coverage gap"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-sky-300/20 bg-sky-300/5 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              Next
+            </p>
+            <p className="mt-1 text-sm">
+              {site.upcomingGapCount
+                ? `${site.upcomingGapCount} upcoming coverage gap${site.upcomingGapCount === 1 ? "" : "s"}`
+                : "No upcoming coverage gap"}
+            </p>
+          </div>
+        </div>
         <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
           <p>
             <span className="text-[var(--text-muted)]">Coverage gaps</span>

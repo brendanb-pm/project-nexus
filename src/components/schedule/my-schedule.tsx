@@ -4,39 +4,18 @@ import { useState } from "react";
 import { IncomingPassdownCards } from "@/components/eosr/incoming-passdown-cards";
 import type { IncomingPassdown } from "@/features/eosr/contracts";
 import type { MySchedulePageState } from "@/features/scheduling/contracts";
+import {
+  formatAuditTime,
+  formatShiftRange,
+  formatWorkedDuration,
+} from "@/lib/display-time";
 
 const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
 const input =
   "mt-1 w-full rounded-lg border border-white/15 bg-[var(--background)] px-3 py-2";
 
-function assignmentTime(start: string, end: string, timezone: string) {
-  const format = new Intl.DateTimeFormat(undefined, {
-    day: "numeric",
-    month: "short",
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: timezone,
-  });
-  return `${format.format(new Date(start))} → ${format.format(new Date(end))}`;
-}
-
-function mapsUrl(address: string) {
+export function mapsUrl(address: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-}
-
-function localTime(value: string, timezone: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: timezone,
-  }).format(new Date(value));
-}
-
-function durationLabel(seconds: number) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.round((seconds % 3600) / 60);
-  return `${hours}h ${minutes}m`;
 }
 
 export type MyScheduleActions = {
@@ -45,7 +24,7 @@ export type MyScheduleActions = {
   setPassdownDismissal?(form: FormData): Promise<void>;
 };
 
-function ClockButton({
+export function ClockButton({
   assignmentId,
   eventType,
   action,
@@ -160,7 +139,7 @@ export function MySchedule({
                   {assignment.shift.siteName} — {assignment.shift.postName}
                 </strong>
                 <p className="mb-3 text-sm text-[var(--text-muted)]">
-                  {assignmentTime(
+                  {formatShiftRange(
                     assignment.shift.scheduledStart,
                     assignment.shift.scheduledEnd,
                     assignment.shift.timezone,
@@ -214,7 +193,7 @@ export function MySchedule({
                   {assignment.shift.siteName} — {assignment.shift.postName}
                 </strong>
                 <p className="mt-1 text-sm text-[var(--text-muted)]">
-                  {assignmentTime(
+                  {formatShiftRange(
                     assignment.shift.scheduledStart,
                     assignment.shift.scheduledEnd,
                     assignment.shift.timezone,
@@ -276,14 +255,14 @@ export function MySchedule({
                           ? "Clock-in"
                           : "Clock-out"}
                         :{" "}
-                        {localTime(
+                        {formatAuditTime(
                           event.effectiveAt,
                           assignment.shift.timezone,
                         )}
                       </p>
                     ))}
                     <p className="mt-2 font-medium">
-                      Total: {durationLabel(totalSeconds)}
+                      Total: {formatWorkedDuration(totalSeconds)}
                     </p>
                     {incomplete ? (
                       <p className="mt-1 text-sm">

@@ -1,6 +1,7 @@
 import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
 import { isLocalDevelopmentAuthEnabled } from "@/auth/development";
 import { DevelopmentSignOut } from "@/components/auth/development-sign-out";
+import { GuardShell } from "@/components/guard/guard-shell";
 import { ReportingWorkspace } from "@/components/reporting/reporting-workspace";
 import { loadReportingPage } from "@/features/reporting/application";
 import { createReportingService } from "@/features/reporting/server";
@@ -17,9 +18,8 @@ export default async function Page() {
   const state = await measureRequest("reporting.page", () =>
     loadReportingPage(createReportingService(resolver, "reporting.page")),
   );
-  return (
+  const workspace = (
     <>
-      {isLocalDevelopmentAuthEnabled() ? <DevelopmentSignOut /> : null}
       <ReportingWorkspace
         state={state}
         actions={{
@@ -30,6 +30,12 @@ export default async function Page() {
           getOperationalRecord,
         }}
       />
+      {isLocalDevelopmentAuthEnabled() ? <DevelopmentSignOut /> : null}
     </>
+  );
+  return state.kind === "ready" && state.reviewEnabled ? (
+    workspace
+  ) : (
+    <GuardShell>{workspace}</GuardShell>
   );
 }

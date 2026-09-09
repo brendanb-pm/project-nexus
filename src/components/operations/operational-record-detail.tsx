@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { OperationalRecordDetailState } from "@/features/operations/record-detail";
 import type { ReviewRecord } from "@/features/reporting/contracts";
+import { PresentationStatusBadge } from "@/components/ui/presentation-status";
 
 const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
 const input =
@@ -123,13 +124,13 @@ export function OperationalRecordDetail({
               {record.siteName} — {record.postName}
             </h1>
           </div>
-          <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-medium">
-            {acknowledged
-              ? review?.acknowledgedAt
+          <PresentationStatusBadge
+            value={
+              acknowledged && review?.acknowledgedAt
                 ? "ACKNOWLEDGED"
                 : record.status
-              : record.status}
-          </span>
+            }
+          />
         </div>
         <dl className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
@@ -143,7 +144,14 @@ export function OperationalRecordDetail({
               Recorded
             </dt>
             <dd className="mt-1">
-              {new Date(record.timestamp).toLocaleString()}
+              {new Intl.DateTimeFormat(undefined, {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                timeZoneName: "short",
+              }).format(new Date(record.timestamp))}
             </dd>
           </div>
           <div className="sm:col-span-2">

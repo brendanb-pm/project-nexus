@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { OperationsCenterState } from "@/features/operations/application";
 import type { OperationalRecordCard } from "@/features/operations/contracts";
+import { PresentationStatusBadge } from "@/components/ui/presentation-status";
 import { SiteScorecard } from "./scorecards";
 
 const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
@@ -31,15 +32,7 @@ function RecordCard({ record }: { record: OperationalRecordCard }) {
             {record.siteName} — {record.postName}
           </h3>
         </div>
-        <span
-          className={`max-w-full rounded-full border px-2 py-1 text-xs font-medium ${
-            record.actionable
-              ? "border-amber-300/40 text-amber-100"
-              : "border-white/15 text-[var(--text-muted)]"
-          }`}
-        >
-          {record.status}
-        </span>
+        <PresentationStatusBadge value={record.status} />
       </div>
       <p className="mt-2 break-words text-sm">{record.summary}</p>
       {record.reviewReason ? (
@@ -89,31 +82,6 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
         <p className="mt-2 text-[var(--text-muted)]">
           What requires my attention, and what has already happened?
         </p>
-      </section>
-
-      <section className="grid gap-3" aria-labelledby="scorecards-heading">
-        <div>
-          <h2 id="scorecards-heading" className="text-xl font-semibold">
-            Site / Post operational scorecards
-          </h2>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Required coverage → scheduled coverage → actual worked coverage →
-            exception.
-          </p>
-        </div>
-        {state.scorecards.sites.length ? (
-          state.scorecards.sites.map((site) => (
-            <SiteScorecard key={site.id} site={site} />
-          ))
-        ) : (
-          <div className={panel}>
-            <h3 className="font-semibold">No authorized Sites</h3>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Scorecards appear when active Sites and Posts are available in
-              your scope.
-            </p>
-          </div>
-        )}
       </section>
 
       <section className="grid gap-3" aria-labelledby="needs-attention-heading">
@@ -189,6 +157,38 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
         </div>
       </section>
 
+      <section
+        className="grid gap-3"
+        aria-labelledby="current-staffing-heading"
+      >
+        <div>
+          <h2 id="current-staffing-heading" className="text-xl font-semibold">
+            Current Staffing
+          </h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Active staffing by authorized Site and Post. Exceptions remain in
+            Needs Attention.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {state.scorecards.sites
+            .flatMap((site) => site.posts)
+            .map((post) => (
+              <a
+                className="rounded-xl border border-white/10 bg-[var(--card)] p-4 hover:border-white/30"
+                href={post.href}
+                key={post.id}
+              >
+                <strong>{post.name}</strong>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  {post.activeStaffing.assigned} assigned /{" "}
+                  {post.activeStaffing.required} required now
+                </p>
+              </a>
+            ))}
+        </div>
+      </section>
+
       <section className="grid gap-3" aria-labelledby="review-queue-heading">
         <div>
           <h2 id="review-queue-heading" className="text-xl font-semibold">
@@ -208,6 +208,31 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
             <p className="mt-1 text-sm text-[var(--text-muted)]">
               No submitted records require acknowledgement in your authorized
               scope.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="grid gap-3" aria-labelledby="scorecards-heading">
+        <div>
+          <h2 id="scorecards-heading" className="text-xl font-semibold">
+            Site / Post operational scorecards
+          </h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Required coverage → scheduled coverage → actual worked coverage →
+            exception.
+          </p>
+        </div>
+        {state.scorecards.sites.length ? (
+          state.scorecards.sites.map((site) => (
+            <SiteScorecard key={site.id} site={site} />
+          ))
+        ) : (
+          <div className={panel}>
+            <h3 className="font-semibold">No authorized Sites</h3>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Scorecards appear when active Sites and Posts are available in
+              your scope.
             </p>
           </div>
         )}
