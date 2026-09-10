@@ -213,6 +213,20 @@ describe("NX-1.5 compliance administration", () => {
       );
     }
   });
+  it("denies supervisor and guard credential verification", async () => {
+    for (const role of ["SUPERVISOR", "GUARD"] as const) {
+      const { service } = await subject(
+        actor([role], { organizationWide: true, employeeId: "employee-1" }),
+      );
+      await expect(
+        service.verify(
+          "credential",
+          "credential-1",
+          "2026-08-24T00:00:00.000Z",
+        ),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
+    }
+  });
   it("denies a forged cross-branch employee identifier", async () => {
     const { service } = await subject(
       actor(["OPERATIONS_MANAGER"], { branchIds: ["branch-2"] }),

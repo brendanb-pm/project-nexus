@@ -401,6 +401,168 @@ export const certifications = pgTable(
     ),
   ],
 );
+
+// NX5.1 canonical compliance policy and instances.  The legacy tables above
+// remain read-only compatibility evidence until the staged reconciliation is
+// complete; new policy must be expressed through these definition-backed rows.
+export const credentialDefinitions = pgTable(
+  "credential_definitions",
+  {
+    id: id(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    key: text("key").notNull(),
+    displayName: text("display_name").notNull(),
+    category: text("category").notNull(),
+    jurisdictionKind: text("jurisdiction_kind").notNull(),
+    jurisdictionCode: text("jurisdiction_code"),
+    jurisdictionTimezone: text("jurisdiction_timezone"),
+    issuingGuidance: text("issuing_guidance"),
+    expirationRequired: boolean("expiration_required").notNull().default(false),
+    verificationRequired: boolean("verification_required")
+      .notNull()
+      .default(true),
+    warningDays: jsonb("warning_days").notNull().default([60, 30, 14, 7]),
+    effectiveStart: date("effective_start").notNull(),
+    effectiveEnd: date("effective_end"),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("credential_definitions_org_key_uidx").on(
+      t.organizationId,
+      t.key,
+    ),
+    index("credential_definitions_org_active_idx").on(
+      t.organizationId,
+      t.active,
+      t.effectiveStart,
+    ),
+    check(
+      "credential_definitions_category_check",
+      sql`${t.category} in ('credential', 'certification')`,
+    ),
+    check(
+      "credential_definitions_jurisdiction_check",
+      sql`${t.jurisdictionKind} in ('organization', 'national', 'state_province', 'local')`,
+    ),
+    check(
+      "credential_definitions_effective_dates_check",
+      sql`${t.effectiveEnd} is null or ${t.effectiveEnd} >= ${t.effectiveStart}`,
+    ),
+  ],
+);
+export const employeeCredentials = pgTable(
+  "employee_credentials",
+  {
+    id: id(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id),
+    credentialDefinitionId: uuid("credential_definition_id")
+      .notNull()
+      .references(() => credentialDefinitions.id),
+    identifier: text("identifier"),
+    issuer: text("issuer").notNull(),
+    issuedOn: date("issued_on").notNull(),
+    expiresOn: date("expires_on"),
+    state: text("state").notNull(),
+    evidenceReference: text("evidence_reference"),
+    predecessorId: uuid("predecessor_id"),
+    supersededById: uuid("superseded_by_id"),
+    legacyKind: text("legacy_kind"),
+    legacyRecordId: uuid("legacy_record_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("employee_credentials_org_employee_definition_idx").on(
+      t.organizationId,
+      t.employeeId,
+      t.credentialDefinitionId,
+      t.expiresOn,
+    ),
+    uniqueIndex("employee_credentials_legacy_uidx").on(
+      t.legacyKind,
+      t.legacyRecordId,
+    ),
+    check(
+      "employee_credentials_state_check",
+      sql`${t.state} in ('pending_verification', 'verified', 'expired', 'suspended', 'revoked', 'superseded')`,
+    ),
+    check(
+      "employee_credentials_date_order_check",
+      sql`${t.expiresOn} is null or ${t.expiresOn} >= ${t.issuedOn}`,
+    ),
+  ],
+);
+export const employeeCredentialVerifications = pgTable(
+  "employee_credential_verifications",
+  {
+    id: id(),
+    employeeCredentialId: uuid("employee_credential_id")
+      .notNull()
+      .references(() => employeeCredentials.id),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    verifierUserId: uuid("verifier_user_id")
+      .notNull()
+      .references(() => users.id),
+    result: text("result").notNull(),
+    method: text("method"),
+    reason: text("reason"),
+    evidenceReference: text("evidence_reference"),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index("employee_credential_verifications_credential_idx").on(
+      t.employeeCredentialId,
+      t.verifiedAt,
+    ),
+  ],
+);
+export const postCredentialRequirements = pgTable(
+  "post_credential_requirements",
+  {
+    id: id(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.id),
+    credentialDefinitionId: uuid("credential_definition_id")
+      .notNull()
+      .references(() => credentialDefinitions.id),
+    severity: text("severity").notNull().default("required"),
+    effectiveStart: date("effective_start").notNull(),
+    effectiveEnd: date("effective_end"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("post_credential_requirements_effective_uidx").on(
+      t.postId,
+      t.credentialDefinitionId,
+      t.effectiveStart,
+    ),
+    index("post_credential_requirements_post_effective_idx").on(
+      t.postId,
+      t.effectiveStart,
+    ),
+    check(
+      "post_credential_requirements_severity_check",
+      sql`${t.severity} in ('required', 'informational')`,
+    ),
+    check(
+      "post_credential_requirements_effective_dates_check",
+      sql`${t.effectiveEnd} is null or ${t.effectiveEnd} >= ${t.effectiveStart}`,
+    ),
+  ],
+);
 export const availability = pgTable(
   "availability",
   {

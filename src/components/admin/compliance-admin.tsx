@@ -288,6 +288,11 @@ export function ComplianceAdmin({
           Compliance records preserve historical issuance. Expiration affects
           future eligibility; it never rewrites completed work.
         </p>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          Credential policies are tenant-owned definitions. Employee records are
+          evidence of a definition, not a definition themselves; legacy records
+          remain visible while their safe reconciliation completes.
+        </p>
         {state.employees.length === 0 ? (
           <p className="mt-4 text-[var(--text-muted)]">
             No employees are available in your authorized scope.

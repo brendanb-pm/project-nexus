@@ -34,6 +34,10 @@ export const capabilities = [
   "MANAGE_EMPLOYEES",
   "MANAGE_ASSETS",
   "MANAGE_ROLES",
+  "MANAGE_CREDENTIAL_DEFINITIONS",
+  "MANAGE_EMPLOYEE_CREDENTIALS",
+  "VERIFY_EMPLOYEE_CREDENTIAL",
+  "VIEW_OWN_CREDENTIALS",
 ] as const;
 export type Capability = (typeof capabilities)[number];
 
