@@ -39,13 +39,13 @@ export class ComplianceAdminService {
     );
   }
   private manage(branchId?: string) {
-    this.access.requireHierarchical("MANAGE_EMPLOYEES", {
+    this.access.requireHierarchical("MANAGE_EMPLOYEE_CREDENTIALS", {
       organizationId: this.access.context.organizationId,
       branchId,
     });
   }
   canManage() {
-    return this.access.context.capabilities.has("MANAGE_EMPLOYEES");
+    return this.access.context.capabilities.has("MANAGE_EMPLOYEE_CREDENTIALS");
   }
   async listEmployees() {
     this.read();
@@ -125,7 +125,10 @@ export class ComplianceAdminService {
         kind === "credential" ? "Credential" : "Certification",
       );
     const detail = await this.getEmployeeDetail(existing.employeeId);
-    this.manage(detail.employee.branchId);
+    this.access.requireHierarchical("VERIFY_EMPLOYEE_CREDENTIAL", {
+      organizationId: this.access.context.organizationId,
+      branchId: detail.employee.branchId,
+    });
     const result = await this.repository.verify(
       this.scope(),
       kind,

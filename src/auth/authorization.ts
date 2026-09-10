@@ -24,6 +24,7 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
       "CREATE_ACTIVITY_ENTRY",
       "CREATE_INCIDENT",
       "SUBMIT_HANDOFF",
+      "VIEW_OWN_CREDENTIALS",
     ]),
     SUPERVISOR: new Set([
       "VIEW_SITE_OPERATIONS",
@@ -48,6 +49,9 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
       "MANAGE_SITES",
       "MANAGE_POSTS",
       "MANAGE_EMPLOYEES",
+      "MANAGE_CREDENTIAL_DEFINITIONS",
+      "MANAGE_EMPLOYEE_CREDENTIALS",
+      "VERIFY_EMPLOYEE_CREDENTIAL",
       "MANAGE_ASSETS",
     ]),
     CLIENT_USER: new Set(["VIEW_CLIENT_REPORTS", "VIEW_CLIENT_INCIDENTS"]),
@@ -69,6 +73,9 @@ export const roleCapabilities: Readonly<Record<Role, ReadonlySet<Capability>>> =
       "MANAGE_EMPLOYEES",
       "MANAGE_ASSETS",
       "MANAGE_ROLES",
+      "MANAGE_CREDENTIAL_DEFINITIONS",
+      "MANAGE_EMPLOYEE_CREDENTIALS",
+      "VERIFY_EMPLOYEE_CREDENTIAL",
       "VIEW_SITE_OPERATIONS",
       "MANAGE_SHIFT_ASSIGNMENTS",
       "ACKNOWLEDGE_INCIDENT",
@@ -152,7 +159,11 @@ export function authorize(
   )
     return { allowed: false, reason: "site-scope" };
   if (
-    ["VIEW_OWN_ASSIGNMENTS", "CLOCK_OWN_SHIFT"].includes(capability) &&
+    [
+      "VIEW_OWN_ASSIGNMENTS",
+      "CLOCK_OWN_SHIFT",
+      "VIEW_OWN_CREDENTIALS",
+    ].includes(capability) &&
     actor.employeeId !== resource.employeeId
   )
     return { allowed: false, reason: "employee-self-scope" };
