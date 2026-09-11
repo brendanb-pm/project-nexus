@@ -17,6 +17,10 @@ import type { SchedulingRepository, SchedulingScope } from "./repository";
 import { validateAvailability, validateShift } from "./validation";
 import { intervalsOverlap, parseZonedInstant } from "./time";
 import { evaluateEmployeeEligibility } from "@/features/compliance-admin/eligibility";
+import {
+  evaluateQualification,
+  type QualificationConflict,
+} from "./qualification";
 import { finiteCoordinate, haversineDistanceMeters } from "./geofence";
 import { ValidationError } from "@/server/request/errors";
 import { deriveTimePairs } from "./time-record";
@@ -217,10 +221,30 @@ export class SchedulingService {
       : "UNKNOWN";
     const post = await this.repository.getPostScope(scope, shift.postId);
     if (!post) throw new ResourceNotFoundError("Post");
+    const canonical = this.repository.getCanonicalQualification
+      ? await this.repository.getCanonicalQualification(
+          scope,
+          shift.postId,
+          employeeId,
+          shift.scheduledStart,
+          shift.scheduledEnd,
+          post.timezone,
+        )
+      : undefined;
+    const qualification = canonical?.requirements.length
+      ? evaluateQualification({
+          requirements: canonical.requirements,
+          credentials: canonical.credentials,
+          scheduledStart: shift.scheduledStart,
+          scheduledEnd: shift.scheduledEnd,
+        })
+      : [];
     const eligibility = evaluateEmployeeEligibility({
       employeeStatus: candidate.employeeStatus,
       armedRequirement: post.armedRequirement,
-      qualificationRequirements: post.qualificationRequirements,
+      qualificationRequirements: qualification.length
+        ? []
+        : post.qualificationRequirements,
       credentials: candidate.credentials,
       certifications: candidate.certifications,
       asOf: shift.scheduledStart.slice(0, 10),
@@ -229,6 +253,10 @@ export class SchedulingService {
       throw new InvariantViolationError(
         `Employee is not eligible: ${eligibility.missing.join(", ")}.`,
       );
+    }
+    const hardConflict = qualification.find((conflict) => conflict.blocking);
+    if (hardConflict) {
+      throw new InvariantViolationError(qualificationMessage(hardConflict));
     }
     const warnings =
       availability === "UNKNOWN"
@@ -501,5 +529,25 @@ export class SchedulingService {
       approvedAt,
       this.access.auditContext(),
     );
+  }
+}
+
+function qualificationMessage(conflict: QualificationConflict) {
+  const subject = conflict.displayName;
+  switch (conflict.reason) {
+    case "MISSING":
+      return `Required ${subject} is missing.`;
+    case "PENDING_VERIFICATION":
+      return `${subject} is awaiting verification.`;
+    case "EXPIRED_BEFORE_START":
+      return `${subject} expires before this shift.`;
+    case "EXPIRES_DURING_SHIFT":
+      return `${subject} expires during this shift.`;
+    case "SUSPENDED":
+      return `${subject} is suspended.`;
+    case "REVOKED":
+      return `${subject} is revoked.`;
+    case "JURISDICTION_MISMATCH":
+      return `${subject} does not match the required jurisdiction.`;
   }
 }

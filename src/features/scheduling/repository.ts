@@ -1,6 +1,10 @@
 import type { AuditContext } from "@/server/request/boundary";
 import type { ComplianceSummary } from "@/features/compliance-admin/contracts";
 import type {
+  CandidateCredential,
+  QualificationRequirement,
+} from "./qualification";
+import type {
   AssignmentSummary,
   AvailabilityStatus,
   AvailabilitySummary,
@@ -50,6 +54,10 @@ export type AssignmentCandidate = {
   credentials: readonly ComplianceSummary[];
   certifications: readonly ComplianceSummary[];
   availability: readonly AvailabilitySummary[];
+};
+export type CanonicalQualificationSnapshot = {
+  requirements: readonly QualificationRequirement[];
+  credentials: readonly CandidateCredential[];
 };
 
 export type ClockContext = {
@@ -118,6 +126,14 @@ export interface SchedulingRepository {
     scope: SchedulingScope,
     employeeId: string,
   ): Promise<AssignmentCandidate | null>;
+  getCanonicalQualification?(
+    scope: SchedulingScope,
+    postId: string,
+    employeeId: string,
+    scheduledStart: string,
+    scheduledEnd: string,
+    timezone: string,
+  ): Promise<CanonicalQualificationSnapshot>;
   hasOverlappingAssignment(
     scope: SchedulingScope,
     employeeId: string,

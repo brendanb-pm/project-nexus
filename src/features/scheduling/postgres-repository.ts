@@ -1,16 +1,30 @@
 import "server-only";
 
-import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { NexusDatabase } from "@/server/db/client";
 import {
   auditEvents,
   availability,
   certifications,
+  credentialDefinitions,
   clockEvents,
   clockEventCorrections,
   clients,
   credentials,
   employees,
+  employeeCredentials,
+  postCredentialRequirements,
   posts,
   operationalRecordRevisions,
   shiftAssignments,
@@ -32,6 +46,19 @@ import type {
   SchedulingScope,
   ShiftMutation,
 } from "./repository";
+import type { CanonicalQualificationSnapshot } from "./repository";
+
+function dateAt(instant: string, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(instant));
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value;
+  return `${read("year")}-${read("month")}-${read("day")}`;
+}
 
 type Tx = Parameters<Parameters<NexusDatabase["transaction"]>[0]>[0];
 
@@ -449,6 +476,111 @@ export class PostgresSchedulingRepository implements SchedulingRepository {
         compliance(row as (typeof credentialRows)[number], "certification"),
       ),
       availability: declaredAvailability,
+    };
+  }
+
+  async getCanonicalQualification(
+    scope: SchedulingScope,
+    postId: string,
+    employeeId: string,
+    scheduledStart: string,
+    scheduledEnd: string,
+    timezone: string,
+  ): Promise<CanonicalQualificationSnapshot> {
+    const startsOn = dateAt(scheduledStart, timezone);
+    const endsOn = dateAt(scheduledEnd, timezone);
+    const requirementRows = await this.database
+      .select({
+        definitionId: credentialDefinitions.id,
+        key: credentialDefinitions.key,
+        displayName: credentialDefinitions.displayName,
+        severity: postCredentialRequirements.severity,
+        kind: credentialDefinitions.jurisdictionKind,
+        code: credentialDefinitions.jurisdictionCode,
+        timezone: credentialDefinitions.jurisdictionTimezone,
+      })
+      .from(postCredentialRequirements)
+      .innerJoin(
+        credentialDefinitions,
+        eq(
+          postCredentialRequirements.credentialDefinitionId,
+          credentialDefinitions.id,
+        ),
+      )
+      .innerJoin(posts, eq(postCredentialRequirements.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(
+          scopePredicate(scope),
+          eq(postCredentialRequirements.postId, postId),
+          eq(credentialDefinitions.organizationId, scope.organizationId),
+          lte(postCredentialRequirements.effectiveStart, endsOn),
+          or(
+            isNull(postCredentialRequirements.effectiveEnd),
+            gte(postCredentialRequirements.effectiveEnd, startsOn),
+          ),
+        ),
+      )
+      .orderBy(
+        asc(credentialDefinitions.displayName),
+        asc(credentialDefinitions.id),
+      );
+    const credentialRows = await this.database
+      .select({
+        definitionId: credentialDefinitions.id,
+        key: credentialDefinitions.key,
+        state: employeeCredentials.state,
+        expiresOn: employeeCredentials.expiresOn,
+        kind: credentialDefinitions.jurisdictionKind,
+        code: credentialDefinitions.jurisdictionCode,
+        timezone: credentialDefinitions.jurisdictionTimezone,
+      })
+      .from(employeeCredentials)
+      .innerJoin(
+        credentialDefinitions,
+        eq(
+          employeeCredentials.credentialDefinitionId,
+          credentialDefinitions.id,
+        ),
+      )
+      .innerJoin(employees, eq(employeeCredentials.employeeId, employees.id))
+      .where(
+        and(
+          eq(employeeCredentials.employeeId, employeeId),
+          eq(employees.organizationId, scope.organizationId),
+          eq(employeeCredentials.organizationId, scope.organizationId),
+          eq(credentialDefinitions.organizationId, scope.organizationId),
+        ),
+      )
+      .orderBy(asc(employeeCredentials.expiresOn), asc(employeeCredentials.id));
+    return {
+      requirements: requirementRows.map((row) => ({
+        definitionId: row.definitionId,
+        key: row.key,
+        displayName: row.displayName,
+        severity:
+          row.severity === "informational" ? "informational" : "required",
+        jurisdiction: {
+          kind: row.kind as
+            "organization" | "national" | "state_province" | "local",
+          ...(row.code ? { code: row.code } : {}),
+          ...(row.timezone ? { timezone: row.timezone } : {}),
+        },
+      })),
+      credentials: credentialRows.map((row) => ({
+        definitionId: row.definitionId,
+        key: row.key,
+        state:
+          row.state as import("./qualification").CandidateCredential["state"],
+        ...(row.expiresOn ? { expiresOn: row.expiresOn } : {}),
+        jurisdiction: {
+          kind: row.kind as
+            "organization" | "national" | "state_province" | "local",
+          ...(row.code ? { code: row.code } : {}),
+          ...(row.timezone ? { timezone: row.timezone } : {}),
+        },
+      })),
     };
   }
 
