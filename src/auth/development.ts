@@ -16,6 +16,7 @@ export const developmentPersonas = {
     authUserId: "nexus-dev-auth-operations-manager-b",
     callbackPath: "/reporting",
   },
+  "client-user-a": { authUserId: "nexus-dev-auth-client-user-a", callbackPath: "/portal" },
 } as const;
 type Persona = keyof typeof developmentPersonas;
 type Session = { authUserId: string; expiresAt: number; persona: Persona };
