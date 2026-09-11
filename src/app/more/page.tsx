@@ -87,6 +87,15 @@ export default async function Page() {
             Manage schedule and availability
           </Link>
         </section>
+        <Link
+          className={panel + " min-h-20 hover:border-white/30"}
+          href="/credentials"
+        >
+          <h2 className="text-xl font-semibold">Credential readiness</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Check your verified, expiring, and shift-blocking credentials.
+          </p>
+        </Link>
         {isLocalDevelopmentAuthEnabled() ? <DevelopmentSignOut /> : null}
       </div>
     </GuardShell>
