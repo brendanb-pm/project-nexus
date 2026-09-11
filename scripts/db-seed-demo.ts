@@ -369,6 +369,10 @@ async function main() {
         now,
       ],
     );
+    await pool.query(
+      "INSERT INTO assets (id, organization_id, identifier, asset_type, status, condition, assigned_site_id, inspection_due_on, expires_on) VALUES ('00000000-0000-4000-8000-000000000140', $1, 'VEH-001', 'vehicle', 'active', 'good', $2, CURRENT_DATE + 30, NULL), ('00000000-0000-4000-8000-000000000141', $1, 'RADIO-001', 'radio', 'active', 'fair', $2, CURRENT_DATE + 7, NULL), ('00000000-0000-4000-8000-000000000142', $1, 'KEY-001', 'keys', 'active', 'good', $2, NULL, NULL), ('00000000-0000-4000-8000-000000000143', $1, 'MED-001', 'medical_kit', 'maintenance', 'poor', $2, CURRENT_DATE - 1, NULL), ('00000000-0000-4000-8000-000000000144', $1, 'EQP-001', 'equipment', 'inactive', 'out_of_service', $2, NULL, CURRENT_DATE + 14), ('00000000-0000-4000-8000-000000000145', $1, 'FIR-001', 'firearm', 'active', 'good', $2, CURRENT_DATE + 60, NULL)",
+      [ids.organization, ids.site],
+    );
     console.log("Nexus demo data reset and seeded.");
   } finally {
     await pool.end();

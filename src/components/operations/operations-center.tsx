@@ -235,6 +235,24 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
         </a>
       </section>
 
+      <section className="grid gap-3" aria-labelledby="asset-inventory-heading">
+        <div>
+          <h2 id="asset-inventory-heading" className="text-xl font-semibold">
+            Asset inventory
+          </h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Find and maintain authorized organization equipment. Custody changes
+            remain separate.
+          </p>
+        </div>
+        <a className={`${panel} hover:border-white/30`} href="/admin/assets">
+          <h3 className="font-semibold">Open Asset inventory</h3>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Search, inspect, and update operational asset inventory.
+          </p>
+        </a>
+      </section>
+
       <section className="grid gap-3" aria-labelledby="scorecards-heading">
         <div>
           <h2 id="scorecards-heading" className="text-xl font-semibold">
