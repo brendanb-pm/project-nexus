@@ -1,16 +1,31 @@
 import "server-only";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { NexusDatabase } from "@/server/db/client";
-import { assets, auditEvents, clients, sites, users } from "@/server/db/schema";
+import {
+  assetCheckoutEvents,
+  assets,
+  auditEvents,
+  clients,
+  employees,
+  sites,
+  users,
+} from "@/server/db/schema";
 import type { AuditContext } from "@/server/request/boundary";
 import {
   DuplicateResourceError,
   StaleUpdateError,
 } from "@/server/request/errors";
 import { matchesUpdatedAt } from "@/server/db/optimistic-concurrency";
-import type { AssetAuditEntry, AssetDetail, AssetSummary } from "./contracts";
+import type {
+  AssetAuditEntry,
+  AssetCustodyEvent,
+  AssetDetail,
+  AssetSummary,
+} from "./contracts";
 import type {
   AssetMutation,
+  CustodyMutation,
   AssetRepository,
   TrustedAssetScope,
 } from "./repository";
@@ -92,6 +107,16 @@ function siteWhere(scope: TrustedAssetScope) {
     ),
   );
 }
+function employeeWhere(scope: TrustedAssetScope) {
+  if (scope.organizationWide)
+    return eq(employees.organizationId, scope.organizationId);
+  return and(
+    eq(employees.organizationId, scope.organizationId),
+    scope.branchIds.length
+      ? inArray(employees.primaryBranchId, [...scope.branchIds])
+      : sql`false`,
+  );
+}
 async function audit(
   tx: Tx,
   context: AuditContext,
@@ -142,6 +167,34 @@ export class PostgresAssetRepository implements AssetRepository {
       r.branchId ? [{ ...r, branchId: r.branchId }] : [],
     );
   }
+  async listEmployees(scope: TrustedAssetScope) {
+    const rows = await this.database
+      .select({
+        id: employees.id,
+        profile: employees.profile,
+        branchId: employees.primaryBranchId,
+      })
+      .from(employees)
+      .where(
+        and(employeeWhere(scope), eq(employees.employmentStatus, "active")),
+      )
+      .orderBy(asc(employees.employeeNumber), asc(employees.id))
+      .limit(200);
+    return rows.flatMap((row) =>
+      row.branchId
+        ? [
+            {
+              id: row.id,
+              displayName: String(
+                (row.profile as Record<string, unknown> | null)?.name ??
+                  "Employee",
+              ),
+              branchId: row.branchId,
+            },
+          ]
+        : [],
+    );
+  }
   async get(scope: TrustedAssetScope, id: string) {
     const rows = await this.database
       .select(projection)
@@ -182,7 +235,69 @@ export class PostgresAssetRepository implements AssetRepository {
       occurredAt: r.occurredAt.toISOString(),
       actor: r.actor ?? "Authorized user",
     }));
-    return { asset, audit };
+    const priorEmployees = alias(employees, "asset_custody_prior_employees");
+    const nextEmployees = alias(employees, "asset_custody_next_employees");
+    const priorSites = alias(sites, "asset_custody_prior_sites");
+    const nextSites = alias(sites, "asset_custody_next_sites");
+    const actors = alias(users, "asset_custody_actors");
+    const custodyRows = await this.database
+      .select({
+        id: assetCheckoutEvents.id,
+        action: assetCheckoutEvents.eventType,
+        occurredAt: assetCheckoutEvents.occurredAt,
+        reason: assetCheckoutEvents.reason,
+        condition: assetCheckoutEvents.condition,
+        fromEmployee: priorEmployees.profile,
+        fromSite: priorSites.name,
+        toEmployee: nextEmployees.profile,
+        toSite: nextSites.name,
+        actor: actors.email,
+      })
+      .from(assetCheckoutEvents)
+      .leftJoin(
+        priorEmployees,
+        eq(assetCheckoutEvents.previousEmployeeId, priorEmployees.id),
+      )
+      .leftJoin(
+        priorSites,
+        eq(assetCheckoutEvents.previousSiteId, priorSites.id),
+      )
+      .leftJoin(
+        nextEmployees,
+        eq(assetCheckoutEvents.employeeId, nextEmployees.id),
+      )
+      .leftJoin(nextSites, eq(assetCheckoutEvents.siteId, nextSites.id))
+      .leftJoin(actors, eq(assetCheckoutEvents.actorUserId, actors.id))
+      .where(eq(assetCheckoutEvents.assetId, id))
+      .orderBy(asc(assetCheckoutEvents.occurredAt), asc(assetCheckoutEvents.id))
+      .limit(100);
+    const custody = custodyRows.map((row): AssetCustodyEvent => ({
+      id: row.id,
+      action: row.action as AssetCustodyEvent["action"],
+      occurredAt: row.occurredAt.toISOString(),
+      ...(row.fromEmployee
+        ? {
+            fromEmployee: String(
+              (row.fromEmployee as Record<string, unknown>).name ?? "Employee",
+            ),
+          }
+        : {}),
+      ...(row.fromSite ? { fromSite: row.fromSite } : {}),
+      ...(row.toEmployee
+        ? {
+            toEmployee: String(
+              (row.toEmployee as Record<string, unknown>).name ?? "Employee",
+            ),
+          }
+        : {}),
+      ...(row.toSite ? { toSite: row.toSite } : {}),
+      actor: row.actor ?? "Authorized user",
+      reason: row.reason,
+      ...(row.condition
+        ? { condition: row.condition as AssetSummary["condition"] }
+        : {}),
+    }));
+    return { asset, audit, custody };
   }
   async create(
     scope: TrustedAssetScope,
@@ -284,6 +399,126 @@ export class PostgresAssetRepository implements AssetRepository {
       if (!updated) throw new Error("Updated asset was unavailable.");
       await audit(tx, context, "asset.updated", id, before, updated);
       return updated;
+    });
+  }
+  async custody(
+    scope: TrustedAssetScope,
+    assetId: string,
+    input: CustodyMutation,
+    expected: string,
+    context: AuditContext,
+  ) {
+    return this.database.transaction(async (tx) => {
+      const locked = await tx.execute(
+        sql`select id, assigned_employee_id, assigned_site_id, status, condition, updated_at from assets where id=${assetId} and organization_id=${scope.organizationId} for update`,
+      );
+      const current = locked.rows[0] as
+        | {
+            assigned_employee_id: string | null;
+            assigned_site_id: string | null;
+            status: string;
+            condition: string;
+            updated_at: Date | string;
+          }
+        | undefined;
+      if (!current) return null;
+      if (new Date(current.updated_at).toISOString() !== expected)
+        throw new StaleUpdateError();
+      if (["inactive", "retired"].includes(current.status))
+        throw new Error("This asset is not available for custody changes.");
+      if (
+        (input.action === "CHECKOUT" && current.assigned_employee_id) ||
+        (input.action === "TRANSFER" && !current.assigned_employee_id) ||
+        (input.action === "CHECKIN" && !current.assigned_employee_id)
+      )
+        throw new Error(
+          "The asset custody state changed. Refresh and try again.",
+        );
+      if (input.employeeId) {
+        const employee = await tx
+          .select({ id: employees.id })
+          .from(employees)
+          .where(
+            and(
+              eq(employees.id, input.employeeId),
+              employeeWhere(scope),
+              eq(employees.employmentStatus, "active"),
+            ),
+          )
+          .limit(1);
+        if (!employee[0])
+          throw new Error("Select an active employee in this organization.");
+      }
+      if (input.siteId) {
+        const site = await tx
+          .select({ id: sites.id })
+          .from(sites)
+          .innerJoin(clients, eq(sites.clientId, clients.id))
+          .where(
+            and(
+              eq(sites.id, input.siteId),
+              siteWhere(scope),
+              eq(sites.active, true),
+            ),
+          )
+          .limit(1);
+        if (!site[0]) throw new Error("Select an authorized return site.");
+      }
+      const nextEmployee =
+        input.action === "CHECKIN" ? null : input.employeeId!;
+      const nextSite =
+        input.action === "CHECKOUT" || input.action === "TRANSFER"
+          ? null
+          : input.siteId!;
+      await tx.insert(assetCheckoutEvents).values({
+        assetId,
+        employeeId: nextEmployee,
+        siteId: nextSite,
+        previousEmployeeId: current.assigned_employee_id,
+        previousSiteId: current.assigned_site_id,
+        eventType: input.action,
+        reason: input.reason,
+        condition: input.condition ?? current.condition,
+        occurredAt: new Date(),
+        actorUserId: context.actorUserId,
+      });
+      const update = await tx
+        .update(assets)
+        .set({
+          assignedEmployeeId: nextEmployee,
+          assignedSiteId: nextSite,
+          condition: input.condition ?? current.condition,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(assets.id, assetId),
+            matchesUpdatedAt(assets.updatedAt, expected),
+          ),
+        )
+        .returning({ id: assets.id });
+      if (!update[0]) throw new StaleUpdateError();
+      const rows = await tx
+        .select(projection)
+        .from(assets)
+        .leftJoin(sites, eq(assets.assignedSiteId, sites.id))
+        .leftJoin(clients, eq(sites.clientId, clients.id))
+        .where(eq(assets.id, assetId))
+        .limit(1);
+      const result = rows[0] ? dto(rows[0]) : null;
+      if (!result) throw new Error("Custody projection unavailable.");
+      await audit(
+        tx,
+        context,
+        `asset.custody.${input.action.toLowerCase()}`,
+        assetId,
+        {
+          employeeId: current.assigned_employee_id,
+          siteId: current.assigned_site_id,
+        },
+        { employeeId: nextEmployee, siteId: nextSite, reason: input.reason },
+      );
+      return result;
     });
   }
 }

@@ -34,3 +34,17 @@ export async function updateAsset(form: FormData) {
   });
   revalidatePath(PATH);
 }
+export async function custodyAsset(form: FormData) {
+  await (
+    await service("assets.custody")
+  ).custody({
+    assetId: form.get("assetId"),
+    action: form.get("action"),
+    employeeId: form.get("employeeId"),
+    siteId: form.get("siteId"),
+    reason: form.get("reason"),
+    condition: form.get("condition"),
+    expectedUpdatedAt: form.get("expectedUpdatedAt"),
+  });
+  revalidatePath(PATH);
+}

@@ -12,15 +12,17 @@ export async function loadAssetPage(
 ): Promise<AssetPageState> {
   try {
     const service = await serviceOrPromise;
-    const [assets, sites] = await Promise.all([
+    const [assets, sites, employees] = await Promise.all([
       service.list(),
       service.listSites(),
+      service.listEmployees(),
     ]);
     const id = createNew ? undefined : (selected ?? assets[0]?.id);
     return {
       kind: "ready",
       assets,
       sites,
+      employees,
       detail: id ? await service.detail(id) : undefined,
       canManage: service.canManage(),
     };

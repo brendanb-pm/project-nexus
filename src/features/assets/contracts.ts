@@ -43,6 +43,24 @@ export type AssetAuditEntry = {
 export type AssetDetail = {
   asset: AssetSummary;
   audit: readonly AssetAuditEntry[];
+  custody: readonly AssetCustodyEvent[];
+};
+export type AssetCustodyEvent = {
+  id: string;
+  action: "CHECKOUT" | "CHECKIN" | "TRANSFER";
+  occurredAt: string;
+  fromEmployee?: string;
+  fromSite?: string;
+  toEmployee?: string;
+  toSite?: string;
+  actor: string;
+  reason: string;
+  condition?: AssetSummary["condition"];
+};
+export type AssetEmployee = {
+  id: string;
+  displayName: string;
+  branchId: string;
 };
 export type AssetSite = {
   id: string;
@@ -63,6 +81,15 @@ export type UpdateAssetInput = CreateAssetInput & {
   assetId: unknown;
   expectedUpdatedAt: unknown;
 };
+export type CustodyActionInput = {
+  assetId: unknown;
+  action: unknown;
+  employeeId: unknown;
+  siteId: unknown;
+  reason: unknown;
+  condition: unknown;
+  expectedUpdatedAt: unknown;
+};
 export type AssetPageState =
   | { kind: "permission-denied"; message: string }
   | { kind: "error"; message: string; retryable: boolean }
@@ -70,6 +97,7 @@ export type AssetPageState =
       kind: "ready";
       assets: readonly AssetSummary[];
       sites: readonly AssetSite[];
+      employees: readonly AssetEmployee[];
       detail?: AssetDetail;
       canManage: boolean;
     };

@@ -72,3 +72,42 @@ export function validateVersion(value: unknown) {
     });
   return v;
 }
+export function validateCustody(input: {
+  action: unknown;
+  employeeId: unknown;
+  siteId: unknown;
+  reason: unknown;
+  condition: unknown;
+}) {
+  const action = enumValue(
+    input.action,
+    ["CHECKOUT", "CHECKIN", "TRANSFER"] as const,
+    "action",
+    "custody action",
+  );
+  const reason = required(input.reason, "reason", "Reason", 500);
+  const employeeId =
+    typeof input.employeeId === "string" && input.employeeId.trim()
+      ? input.employeeId.trim()
+      : undefined;
+  const siteId =
+    typeof input.siteId === "string" && input.siteId.trim()
+      ? input.siteId.trim()
+      : undefined;
+  if ((action === "CHECKOUT" || action === "TRANSFER") && !employeeId)
+    throw new ValidationError({
+      employeeId: ["Select a destination employee."],
+    });
+  if (action === "CHECKIN" && !siteId)
+    throw new ValidationError({ siteId: ["Select a return site."] });
+  return {
+    action,
+    employeeId,
+    siteId,
+    reason,
+    condition:
+      typeof input.condition === "string" && input.condition.trim()
+        ? enumValue(input.condition, assetConditions, "condition", "condition")
+        : undefined,
+  };
+}
