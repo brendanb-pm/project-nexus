@@ -2,24 +2,20 @@ import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
 import { CredentialReadiness } from "@/components/guard/credential-readiness";
 import { GuardShell } from "@/components/guard/guard-shell";
 import { loadGuardReadiness } from "@/features/guard-readiness/server";
-export default async function Page() {
+
+async function loadPageState() {
   try {
-    return (
-      <GuardShell>
-        <CredentialReadiness
-          state={await loadGuardReadiness(
-            await createProductionPrincipalResolver(),
-          )}
-        />
-      </GuardShell>
-    );
+    return await loadGuardReadiness(await createProductionPrincipalResolver());
   } catch {
-    return (
-      <GuardShell>
-        <CredentialReadiness
-          state={{ error: "You do not have access to credential readiness." }}
-        />
-      </GuardShell>
-    );
+    return { error: "You do not have access to credential readiness." };
   }
+}
+
+export default async function Page() {
+  const state = await loadPageState();
+  return (
+    <GuardShell>
+      <CredentialReadiness state={state} />
+    </GuardShell>
+  );
 }
