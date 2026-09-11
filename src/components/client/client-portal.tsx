@@ -1,6 +1,14 @@
 import type { loadClientPortal } from "@/features/client-portal/server";
 
 const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
+function coverageStatus(status: string) {
+  if (status === "CRITICAL") return "Coverage needs attention";
+  if (status === "ATTENTION") return "Coverage needs review";
+  if (status === "UPCOMING") return "Upcoming coverage change";
+  if (status === "NO_REQUIREMENT") return "Coverage requirement not configured";
+  return "Coverage on track";
+}
+
 export function ClientPortal({
   state,
 }: {
@@ -21,6 +29,40 @@ export function ClientPortal({
         <p className="mt-2 text-[var(--text-muted)]">
           Authorized site reports and incidents. This portal is read-only.
         </p>
+      </section>
+      <section className="grid gap-3">
+        <h2 className="text-xl font-semibold">Current coverage</h2>
+        {state.coverage.length ? (
+          state.coverage.map((site) => (
+            <article className={panel} key={site.id}>
+              <strong>{site.name}</strong>
+              <p className="mt-2 text-sm">{coverageStatus(site.status)}</p>
+              <p className="mt-2 text-sm text-[var(--text-muted)]">
+                {site.coveragePercent === null
+                  ? "Coverage percentage is not available."
+                  : `${site.coveragePercent}% scheduled coverage.`}
+                {site.currentGapCount
+                  ? ` ${site.currentGapCount} current gap${site.currentGapCount === 1 ? "" : "s"}.`
+                  : " No current coverage gap."}
+                {site.upcomingGapCount
+                  ? ` ${site.upcomingGapCount} upcoming gap${site.upcomingGapCount === 1 ? "" : "s"}.`
+                  : ""}
+              </p>
+              <ul className="mt-3 grid gap-2 text-sm text-[var(--text-muted)]">
+                {site.posts.map((post) => (
+                  <li key={post.id}>
+                    {post.name}: {coverageStatus(post.status)}
+                    {post.coveragePercent === null
+                      ? ""
+                      : ` · ${post.coveragePercent}% scheduled coverage`}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))
+        ) : (
+          <div className={panel}>No authorized sites are available.</div>
+        )}
       </section>
       <section className="grid gap-3">
         <h2 className="text-xl font-semibold">Recent reports</h2>
