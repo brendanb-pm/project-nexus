@@ -213,6 +213,28 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
         )}
       </section>
 
+      <section className="grid gap-3" aria-labelledby="compliance-heading">
+        <div>
+          <h2 id="compliance-heading" className="text-xl font-semibold">
+            Compliance
+          </h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Credential risk and future assignment impact, prioritized for
+            Operations.
+          </p>
+        </div>
+        <a
+          className={`${panel} hover:border-white/30`}
+          href="/operations/compliance"
+        >
+          <h3 className="font-semibold">Open Compliance workspace</h3>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Review blocking qualification conflicts, verification work, and
+            upcoming expirations.
+          </p>
+        </a>
+      </section>
+
       <section className="grid gap-3" aria-labelledby="scorecards-heading">
         <div>
           <h2 id="scorecards-heading" className="text-xl font-semibold">

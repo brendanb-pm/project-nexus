@@ -44,6 +44,14 @@ const ids = {
   coverageSouth: "00000000-0000-4000-8000-000000000072",
   clockIn: "00000000-0000-4000-8000-000000000073",
   clockOut: "00000000-0000-4000-8000-000000000074",
+  guardCardDefinition: "00000000-0000-4000-8000-000000000120",
+  cprDefinition: "00000000-0000-4000-8000-000000000121",
+  fireWatchDefinition: "00000000-0000-4000-8000-000000000122",
+  firstAidDefinition: "00000000-0000-4000-8000-000000000123",
+  guardCardCredential: "00000000-0000-4000-8000-000000000124",
+  incomingGuardCredential: "00000000-0000-4000-8000-000000000125",
+  revokedCredential: "00000000-0000-4000-8000-000000000126",
+  expiredCredential: "00000000-0000-4000-8000-000000000127",
 } as const;
 
 function localDescriptor(value: Date) {
@@ -78,6 +86,12 @@ async function main() {
   const southRequirementEndsAt = new Date(now.valueOf() + 4 * 60 * 60 * 1000);
   const upcomingStartsAt = new Date(now.valueOf() + 10 * 60 * 60 * 1000);
   const upcomingEndsAt = new Date(now.valueOf() + 11 * 60 * 60 * 1000);
+  const expiresSoon = localDescriptor(
+    new Date(now.valueOf() + 7 * 24 * 60 * 60 * 1000),
+  ).date;
+  const expiredOn = localDescriptor(
+    new Date(now.valueOf() - 3 * 24 * 60 * 60 * 1000),
+  ).date;
   try {
     await pool.query(
       "TRUNCATE TABLE eosr_passdown_dismissals, end_of_shift_reports, operational_record_revisions, audit_events, handoffs, incident_reports, activity_entries, clock_events, time_records, shift_assignments, shifts, employee_roles, employees, user_memberships, external_identities, users, auth_accounts, auth_sessions, auth_verifications, auth_users, posts, sites, clients, branches, organizations RESTART IDENTITY CASCADE",
@@ -188,6 +202,44 @@ async function main() {
         ids.incomingGuardEmployee,
         ids.branch,
         ids.site,
+      ],
+    );
+    await pool.query(
+      "INSERT INTO credential_definitions (id, organization_id, key, display_name, category, jurisdiction_kind, jurisdiction_code, jurisdiction_timezone, expiration_required, verification_required, warning_days, effective_start, active) VALUES ($1, $5, 'ca_guard_card', 'California guard card', 'credential', 'state_province', 'CA', 'America/Los_Angeles', true, true, $6::jsonb, '2020-01-01', true), ($2, $5, 'cpr', 'CPR certification', 'certification', 'organization', NULL, NULL, true, true, $6::jsonb, '2020-01-01', true), ($3, $5, 'fire_watch', 'Fire watch certification', 'certification', 'organization', NULL, NULL, false, true, $6::jsonb, '2020-01-01', true), ($4, $5, 'first_aid', 'First aid certification', 'certification', 'organization', NULL, NULL, true, true, $6::jsonb, '2020-01-01', true)",
+      [
+        ids.guardCardDefinition,
+        ids.cprDefinition,
+        ids.fireWatchDefinition,
+        ids.firstAidDefinition,
+        ids.organization,
+        JSON.stringify([60, 30, 14, 7]),
+      ],
+    );
+    await pool.query(
+      "INSERT INTO post_credential_requirements (post_id, credential_definition_id, severity, effective_start) VALUES ($1, $3, 'required', '2020-01-01'), ($1, $4, 'required', '2020-01-01'), ($2, $5, 'required', '2020-01-01')",
+      [
+        ids.post,
+        ids.incompletePost,
+        ids.guardCardDefinition,
+        ids.cprDefinition,
+        ids.fireWatchDefinition,
+      ],
+    );
+    await pool.query(
+      "INSERT INTO employee_credentials (id, organization_id, employee_id, credential_definition_id, issuer, issued_on, expires_on, state) VALUES ($1, $5, $6, $8, 'California Bureau of Security', '2024-01-01', $9, 'verified'), ($2, $5, $7, $8, 'California Bureau of Security', '2026-01-01', NULL, 'pending_verification'), ($3, $5, $6, $10, 'Nexus Demo', '2024-01-01', NULL, 'revoked'), ($4, $5, $7, $11, 'Nexus Demo', '2024-01-01', $12, 'expired')",
+      [
+        ids.guardCardCredential,
+        ids.incomingGuardCredential,
+        ids.revokedCredential,
+        ids.expiredCredential,
+        ids.organization,
+        ids.guardEmployee,
+        ids.incomingGuardEmployee,
+        ids.guardCardDefinition,
+        expiresSoon,
+        ids.fireWatchDefinition,
+        ids.firstAidDefinition,
+        expiredOn,
       ],
     );
     await pool.query(
