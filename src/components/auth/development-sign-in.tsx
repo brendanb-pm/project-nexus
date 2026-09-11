@@ -6,6 +6,7 @@ const personas = [
   ["guard-a", "Guard A"],
   ["guard-b", "Incoming Guard B"],
   ["operations-manager-b", "Operations Manager B"],
+  ["client-user-a", "Client User A"],
 ] as const;
 
 export function DevelopmentSignIn() {

@@ -205,6 +205,37 @@ async function main() {
       ],
     );
     await pool.query(
+      "INSERT INTO auth_users (id, name, email, email_verified) VALUES ('nexus-dev-auth-client-user-a', 'Client User A', 'client.a@nexus.demo.invalid', true)",
+    );
+    await pool.query(
+      "INSERT INTO users (id, organization_id, email, status) VALUES ($1, $2, 'client.a@nexus.demo.invalid', 'active')",
+      ["00000000-0000-4000-8000-000000000130", ids.organization],
+    );
+    await pool.query(
+      "INSERT INTO external_identities (issuer, subject, user_id) VALUES ('local-dev://nexus', 'client-user-a', $1)",
+      ["00000000-0000-4000-8000-000000000130"],
+    );
+    await pool.query(
+      "INSERT INTO auth_accounts (id, issuer, account_id, provider_id, user_id) VALUES ('nexus-dev-account-client-user-a', 'local-dev://nexus', 'client-user-a', 'nexus-oidc', 'nexus-dev-auth-client-user-a')",
+    );
+    await pool.query(
+      "INSERT INTO user_memberships (user_id, organization_id, status) VALUES ($1, $2, 'active')",
+      ["00000000-0000-4000-8000-000000000130", ids.organization],
+    );
+    await pool.query(
+      "INSERT INTO employees (id, organization_id, user_id, employee_number, employment_status, primary_branch_id, profile) VALUES ($1, $2, $3, 'CLIENT-100', 'active', $4, '{\"name\":\"Client User A\"}'::jsonb)",
+      [
+        "00000000-0000-4000-8000-000000000131",
+        ids.organization,
+        "00000000-0000-4000-8000-000000000130",
+        ids.branch,
+      ],
+    );
+    await pool.query(
+      "INSERT INTO employee_roles (employee_id, role, client_id) VALUES ($1, 'CLIENT_USER', $2)",
+      ["00000000-0000-4000-8000-000000000131", ids.client],
+    );
+    await pool.query(
       "INSERT INTO credential_definitions (id, organization_id, key, display_name, category, jurisdiction_kind, jurisdiction_code, jurisdiction_timezone, expiration_required, verification_required, warning_days, effective_start, active) VALUES ($1, $5, 'ca_guard_card', 'California guard card', 'credential', 'state_province', 'CA', 'America/Los_Angeles', true, true, $6::jsonb, '2020-01-01', true), ($2, $5, 'cpr', 'CPR certification', 'certification', 'organization', NULL, NULL, true, true, $6::jsonb, '2020-01-01', true), ($3, $5, 'fire_watch', 'Fire watch certification', 'certification', 'organization', NULL, NULL, false, true, $6::jsonb, '2020-01-01', true), ($4, $5, 'first_aid', 'First aid certification', 'certification', 'organization', NULL, NULL, true, true, $6::jsonb, '2020-01-01', true)",
       [
         ids.guardCardDefinition,
@@ -289,7 +320,7 @@ async function main() {
       ],
     );
     await pool.query(
-      "INSERT INTO activity_entries (id, shift_assignment_id, occurred_at, category, post_id, description, action_taken, follow_up_required, incident_related, incident_gate, submission_key, visibility, status) VALUES ($1, $2, $3, 'OBSERVATION', $4, $5::jsonb, $6, false, false, 'ROUTINE', 'demo-routine-activity', 'INTERNAL', 'SUBMITTED')",
+      "INSERT INTO activity_entries (id, shift_assignment_id, occurred_at, category, post_id, description, action_taken, follow_up_required, incident_related, incident_gate, submission_key, visibility, status) VALUES ($1, $2, $3, 'OBSERVATION', $4, $5::jsonb, $6, false, false, 'ROUTINE', 'demo-routine-activity', 'CLIENT_VISIBLE', 'SUBMITTED')",
       [
         ids.activity,
         ids.assignment,
@@ -303,7 +334,7 @@ async function main() {
       ],
     );
     await pool.query(
-      "INSERT INTO incident_reports (id, site_id, shift_assignment_id, originating_activity_entry_id, reported_by_user_id, incident_number, classification, severity, occurred_at, narrative, actions_taken, emergency_service_involvement, submission_key, status, visibility) VALUES ($1, $2, $3, $4, $5, 'INC-DEMO-0001', 'SECURITY', 'LOW', $6, 'Synthetic demo access-control concern for review.', 'Logged the concern and notified operations.', false, 'demo-incident', 'SUBMITTED', 'INTERNAL')",
+      "INSERT INTO incident_reports (id, site_id, shift_assignment_id, originating_activity_entry_id, reported_by_user_id, incident_number, classification, severity, occurred_at, narrative, actions_taken, emergency_service_involvement, submission_key, status, visibility) VALUES ($1, $2, $3, $4, $5, 'INC-DEMO-0001', 'SECURITY', 'LOW', $6, 'Synthetic demo access-control concern for review.', 'Logged the concern and notified operations.', false, 'demo-incident', 'SUBMITTED', 'CLIENT_VISIBLE')",
       [
         ids.incident,
         ids.site,
