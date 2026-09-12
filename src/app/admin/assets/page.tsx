@@ -23,6 +23,7 @@ export default async function Page({
       actions={{
         createAsset: actions.createAsset,
         updateAsset: actions.updateAsset,
+        custodyAsset: actions.custodyAsset,
       }}
     />
   );

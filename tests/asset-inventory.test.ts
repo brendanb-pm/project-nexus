@@ -30,9 +30,12 @@ function repository(): AssetRepository {
         branchId: "branch-1",
       },
     ],
+    listEmployees: async () => [
+      { id: "employee-1", displayName: "Alex Guard", branchId: "branch-1" },
+    ],
     get: async (_scope, id) => (id === asset.id ? asset : null),
     detail: async (_scope, id) =>
-      id === asset.id ? { asset, audit: [] } : null,
+      id === asset.id ? { asset, audit: [], custody: [] } : null,
     create: async (_scope, input) =>
       ({
         ...asset,
@@ -42,6 +45,7 @@ function repository(): AssetRepository {
       }) as typeof asset,
     update: async (_scope, id, input) =>
       id === asset.id ? ({ ...asset, ...input } as typeof asset) : null,
+    custody: async (_scope, id) => (id === asset.id ? asset : null),
   };
 }
 async function service(

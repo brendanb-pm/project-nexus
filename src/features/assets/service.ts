@@ -1,8 +1,12 @@
 import { AuthorizedDataAccess } from "@/server/request/boundary";
 import { ResourceNotFoundError } from "@/server/request/errors";
-import type { CreateAssetInput, UpdateAssetInput } from "./contracts";
+import type {
+  CreateAssetInput,
+  CustodyActionInput,
+  UpdateAssetInput,
+} from "./contracts";
 import type { AssetRepository, TrustedAssetScope } from "./repository";
-import { validateAsset, validateVersion } from "./validation";
+import { validateAsset, validateCustody, validateVersion } from "./validation";
 export class AssetService {
   constructor(
     private readonly access: AuthorizedDataAccess,
@@ -32,6 +36,10 @@ export class AssetService {
     this.read();
     return this.repository.listSites(this.scope());
   }
+  async listEmployees() {
+    this.read();
+    return this.repository.listEmployees(this.scope());
+  }
   async detail(id: string) {
     this.read();
     const detail = await this.repository.detail(this.scope(), id);
@@ -60,6 +68,22 @@ export class AssetService {
     if (!sites.some((site) => site.id === value.siteId))
       throw new ResourceNotFoundError("Inventory site");
     const result = await this.repository.update(
+      this.scope(),
+      id,
+      value,
+      validateVersion(input.expectedUpdatedAt),
+      this.access.auditContext(),
+    );
+    if (!result) throw new ResourceNotFoundError("Asset");
+    return result;
+  }
+  async custody(input: CustodyActionInput) {
+    this.read();
+    const id = typeof input.assetId === "string" ? input.assetId : "";
+    if (!(await this.repository.get(this.scope(), id)))
+      throw new ResourceNotFoundError("Asset");
+    const value = validateCustody(input);
+    const result = await this.repository.custody(
       this.scope(),
       id,
       value,

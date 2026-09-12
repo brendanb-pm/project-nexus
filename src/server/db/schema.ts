@@ -1041,7 +1041,12 @@ export const assetCheckoutEvents = pgTable("asset_checkout_events", {
     .references(() => assets.id),
   employeeId: uuid("employee_id").references(() => employees.id),
   siteId: uuid("site_id").references(() => sites.id),
+  previousEmployeeId: uuid("previous_employee_id").references(
+    () => employees.id,
+  ),
+  previousSiteId: uuid("previous_site_id").references(() => sites.id),
   eventType: text("event_type").notNull(),
+  reason: text("reason").notNull().default(""),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
   condition: text("condition"),
   actorUserId: uuid("actor_user_id")

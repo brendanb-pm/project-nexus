@@ -12,7 +12,89 @@ const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
 type Actions = {
   createAsset(form: FormData): Promise<void>;
   updateAsset(form: FormData): Promise<void>;
+  custodyAsset(form: FormData): Promise<void>;
 };
+function CustodyForm({
+  state,
+  actions,
+}: {
+  state: Extract<AssetPageState, { kind: "ready" }>;
+  actions: Actions;
+}) {
+  const asset = state.detail?.asset;
+  if (!asset) return null;
+  const held = Boolean(asset.siteId === undefined);
+  const action = held ? "CHECKIN" : "CHECKOUT";
+  return (
+    <form action={actions.custodyAsset} className={`${panel} grid gap-3`}>
+      <h2 className="text-lg font-semibold">Current custody</h2>
+      <p>
+        {held
+          ? "Checked out to an employee"
+          : `In inventory at ${asset.siteName}`}
+      </p>
+      <input type="hidden" name="assetId" value={asset.id} />
+      <input type="hidden" name="expectedUpdatedAt" value={asset.updatedAt} />
+      <label>
+        Action
+        <select className={field} name="action" defaultValue={action}>
+          {held ? (
+            <>
+              <option value="CHECKIN">Check in</option>
+              <option value="TRANSFER">Transfer</option>
+            </>
+          ) : (
+            <option value="CHECKOUT">Check out</option>
+          )}
+        </select>
+      </label>
+      <label>
+        Destination employee
+        <select className={field} name="employeeId" defaultValue="">
+          <option value="">Select employee</option>
+          {state.employees.map((employee) => (
+            <option key={employee.id} value={employee.id}>
+              {employee.displayName}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Return site
+        <select
+          className={field}
+          name="siteId"
+          defaultValue={asset.siteId ?? ""}
+        >
+          <option value="">Select site</option>
+          {state.sites.map((site) => (
+            <option key={site.id} value={site.id}>
+              {site.clientName} — {site.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Reason
+        <textarea className={field} name="reason" required />
+      </label>
+      <label>
+        Condition
+        <Select
+          name="condition"
+          values={assetConditions}
+          value={asset.condition}
+        />
+      </label>
+      <button
+        className="min-h-11 rounded-lg bg-[var(--accent)] px-4 py-2 font-semibold text-black"
+        type="submit"
+      >
+        Record custody action
+      </button>
+    </form>
+  );
+}
 function Select({
   name,
   values,
@@ -233,6 +315,32 @@ export function AssetInventory({
         )}
       </section>
       <AssetForm state={state} actions={actions} />
+      <CustodyForm state={state} actions={actions} />
+      {state.detail ? (
+        <section className={panel}>
+          <h2 className="text-lg font-semibold">Custody history</h2>
+          {state.detail.custody.length ? (
+            <ol className="mt-3 grid gap-3">
+              {state.detail.custody.map((event) => (
+                <li className="border-t border-white/10 pt-3" key={event.id}>
+                  <p className="font-medium">{event.action.toLowerCase()}</p>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {event.fromEmployee ?? event.fromSite ?? "Inventory"} →{" "}
+                    {event.toEmployee ?? event.toSite ?? "Inventory"}
+                  </p>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {event.reason} · {event.actor}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              No custody actions have been recorded yet.
+            </p>
+          )}
+        </section>
+      ) : null}
       {state.detail ? (
         <section className={panel}>
           <h2 className="text-lg font-semibold">Administration history</h2>
