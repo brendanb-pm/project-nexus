@@ -12,33 +12,8 @@ import {
   authVerifications,
   externalIdentities,
 } from "@/server/db/schema";
+import { readOidcEnvironment, type OidcEnvironment } from "./configuration";
 import { NEXUS_OIDC_PROVIDER_ID } from "./provider";
-
-type OidcEnvironment = {
-  appUrl: string;
-  authSecret: string;
-  clientId: string;
-  clientSecret: string;
-  discoveryUrl: string;
-  issuer: string;
-};
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} is required for authentication.`);
-  return value;
-}
-
-function readOidcEnvironment(): OidcEnvironment {
-  return {
-    appUrl: requiredEnvironment("NEXT_PUBLIC_APP_URL"),
-    authSecret: requiredEnvironment("BETTER_AUTH_SECRET"),
-    clientId: requiredEnvironment("OIDC_CLIENT_ID"),
-    clientSecret: requiredEnvironment("OIDC_CLIENT_SECRET"),
-    discoveryUrl: requiredEnvironment("OIDC_DISCOVERY_URL"),
-    issuer: requiredEnvironment("OIDC_ISSUER"),
-  };
-}
 
 export function createAuthOptions(
   environment: OidcEnvironment,
@@ -48,6 +23,7 @@ export function createAuthOptions(
   return {
     appName: "Project Nexus",
     baseURL: environment.appUrl,
+    trustedOrigins: [new URL(environment.appUrl).origin],
     secret: environment.authSecret,
     database: drizzleAdapter(database, {
       provider: "pg",
@@ -59,15 +35,31 @@ export function createAuthOptions(
       },
     }),
     emailAndPassword: { enabled: false },
-    account: { encryptOAuthTokens: true },
+    account: {
+      accountLinking: { enabled: false },
+      encryptOAuthTokens: true,
+    },
     session: {
+      cookieCache: { enabled: false },
+      disableSessionRefresh: true,
       expiresIn: 60 * 60 * 12,
-      updateAge: 60 * 60,
       freshAge: 60 * 15,
       preserveSessionInDatabase: true,
     },
+    rateLimit: { enabled: true, max: 100, window: 60 },
     advanced: {
+      cookiePrefix: "nexus",
+      crossSubDomainCookies: { enabled: false },
+      defaultCookieAttributes: {
+        httpOnly: true,
+        path: "/",
+        sameSite: "lax",
+        secure: environment.secureCookies,
+      },
+      disableCSRFCheck: false,
+      disableOriginCheck: false,
       database: { generateId: () => crypto.randomUUID() },
+      useSecureCookies: environment.secureCookies,
     },
     user: {
       validateUserInfo: async ({ source }) => {

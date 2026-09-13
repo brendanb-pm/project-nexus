@@ -17,6 +17,7 @@ import {
   users,
 } from "@/server/db/schema";
 import type { AuthenticatedPrincipal } from "@/shared/types/auth";
+import { NEXUS_OIDC_PROVIDER_ID } from "./provider";
 
 export type VerifiedExternalSession = {
   authUserId: string;
@@ -73,7 +74,12 @@ export class PostgresMembershipResolver implements MembershipResolver {
           eq(employees.organizationId, users.organizationId),
         ),
       )
-      .where(eq(authAccounts.userId, authUserId))
+      .where(
+        and(
+          eq(authAccounts.userId, authUserId),
+          eq(authAccounts.providerId, NEXUS_OIDC_PROVIDER_ID),
+        ),
+      )
       .limit(2);
 
     if (identityRows.length !== 1) return null;

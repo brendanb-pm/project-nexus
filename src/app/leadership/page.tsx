@@ -3,6 +3,7 @@ import { LeadershipDashboardView } from "@/components/leadership/leadership-dash
 import { loadLeadershipDashboard } from "@/features/leadership-dashboard/application";
 import { createLeadershipDashboardService } from "@/features/leadership-dashboard/server";
 import { measureRequest } from "@/server/performance/telemetry";
+import { SessionSignOut } from "@/components/auth/session-sign-out";
 
 function filter(value: string | undefined) {
   return value && value.trim() ? value : undefined;
@@ -21,5 +22,10 @@ export default async function Page({
       { clientId: filter(params.clientId), siteId: filter(params.siteId) },
     ),
   );
-  return <LeadershipDashboardView state={state} />;
+  return (
+    <>
+      <SessionSignOut />
+      <LeadershipDashboardView state={state} />
+    </>
+  );
 }

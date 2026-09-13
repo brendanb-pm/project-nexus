@@ -5,8 +5,7 @@ import { createOperationsService } from "@/features/operations/server";
 import { measureRequest } from "@/server/performance/telemetry";
 import { createEndOfShiftReportService } from "@/features/eosr/server";
 import { createReportingService } from "@/features/reporting/server";
-import { DevelopmentSignOut } from "@/components/auth/development-sign-out";
-import { isLocalDevelopmentAuthEnabled } from "@/auth/development";
+import { SessionSignOut } from "@/components/auth/session-sign-out";
 
 export default async function Page() {
   const resolver = await createProductionPrincipalResolver();
@@ -19,7 +18,7 @@ export default async function Page() {
   );
   return (
     <>
-      {isLocalDevelopmentAuthEnabled() ? <DevelopmentSignOut /> : null}
+      <SessionSignOut />
       <OperationsCenter state={state} />
     </>
   );

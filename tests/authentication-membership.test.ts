@@ -111,4 +111,20 @@ describe("production identity and membership boundary", () => {
     const revoked = resolver(session, null);
     await expect(revoked.resolver.resolve()).resolves.toBeNull();
   });
+
+  it("uses changed roles on the next request without retaining stale privilege", async () => {
+    const prior = resolver(session, { ...member, roles: ["ADMIN"] });
+    const priorContext = await createAuthenticatedRequestContext(
+      prior.resolver,
+      "test",
+    );
+    expect(priorContext.capabilities.has("MANAGE_ORGANIZATION")).toBe(true);
+
+    const changed = resolver(session, { ...member, roles: ["GUARD"] });
+    const changedContext = await createAuthenticatedRequestContext(
+      changed.resolver,
+      "test",
+    );
+    expect(changedContext.capabilities.has("MANAGE_ORGANIZATION")).toBe(false);
+  });
 });

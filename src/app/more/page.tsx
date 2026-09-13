@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { isLocalDevelopmentAuthEnabled } from "@/auth/development";
 import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
-import { DevelopmentSignOut } from "@/components/auth/development-sign-out";
+import { SessionSignOut } from "@/components/auth/session-sign-out";
 import { GuardShell } from "@/components/guard/guard-shell";
 import { loadMySchedulePage } from "@/features/scheduling/application";
 import { createSchedulingService } from "@/features/scheduling/server";
@@ -96,7 +95,7 @@ export default async function Page() {
             Check your verified, expiring, and shift-blocking credentials.
           </p>
         </Link>
-        {isLocalDevelopmentAuthEnabled() ? <DevelopmentSignOut /> : null}
+        <SessionSignOut />
       </div>
     </GuardShell>
   );

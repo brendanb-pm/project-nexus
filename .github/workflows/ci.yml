@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://nexus_app:nexus_local_only@127.0.0.1:5432/nexus_demo
-      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
       BETTER_AUTH_SECRET: nexus-ci-only-secret-at-least-32-characters
       NEXUS_DEV_AUTH: "true"
     services:

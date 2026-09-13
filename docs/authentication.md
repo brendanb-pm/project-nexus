@@ -9,8 +9,8 @@ The provider authenticates a person. It does not authorize Nexus access.
 ## Resolution flow
 
 1. Better Auth validates the OIDC authorization-code flow using discovery, issuer and ID-token validation, nonce, state, and PKCE.
-2. Provider token material is encrypted at rest and a database-backed Better Auth session is issued in a secure HTTP-only cookie.
-3. The server validates that session for a request and obtains only the local authentication-user and session identifiers.
+2. Provider token material is encrypted at rest and a database-backed Better Auth session is issued in a `Secure`, HTTP-only, same-site cookie in production.
+3. The server validates that session from the authoritative database for every request, without cookie-cache acceptance or sliding refresh, and obtains only the local authentication-user and session identifiers.
 4. The membership resolver joins the provider account's authoritative issuer/subject to a pre-provisioned Nexus external-identity binding.
 5. Nexus requires an active user, active provider organization, active membership, and (when linked) active employee.
 6. Nexus loads at most 100 scoped employee-role assignments, rejects invalid or cross-organization scopes, and derives roles, capabilities, and visibility through the centralized Sprint 0B authorization module.
@@ -33,7 +33,7 @@ No self-service enrollment or IAM administration UI is included in this work.
 
 Sessions are database-backed and checked on every request; cross-request session or membership caching is intentionally disabled. Revoked or expired sessions therefore stop producing a Nexus request context. Local sign-out revokes the application session, and OIDC RP-initiated logout is used when the discovery document advertises an end-session endpoint.
 
-Sessions last up to 12 hours, refresh no more than hourly, and use a 15-minute freshness window for future high-risk step-up policy. Routine administration in this story does not add a new step-up requirement.
+Sessions have a deterministic 12-hour absolute lifetime and use a 15-minute freshness window for future high-risk step-up policy. Routine administration in this story does not add a new step-up requirement. Sign-out invalidates the database session before returning to the sign-in page; a failed sign-out remains visible and retryable rather than implying success.
 
 ## Deployment configuration
 
@@ -47,4 +47,6 @@ Required server configuration:
 - `OIDC_CLIENT_ID`
 - `OIDC_CLIENT_SECRET`
 
-Register `${NEXT_PUBLIC_APP_URL}/api/auth/callback/nexus-oidc` as the provider callback and `${NEXT_PUBLIC_APP_URL}/sign-in` as an allowed post-logout return. Use HTTPS outside local development. Secrets belong in the deployment secret store, not source control.
+Register `${NEXT_PUBLIC_APP_URL}/api/auth/callback/nexus-oidc` as the provider callback and `${NEXT_PUBLIC_APP_URL}/sign-in` as an allowed post-logout return. Production startup rejects non-HTTPS application/provider URLs, placeholder secrets, and session secrets shorter than 32 characters. Only the exact application origin is trusted. Secrets belong in the deployment secret store, not source control.
+
+The optional persona sign-in endpoint is a local-development harness only. It requires `NODE_ENV=development`, `NEXUS_DEV_AUTH=true`, a loopback application URL, and an exact same-origin loopback request. Production configuration cannot enable it.
