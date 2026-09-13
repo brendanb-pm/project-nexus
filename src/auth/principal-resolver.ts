@@ -15,6 +15,22 @@ import type {
   ResolvedPrincipal,
 } from "@/server/request/context";
 
+interface SessionResult {
+  session: {
+    id: string;
+    createdAt: Date;
+    expiresAt: Date;
+  };
+  user: { id: string };
+}
+
+const MAX_SESSION_AGE_MS = 12 * 60 * 60 * 1000;
+
+type SessionReader = (context: {
+  headers: Headers;
+  query: { disableCookieCache: true; disableRefresh: true };
+}) => Promise<SessionResult | null>;
+
 export class NexusPrincipalResolver implements PrincipalResolver {
   private resolution?: Promise<ResolvedPrincipal | null>;
 
@@ -46,18 +62,38 @@ export class NexusPrincipalResolver implements PrincipalResolver {
 }
 
 export class BetterAuthSessionVerifier implements ExternalSessionVerifier {
-  constructor(private readonly requestHeaders: Headers) {}
+  constructor(
+    private readonly requestHeaders: Headers,
+    private readonly readSession: SessionReader = (context) =>
+      getAuth().api.getSession(context),
+  ) {}
 
   async verify(): Promise<VerifiedExternalSession | null> {
-    const result = await getAuth().api.getSession({
+    const result = await this.readSession({
       headers: this.requestHeaders,
+      query: { disableCookieCache: true, disableRefresh: true },
     });
     if (!result) return null;
+
+    const now = Date.now();
+    const expiresAt = result.session.expiresAt.getTime();
+    const authenticatedAt = result.session.createdAt.getTime();
+    if (
+      !result.user.id ||
+      !result.session.id ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= now ||
+      !Number.isFinite(authenticatedAt) ||
+      authenticatedAt > now ||
+      now >= authenticatedAt + MAX_SESSION_AGE_MS
+    ) {
+      return null;
+    }
 
     return {
       authUserId: result.user.id,
       sessionId: result.session.id,
-      authenticatedAt: result.session.createdAt.toISOString(),
+      authenticatedAt: new Date(authenticatedAt).toISOString(),
       provider: NEXUS_OIDC_PROVIDER_ID,
     };
   }

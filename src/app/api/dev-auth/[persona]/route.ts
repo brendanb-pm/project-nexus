@@ -5,12 +5,13 @@ import {
   isLocalDevelopmentAuthEnabled,
   issueDevelopmentSession,
 } from "@/auth/development";
+import { isLoopbackRequest } from "@/auth/configuration";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ persona: string }> },
 ) {
-  if (!isLocalDevelopmentAuthEnabled())
+  if (!isLocalDevelopmentAuthEnabled() || !isLoopbackRequest(request))
     return new NextResponse(null, { status: 404 });
 
   const { persona } = await context.params;
@@ -31,11 +32,12 @@ export async function POST(
     sameSite: "lax",
     secure: false,
   });
+  response.headers.set("Cache-Control", "no-store");
   return response;
 }
 
-export function DELETE() {
-  if (!isLocalDevelopmentAuthEnabled())
+export function DELETE(request: Request) {
+  if (!isLocalDevelopmentAuthEnabled() || !isLoopbackRequest(request))
     return new NextResponse(null, { status: 404 });
 
   const response = NextResponse.json({ redirectTo: "/sign-in" });
@@ -46,5 +48,6 @@ export function DELETE() {
     sameSite: "lax",
     secure: false,
   });
+  response.headers.set("Cache-Control", "no-store");
   return response;
 }

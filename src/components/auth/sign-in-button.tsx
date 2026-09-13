@@ -11,11 +11,13 @@ export function SignInButton() {
   async function signIn() {
     setPending(true);
     setFailed(false);
-    const result = await authClient.signIn.social({
-      provider: NEXUS_OIDC_PROVIDER_ID,
-      callbackURL: "/admin/organization",
-    });
-    if (result.error) {
+    try {
+      const result = await authClient.signIn.social({
+        provider: NEXUS_OIDC_PROVIDER_ID,
+        callbackURL: "/session/continue",
+      });
+      if (result.error) throw new Error("sign-in-failed");
+    } catch {
       setPending(false);
       setFailed(true);
     }
