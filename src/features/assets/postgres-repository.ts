@@ -25,11 +25,13 @@ import type {
 } from "./contracts";
 import type {
   AssetMutation,
+  AssetUpdateMutation,
   CustodyMutation,
   AssetRepository,
   TrustedAssetScope,
 } from "./repository";
 type Tx = Parameters<Parameters<NexusDatabase["transaction"]>[0]>[0];
+const assignedEmployees = alias(employees, "asset_assigned_employees");
 const projection = {
   id: assets.id,
   identifier: assets.identifier,
@@ -39,6 +41,8 @@ const projection = {
   siteId: assets.assignedSiteId,
   siteName: sites.name,
   clientName: clients.name,
+  employeeId: assets.assignedEmployeeId,
+  employeeProfile: assignedEmployees.profile,
   inspectionDueOn: assets.inspectionDueOn,
   expiresOn: assets.expiresOn,
   updatedAt: assets.updatedAt,
@@ -52,6 +56,8 @@ type AssetRow = {
   siteId: string | null;
   siteName: string | null;
   clientName: string | null;
+  employeeId: string | null;
+  employeeProfile: unknown;
   inspectionDueOn: string | null;
   expiresOn: string | null;
   updatedAt: Date;
@@ -70,6 +76,15 @@ function dto(row: AssetRow): AssetSummary {
           clientName: row.clientName ?? undefined,
         }
       : {}),
+    ...(row.employeeId
+      ? {
+          employeeId: row.employeeId,
+          employeeName: String(
+            (row.employeeProfile as Record<string, unknown> | null)?.name ??
+              "Employee",
+          ),
+        }
+      : {}),
     ...(row.inspectionDueOn
       ? { inspectionDueOn: String(row.inspectionDueOn) }
       : {}),
@@ -82,7 +97,10 @@ function scopeWhere(scope: TrustedAssetScope) {
     return eq(assets.organizationId, scope.organizationId);
   const filters = [
     scope.branchIds.length
-      ? inArray(clients.branchId, [...scope.branchIds])
+      ? or(
+          inArray(clients.branchId, [...scope.branchIds]),
+          inArray(assignedEmployees.primaryBranchId, [...scope.branchIds]),
+        )
       : sql`false`,
     scope.clientIds.length
       ? inArray(clients.id, [...scope.clientIds])
@@ -145,6 +163,10 @@ export class PostgresAssetRepository implements AssetRepository {
       .from(assets)
       .leftJoin(sites, eq(assets.assignedSiteId, sites.id))
       .leftJoin(clients, eq(sites.clientId, clients.id))
+      .leftJoin(
+        assignedEmployees,
+        eq(assets.assignedEmployeeId, assignedEmployees.id),
+      )
       .where(scopeWhere(scope))
       .orderBy(asc(assets.identifier), asc(assets.id))
       .limit(200);
@@ -201,6 +223,10 @@ export class PostgresAssetRepository implements AssetRepository {
       .from(assets)
       .leftJoin(sites, eq(assets.assignedSiteId, sites.id))
       .leftJoin(clients, eq(sites.clientId, clients.id))
+      .leftJoin(
+        assignedEmployees,
+        eq(assets.assignedEmployeeId, assignedEmployees.id),
+      )
       .where(and(scopeWhere(scope), eq(assets.id, id)))
       .limit(1);
     return rows[0] ? dto(rows[0]) : null;
@@ -337,6 +363,10 @@ export class PostgresAssetRepository implements AssetRepository {
         .from(assets)
         .leftJoin(sites, eq(assets.assignedSiteId, sites.id))
         .leftJoin(clients, eq(sites.clientId, clients.id))
+        .leftJoin(
+          assignedEmployees,
+          eq(assets.assignedEmployeeId, assignedEmployees.id),
+        )
         .where(and(scopeWhere(scope), eq(assets.id, rows[0]!.id)))
         .limit(1);
       const asset = createdRows[0] ? dto(createdRows[0]) : null;
@@ -348,7 +378,7 @@ export class PostgresAssetRepository implements AssetRepository {
   async update(
     scope: TrustedAssetScope,
     id: string,
-    input: AssetMutation,
+    input: AssetUpdateMutation,
     expected: string,
     context: AuditContext,
   ) {
@@ -378,7 +408,6 @@ export class PostgresAssetRepository implements AssetRepository {
           assetType: input.assetType,
           status: input.status,
           condition: input.condition,
-          assignedSiteId: input.siteId,
           inspectionDueOn: input.inspectionDueOn,
           expiresOn: input.expiresOn,
           updatedAt: new Date(),
@@ -393,6 +422,10 @@ export class PostgresAssetRepository implements AssetRepository {
         .from(assets)
         .leftJoin(sites, eq(assets.assignedSiteId, sites.id))
         .leftJoin(clients, eq(sites.clientId, clients.id))
+        .leftJoin(
+          assignedEmployees,
+          eq(assets.assignedEmployeeId, assignedEmployees.id),
+        )
         .where(and(scopeWhere(scope), eq(assets.id, id)))
         .limit(1);
       const updated = updatedRows[0] ? dto(updatedRows[0]) : null;
@@ -422,14 +455,30 @@ export class PostgresAssetRepository implements AssetRepository {
           }
         | undefined;
       if (!current) return null;
+      const authorized = await tx
+        .select({ id: assets.id })
+        .from(assets)
+        .leftJoin(sites, eq(assets.assignedSiteId, sites.id))
+        .leftJoin(clients, eq(sites.clientId, clients.id))
+        .leftJoin(
+          assignedEmployees,
+          eq(assets.assignedEmployeeId, assignedEmployees.id),
+        )
+        .where(and(scopeWhere(scope), eq(assets.id, assetId)))
+        .limit(1);
+      if (!authorized[0]) return null;
       if (new Date(current.updated_at).toISOString() !== expected)
         throw new StaleUpdateError();
-      if (["inactive", "retired"].includes(current.status))
+      if (
+        input.action !== "CHECKIN" &&
+        (current.status !== "active" || current.condition === "out_of_service")
+      )
         throw new Error("This asset is not available for custody changes.");
       if (
         (input.action === "CHECKOUT" && current.assigned_employee_id) ||
         (input.action === "TRANSFER" && !current.assigned_employee_id) ||
-        (input.action === "CHECKIN" && !current.assigned_employee_id)
+        (input.action === "CHECKIN" && !current.assigned_employee_id) ||
+        (input.action === "RELOCATE" && current.assigned_employee_id)
       )
         throw new Error(
           "The asset custody state changed. Refresh and try again.",
@@ -462,10 +511,19 @@ export class PostgresAssetRepository implements AssetRepository {
             ),
           )
           .limit(1);
-        if (!site[0]) throw new Error("Select an authorized return site.");
+        if (!site[0]) throw new Error("Select an authorized active site.");
       }
+      if (
+        (input.action === "TRANSFER" &&
+          input.employeeId === current.assigned_employee_id) ||
+        (input.action === "RELOCATE" &&
+          input.siteId === current.assigned_site_id)
+      )
+        throw new Error("Select a different custody destination.");
       const nextEmployee =
-        input.action === "CHECKIN" ? null : input.employeeId!;
+        input.action === "CHECKIN" || input.action === "RELOCATE"
+          ? null
+          : input.employeeId!;
       const nextSite =
         input.action === "CHECKOUT" || input.action === "TRANSFER"
           ? null
@@ -503,6 +561,10 @@ export class PostgresAssetRepository implements AssetRepository {
         .from(assets)
         .leftJoin(sites, eq(assets.assignedSiteId, sites.id))
         .leftJoin(clients, eq(sites.clientId, clients.id))
+        .leftJoin(
+          assignedEmployees,
+          eq(assets.assignedEmployeeId, assignedEmployees.id),
+        )
         .where(eq(assets.id, assetId))
         .limit(1);
       const result = rows[0] ? dto(rows[0]) : null;

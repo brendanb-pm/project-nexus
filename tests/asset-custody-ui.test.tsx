@@ -57,12 +57,18 @@ describe("asset custody controls", () => {
     ).toBeInTheDocument();
     expect(
       screen.getAllByRole("option", { name: /Cedar.*North/ }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(screen.getByRole("textbox", { name: "Reason" })).toBeRequired();
     expect(
       screen.getByRole("option", { name: "Check out" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Move inventory site" }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Check in" })).toBeNull();
+    expect(
+      screen.queryByRole("combobox", { name: "Inventory site" }),
+    ).toBeNull();
   });
   it("renders transfer for a checked-out asset", () => {
     render(
@@ -74,6 +80,8 @@ describe("asset custody controls", () => {
               ...state.detail!.asset,
               siteId: undefined,
               siteName: undefined,
+              employeeId: "employee-1",
+              employeeName: "Alex Guard",
             },
             audit: [],
             custody: [
@@ -102,6 +110,7 @@ describe("asset custody controls", () => {
     expect(
       screen.getByRole("heading", { name: "Custody history" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Checked out to Alex Guard")).toBeInTheDocument();
     expect(screen.getByText(/North.*Alex Guard/)).toBeInTheDocument();
     expect(screen.getByText(/Start shift.*Riley Ops/)).toBeInTheDocument();
   });

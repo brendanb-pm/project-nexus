@@ -21,8 +21,9 @@ export type AssetMutation = {
   inspectionDueOn?: string;
   expiresOn?: string;
 };
+export type AssetUpdateMutation = Omit<AssetMutation, "siteId">;
 export type CustodyMutation = {
-  action: "CHECKOUT" | "CHECKIN" | "TRANSFER";
+  action: "CHECKOUT" | "CHECKIN" | "TRANSFER" | "RELOCATE";
   employeeId?: string;
   siteId?: string;
   reason: string;
@@ -42,7 +43,7 @@ export interface AssetRepository {
   update(
     scope: TrustedAssetScope,
     id: string,
-    input: AssetMutation,
+    input: AssetUpdateMutation,
     expected: string,
     audit: AuditContext,
   ): Promise<AssetSummary | null>;

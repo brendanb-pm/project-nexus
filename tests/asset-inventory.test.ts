@@ -90,13 +90,18 @@ describe("asset inventory", () => {
     expect(result.identifier).toBe("VEH-1");
     expect(result.assetType).toBe("vehicle");
   });
-  it("denies guards and client users", async () => {
-    await expect((await service(["GUARD"])).list()).rejects.toBeInstanceOf(
-      PermissionDeniedError,
-    );
-    await expect(
-      (await service(["CLIENT_USER"])).list(),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  it("allows Admin and denies roles without asset-management authority", async () => {
+    await expect((await service(["ADMIN"])).list()).resolves.toHaveLength(1);
+    for (const role of [
+      "GUARD",
+      "CLIENT_USER",
+      "SUPERVISOR",
+      "LEADERSHIP",
+    ] as const) {
+      await expect((await service([role])).list()).rejects.toBeInstanceOf(
+        PermissionDeniedError,
+      );
+    }
   });
   it("does not accept a forged site outside the authoritative scope", async () => {
     const subject = await service(["OPERATIONS_MANAGER"], {
@@ -116,6 +121,43 @@ describe("asset inventory", () => {
         expiresOn: "",
       }),
     ).rejects.toBeInstanceOf(ResourceNotFoundError);
+  });
+  it("does not pass browser-supplied custody fields through inventory updates", async () => {
+    let updateInput: unknown;
+    const repo = repository();
+    repo.update = async (_scope, id, input) => {
+      updateInput = input;
+      return id === asset.id ? ({ ...asset, ...input } as typeof asset) : null;
+    };
+    const context = await createAuthenticatedRequestContext(
+      {
+        resolve: async () => ({
+          principal: {
+            userId: "user-1",
+            organizationId: "org-1",
+            roles: ["ADMIN"],
+            organizationWide: true,
+            branchIds: [],
+            clientIds: [],
+            siteIds: [],
+          },
+        }),
+      },
+      "asset.update.test",
+    );
+    const subject = new AssetService(new AuthorizedDataAccess(context), repo);
+    await subject.update({
+      assetId: asset.id,
+      expectedUpdatedAt: asset.updatedAt,
+      identifier: asset.identifier,
+      assetType: asset.assetType,
+      status: asset.status,
+      condition: asset.condition,
+      siteId: "forged-site",
+      inspectionDueOn: "",
+      expiresOn: "",
+    });
+    expect(updateInput).not.toHaveProperty("siteId");
   });
   it("rejects invalid canonical values and missing identifiers", async () => {
     const subject = await service(["ADMIN"]);

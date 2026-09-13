@@ -38,7 +38,7 @@ function date(value: unknown, field: string) {
     throw new ValidationError({ [field]: ["Enter a valid date."] });
   return value;
 }
-export function validateAsset(input: CreateAssetInput) {
+function validateAssetDetails(input: CreateAssetInput) {
   return {
     identifier: required(input.identifier, "identifier", "Identifier", 120),
     assetType: enumValue(
@@ -59,10 +59,18 @@ export function validateAsset(input: CreateAssetInput) {
       "condition",
       "condition",
     ) as AssetCondition,
-    siteId: required(input.siteId, "siteId", "Inventory site"),
     inspectionDueOn: date(input.inspectionDueOn, "inspectionDueOn"),
     expiresOn: date(input.expiresOn, "expiresOn"),
   };
+}
+export function validateAsset(input: CreateAssetInput) {
+  return {
+    ...validateAssetDetails(input),
+    siteId: required(input.siteId, "siteId", "Inventory site"),
+  };
+}
+export function validateAssetUpdate(input: CreateAssetInput) {
+  return validateAssetDetails(input);
 }
 export function validateVersion(value: unknown) {
   const v = required(value, "expectedUpdatedAt", "Record version", 40);
@@ -81,7 +89,7 @@ export function validateCustody(input: {
 }) {
   const action = enumValue(
     input.action,
-    ["CHECKOUT", "CHECKIN", "TRANSFER"] as const,
+    ["CHECKOUT", "CHECKIN", "TRANSFER", "RELOCATE"] as const,
     "action",
     "custody action",
   );
@@ -98,7 +106,7 @@ export function validateCustody(input: {
     throw new ValidationError({
       employeeId: ["Select a destination employee."],
     });
-  if (action === "CHECKIN" && !siteId)
+  if ((action === "CHECKIN" || action === "RELOCATE") && !siteId)
     throw new ValidationError({ siteId: ["Select a return site."] });
   return {
     action,
