@@ -31,4 +31,9 @@ export class OperationsService {
       asOf: asOf.toISOString(),
     });
   }
+
+  /** Navigation affordance only; the leadership route enforces its own capability. */
+  canViewLeadershipDashboard() {
+    return this.access.context.capabilities.has("VIEW_ORGANIZATION_ANALYTICS");
+  }
 }

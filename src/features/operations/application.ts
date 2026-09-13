@@ -13,6 +13,7 @@ export type OperationsCenterState =
       exceptions: Awaited<ReturnType<OperationsService["listExceptions"]>>;
       scorecards: Awaited<ReturnType<OperationsService["listScorecards"]>>;
       recordWorkflow: ReturnType<typeof buildOperationsRecordWorkflow>;
+      canViewLeadershipDashboard?: boolean;
     }
   | { kind: "permission-denied"; message: string }
   | { kind: "error"; message: string; retryable: boolean };
@@ -36,6 +37,7 @@ export async function loadOperationsCenter(
       activities,
       incidents,
       handoffs,
+      canViewLeadershipDashboard,
     ] = await Promise.all([
       service.listExceptions(),
       service.listScorecards(),
@@ -43,6 +45,7 @@ export async function loadOperationsCenter(
       reportingService.listAuthorizedActivities(),
       reportingService.listAuthorizedIncidents(),
       reportingService.listAuthorizedHandoffs(),
+      service.canViewLeadershipDashboard(),
     ]);
     return {
       kind: "ready",
@@ -54,6 +57,7 @@ export async function loadOperationsCenter(
         reports: completedReports,
         handoffs,
       }),
+      canViewLeadershipDashboard,
     };
   } catch (error) {
     if (
