@@ -235,6 +235,27 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
         </a>
       </section>
 
+      {state.canViewLeadershipDashboard ? (
+        <section className="grid gap-3" aria-labelledby="leadership-heading">
+          <div>
+            <h2 className="text-xl font-semibold" id="leadership-heading">
+              Leadership
+            </h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Organization-level operational health is available to authorized
+              Leadership and Admin users.
+            </p>
+          </div>
+          <a className={`${panel} hover:border-white/30`} href="/leadership">
+            <h3 className="font-semibold">Open Leadership Operations</h3>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Review coverage, shift-close, incident, and aggregate compliance
+              risk.
+            </p>
+          </a>
+        </section>
+      ) : null}
+
       <section className="grid gap-3" aria-labelledby="asset-inventory-heading">
         <div>
           <h2 id="asset-inventory-heading" className="text-xl font-semibold">

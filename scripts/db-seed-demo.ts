@@ -25,9 +25,13 @@ const ids = {
   guardUser: "00000000-0000-4000-8000-000000000050",
   incomingGuardUser: "00000000-0000-4000-8000-000000000051",
   operationsUser: "00000000-0000-4000-8000-000000000052",
+  leadershipUser: "00000000-0000-4000-8000-000000000132",
+  adminUser: "00000000-0000-4000-8000-000000000134",
   guardEmployee: "00000000-0000-4000-8000-000000000060",
   incomingGuardEmployee: "00000000-0000-4000-8000-000000000061",
   operationsEmployee: "00000000-0000-4000-8000-000000000062",
+  leadershipEmployee: "00000000-0000-4000-8000-000000000133",
+  adminEmployee: "00000000-0000-4000-8000-000000000135",
   shift: "00000000-0000-4000-8000-000000000080",
   assignment: "00000000-0000-4000-8000-000000000090",
   incomingShift: "00000000-0000-4000-8000-000000000081",
@@ -208,6 +212,9 @@ async function main() {
       "INSERT INTO auth_users (id, name, email, email_verified) VALUES ('nexus-dev-auth-client-user-a', 'Client User A', 'client.a@nexus.demo.invalid', true)",
     );
     await pool.query(
+      "INSERT INTO auth_users (id, name, email, email_verified) VALUES ('nexus-dev-auth-leadership-a', 'Leadership A', 'leadership.a@nexus.demo.invalid', true), ('nexus-dev-auth-admin-a', 'Admin A', 'admin.a@nexus.demo.invalid', true)",
+    );
+    await pool.query(
       "INSERT INTO users (id, organization_id, email, status) VALUES ($1, $2, 'client.a@nexus.demo.invalid', 'active')",
       ["00000000-0000-4000-8000-000000000130", ids.organization],
     );
@@ -234,6 +241,36 @@ async function main() {
     await pool.query(
       "INSERT INTO employee_roles (employee_id, role, client_id) VALUES ($1, 'CLIENT_USER', $2)",
       ["00000000-0000-4000-8000-000000000131", ids.client],
+    );
+    await pool.query(
+      "INSERT INTO users (id, organization_id, email, status) VALUES ($1, $3, 'leadership.a@nexus.demo.invalid', 'active'), ($2, $3, 'admin.a@nexus.demo.invalid', 'active')",
+      [ids.leadershipUser, ids.adminUser, ids.organization],
+    );
+    await pool.query(
+      "INSERT INTO external_identities (issuer, subject, user_id) VALUES ('local-dev://nexus', 'leadership-a', $1), ('local-dev://nexus', 'admin-a', $2)",
+      [ids.leadershipUser, ids.adminUser],
+    );
+    await pool.query(
+      "INSERT INTO auth_accounts (id, issuer, account_id, provider_id, user_id) VALUES ('nexus-dev-account-leadership-a', 'local-dev://nexus', 'leadership-a', 'nexus-oidc', 'nexus-dev-auth-leadership-a'), ('nexus-dev-account-admin-a', 'local-dev://nexus', 'admin-a', 'nexus-oidc', 'nexus-dev-auth-admin-a')",
+    );
+    await pool.query(
+      "INSERT INTO user_memberships (user_id, organization_id, status) VALUES ($1, $3, 'active'), ($2, $3, 'active')",
+      [ids.leadershipUser, ids.adminUser, ids.organization],
+    );
+    await pool.query(
+      "INSERT INTO employees (id, organization_id, user_id, employee_number, employment_status, primary_branch_id, profile) VALUES ($1, $3, $4, 'NPS-300', 'active', $5, '{\"name\":\"Leadership A\"}'::jsonb), ($2, $3, $6, 'NPS-301', 'active', $5, '{\"name\":\"Admin A\"}'::jsonb)",
+      [
+        ids.leadershipEmployee,
+        ids.adminEmployee,
+        ids.organization,
+        ids.leadershipUser,
+        ids.branch,
+        ids.adminUser,
+      ],
+    );
+    await pool.query(
+      "INSERT INTO employee_roles (employee_id, role, branch_id) VALUES ($1, 'LEADERSHIP', $3), ($2, 'ADMIN', $3)",
+      [ids.leadershipEmployee, ids.adminEmployee, ids.branch],
     );
     await pool.query(
       "INSERT INTO credential_definitions (id, organization_id, key, display_name, category, jurisdiction_kind, jurisdiction_code, jurisdiction_timezone, expiration_required, verification_required, warning_days, effective_start, active) VALUES ($1, $5, 'ca_guard_card', 'California guard card', 'credential', 'state_province', 'CA', 'America/Los_Angeles', true, true, $6::jsonb, '2020-01-01', true), ($2, $5, 'cpr', 'CPR certification', 'certification', 'organization', NULL, NULL, true, true, $6::jsonb, '2020-01-01', true), ($3, $5, 'fire_watch', 'Fire watch certification', 'certification', 'organization', NULL, NULL, false, true, $6::jsonb, '2020-01-01', true), ($4, $5, 'first_aid', 'First aid certification', 'certification', 'organization', NULL, NULL, true, true, $6::jsonb, '2020-01-01', true)",
