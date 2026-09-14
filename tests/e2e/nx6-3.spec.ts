@@ -1,4 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { missingAssetWorkflow } from "./missing-asset-workflow";
+
+test("reports missing and recovers with persisted history on desktop", async ({
+  page,
+}) => {
+  await missingAssetWorkflow(page);
+});
 
 async function openAsset(page: Page, identifier: string) {
   await page.goto("/sign-in");

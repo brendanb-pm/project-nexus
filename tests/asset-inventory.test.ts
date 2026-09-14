@@ -76,6 +76,45 @@ async function service(
   return new AssetService(new AuthorizedDataAccess(context), repository());
 }
 describe("asset inventory", () => {
+  it("requires authorized custody actions, a reason, and recovery condition without accepting irrelevant destinations", async () => {
+    const input = {
+      assetId: asset.id,
+      action: "REPORT_MISSING",
+      employeeId: "forged",
+      siteId: "forged",
+      reason: "Not found",
+      condition: "good",
+      expectedUpdatedAt: asset.updatedAt,
+    };
+    for (const role of [
+      "GUARD",
+      "CLIENT_USER",
+      "SUPERVISOR",
+      "LEADERSHIP",
+    ] as const) {
+      await expect(
+        (await service([role])).custody(input),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
+    }
+    const subject = await service(["ADMIN"]);
+    await expect(
+      subject.custody({ ...input, reason: " " }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      subject.custody({ ...input, action: "RECOVER", condition: "" }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      subject.create({
+        identifier: "MISSING-1",
+        assetType: "radio",
+        status: "missing",
+        condition: "good",
+        siteId: "site-1",
+        inspectionDueOn: "",
+        expiresOn: "",
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
   it("allows an Operations Manager to create scoped inventory and preserves non-custody fields", async () => {
     const subject = await service(["OPERATIONS_MANAGER"]);
     const result = await subject.create({

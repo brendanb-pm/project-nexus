@@ -23,7 +23,13 @@ export type AssetMutation = {
 };
 export type AssetUpdateMutation = Omit<AssetMutation, "siteId">;
 export type CustodyMutation = {
-  action: "CHECKOUT" | "CHECKIN" | "TRANSFER" | "RELOCATE";
+  action:
+    | "CHECKOUT"
+    | "CHECKIN"
+    | "TRANSFER"
+    | "RELOCATE"
+    | "REPORT_MISSING"
+    | "RECOVER";
   employeeId?: string;
   siteId?: string;
   reason: string;

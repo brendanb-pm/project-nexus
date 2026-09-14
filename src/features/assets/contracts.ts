@@ -11,6 +11,7 @@ export const assetStatuses = [
   "inactive",
   "maintenance",
   "retired",
+  "missing",
 ] as const;
 export const assetConditions = [
   "good",
@@ -49,7 +50,13 @@ export type AssetDetail = {
 };
 export type AssetCustodyEvent = {
   id: string;
-  action: "CHECKOUT" | "CHECKIN" | "TRANSFER" | "RELOCATE";
+  action:
+    | "CHECKOUT"
+    | "CHECKIN"
+    | "TRANSFER"
+    | "RELOCATE"
+    | "REPORT_MISSING"
+    | "RECOVER";
   occurredAt: string;
   fromEmployee?: string;
   fromSite?: string;

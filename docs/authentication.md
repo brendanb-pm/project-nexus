@@ -50,3 +50,17 @@ Required server configuration:
 Register `${NEXT_PUBLIC_APP_URL}/api/auth/callback/nexus-oidc` as the provider callback and `${NEXT_PUBLIC_APP_URL}/sign-in` as an allowed post-logout return. Production startup rejects non-HTTPS application/provider URLs, placeholder secrets, and session secrets shorter than 32 characters. Only the exact application origin is trusted. Secrets belong in the deployment secret store, not source control.
 
 The optional persona sign-in endpoint is a local-development harness only. It requires `NODE_ENV=development`, `NEXUS_DEV_AUTH=true`, a loopback application URL, and an exact same-origin loopback request. Production configuration cannot enable it.
+
+## Live provider deployment acceptance (NX-7.1A)
+
+Repository acceptance of NX-7.1 does not assert a live provider handshake. Before production launch, the deployment owner must supply an HTTPS acceptance deployment, real OIDC client/discovery configuration in the secret store, registered callback and post-logout URLs above, and an authorized test identity with an immutable issuer/subject binding and active Nexus membership. No owner-specific credentials or test identity belong in this runbook.
+
+Record deployment version, time, provider configuration reference (not secrets), expected versus observed results, and sanitized evidence for:
+
+- Nexus/provider login, exact redirect URI, callback state/nonce/PKCE validation, and issuer/subject binding (not email).
+- Session establishment, correct tenant/membership/capabilities, and protected access.
+- Logout followed by protected-access denial; distinguish local session revocation from provider logout support.
+- Absolute 12-hour expiry and explicit session/membership revocation where safely observable.
+- Approved invalid-state/provider/identity negative cases in the acceptance environment, without changing production configuration.
+
+Unavailable or impractical checks remain explicitly pending. Development personas and local mocked-provider tests are not substitutes. NX-7.1A blocks production launch, not repository-only NX-7.2 performance work; representative deployed-auth performance claims still require an appropriate environment.

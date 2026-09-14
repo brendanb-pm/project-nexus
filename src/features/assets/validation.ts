@@ -64,6 +64,10 @@ function validateAssetDetails(input: CreateAssetInput) {
   };
 }
 export function validateAsset(input: CreateAssetInput) {
+  if (input.status === "missing")
+    throw new ValidationError({
+      status: ["Report missing through the custody controls."],
+    });
   return {
     ...validateAssetDetails(input),
     siteId: required(input.siteId, "siteId", "Inventory site"),
@@ -89,7 +93,14 @@ export function validateCustody(input: {
 }) {
   const action = enumValue(
     input.action,
-    ["CHECKOUT", "CHECKIN", "TRANSFER", "RELOCATE"] as const,
+    [
+      "CHECKOUT",
+      "CHECKIN",
+      "TRANSFER",
+      "RELOCATE",
+      "REPORT_MISSING",
+      "RECOVER",
+    ] as const,
     "action",
     "custody action",
   );
@@ -106,12 +117,26 @@ export function validateCustody(input: {
     throw new ValidationError({
       employeeId: ["Select a destination employee."],
     });
-  if ((action === "CHECKIN" || action === "RELOCATE") && !siteId)
+  if (
+    (action === "CHECKIN" || action === "RELOCATE" || action === "RECOVER") &&
+    !siteId
+  )
     throw new ValidationError({ siteId: ["Select a return site."] });
+  if (action === "RECOVER")
+    enumValue(
+      input.condition,
+      assetConditions,
+      "condition",
+      "recovery condition",
+    );
   return {
     action,
-    employeeId,
-    siteId,
+    employeeId:
+      action === "CHECKOUT" || action === "TRANSFER" ? employeeId : undefined,
+    siteId:
+      action === "CHECKIN" || action === "RELOCATE" || action === "RECOVER"
+        ? siteId
+        : undefined,
     reason,
     condition:
       typeof input.condition === "string" && input.condition.trim()

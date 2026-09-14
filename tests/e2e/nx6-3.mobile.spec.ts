@@ -1,4 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { missingAssetWorkflow } from "./missing-asset-workflow";
+
+test("reports missing and recovers with persisted history at 390x844", async ({
+  page,
+}) => {
+  await missingAssetWorkflow(page);
+});
 
 test("keeps custody state and actions usable at 390 by 844", async ({
   page,

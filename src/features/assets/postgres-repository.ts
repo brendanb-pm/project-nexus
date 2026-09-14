@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { NexusDatabase } from "@/server/db/client";
 import {
@@ -15,6 +15,7 @@ import type { AuditContext } from "@/server/request/boundary";
 import {
   DuplicateResourceError,
   StaleUpdateError,
+  ValidationError,
 } from "@/server/request/errors";
 import { matchesUpdatedAt } from "@/server/db/optimistic-concurrency";
 import type {
@@ -295,7 +296,10 @@ export class PostgresAssetRepository implements AssetRepository {
       .leftJoin(nextSites, eq(assetCheckoutEvents.siteId, nextSites.id))
       .leftJoin(actors, eq(assetCheckoutEvents.actorUserId, actors.id))
       .where(eq(assetCheckoutEvents.assetId, id))
-      .orderBy(asc(assetCheckoutEvents.occurredAt), asc(assetCheckoutEvents.id))
+      .orderBy(
+        desc(assetCheckoutEvents.occurredAt),
+        desc(assetCheckoutEvents.id),
+      )
       .limit(100);
     const custody = custodyRows.map((row): AssetCustodyEvent => ({
       id: row.id,
@@ -330,6 +334,10 @@ export class PostgresAssetRepository implements AssetRepository {
     input: AssetMutation,
     context: AuditContext,
   ) {
+    if (input.status === "missing")
+      throw new ValidationError({
+        status: ["Report missing through the custody controls."],
+      });
     return this.database.transaction(async (tx) => {
       const duplicate = await tx
         .select({ id: assets.id })
@@ -386,6 +394,13 @@ export class PostgresAssetRepository implements AssetRepository {
       const before = await this.get(scope, id);
       if (!before) return null;
       if (before.updatedAt !== expected) throw new StaleUpdateError();
+      if (
+        before.status !== input.status &&
+        (before.status === "missing" || input.status === "missing")
+      )
+        throw new ValidationError({
+          status: ["Use report missing or recovery to change missing status."],
+        });
       const duplicate = await tx
         .select({ id: assets.id })
         .from(assets)
@@ -469,7 +484,29 @@ export class PostgresAssetRepository implements AssetRepository {
       if (!authorized[0]) return null;
       if (new Date(current.updated_at).toISOString() !== expected)
         throw new StaleUpdateError();
+      const reportingMissing = input.action === "REPORT_MISSING";
+      const recovering = input.action === "RECOVER";
+      if (!input.reason.trim())
+        throw new ValidationError({ reason: ["Reason is required."] });
+      if (current.status === "missing" && !recovering)
+        throw new ValidationError({
+          action: [
+            "This asset is missing. Use explicit recovery before any other custody change.",
+          ],
+        });
+      if (recovering && current.status !== "missing")
+        throw new ValidationError({
+          action: ["Only a missing asset can be recovered."],
+        });
+      if (reportingMissing && current.status === "retired")
+        throw new ValidationError({
+          action: [
+            "Retired assets require an explicit administrative review before reporting missing.",
+          ],
+        });
       if (
+        !reportingMissing &&
+        !recovering &&
         input.action !== "CHECKIN" &&
         (current.status !== "active" || current.condition === "out_of_service")
       )
@@ -520,14 +557,30 @@ export class PostgresAssetRepository implements AssetRepository {
           input.siteId === current.assigned_site_id)
       )
         throw new Error("Select a different custody destination.");
-      const nextEmployee =
-        input.action === "CHECKIN" || input.action === "RELOCATE"
+      const nextEmployee = reportingMissing
+        ? current.assigned_employee_id
+        : input.action === "CHECKIN" ||
+            input.action === "RELOCATE" ||
+            recovering
           ? null
           : input.employeeId!;
-      const nextSite =
-        input.action === "CHECKOUT" || input.action === "TRANSFER"
+      const nextSite = reportingMissing
+        ? current.assigned_site_id
+        : input.action === "CHECKOUT" || input.action === "TRANSFER"
           ? null
           : input.siteId!;
+      const nextStatus = reportingMissing
+        ? "missing"
+        : recovering
+          ? "maintenance"
+          : current.status;
+      // Unknown whereabouts is not a condition inspection. Preserve last-known condition.
+      const nextCondition = reportingMissing
+        ? current.condition
+        : (input.condition ?? current.condition);
+      const occurredAt = new Date(
+        Math.max(Date.now(), new Date(current.updated_at).getTime() + 1),
+      );
       await tx.insert(assetCheckoutEvents).values({
         assetId,
         employeeId: nextEmployee,
@@ -536,8 +589,8 @@ export class PostgresAssetRepository implements AssetRepository {
         previousSiteId: current.assigned_site_id,
         eventType: input.action,
         reason: input.reason,
-        condition: input.condition ?? current.condition,
-        occurredAt: new Date(),
+        condition: nextCondition,
+        occurredAt,
         actorUserId: context.actorUserId,
       });
       const update = await tx
@@ -545,8 +598,9 @@ export class PostgresAssetRepository implements AssetRepository {
         .set({
           assignedEmployeeId: nextEmployee,
           assignedSiteId: nextSite,
-          condition: input.condition ?? current.condition,
-          updatedAt: new Date(),
+          status: nextStatus,
+          condition: nextCondition,
+          updatedAt: occurredAt,
         })
         .where(
           and(
@@ -577,8 +631,16 @@ export class PostgresAssetRepository implements AssetRepository {
         {
           employeeId: current.assigned_employee_id,
           siteId: current.assigned_site_id,
+          status: current.status,
+          condition: current.condition,
         },
-        { employeeId: nextEmployee, siteId: nextSite, reason: input.reason },
+        {
+          employeeId: nextEmployee,
+          siteId: nextSite,
+          status: nextStatus,
+          condition: nextCondition,
+          reason: input.reason,
+        },
       );
       return result;
     });

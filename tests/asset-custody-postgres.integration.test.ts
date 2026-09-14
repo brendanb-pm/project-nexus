@@ -584,4 +584,349 @@ suite("NX-6.3 PostgreSQL custody invariants", () => {
     expect(current).toMatchObject({ siteId: ids.site });
     expect(current?.employeeId).toBeUndefined();
   });
+
+  it("preserves last-known custody and immutable missing history through explicit recovery", async () => {
+    await resetAsset();
+    const initial = (await repository.get(scope, ids.asset))!;
+    const held = (await repository.custody(
+      scope,
+      ids.asset,
+      { action: "CHECKOUT", employeeId: ids.employeeA, reason: "Issue" },
+      initial.updatedAt,
+      audit,
+    ))!;
+    const missing = (await repository.custody(
+      branchScope,
+      ids.asset,
+      {
+        action: "REPORT_MISSING",
+        reason: "Not located at handover",
+        condition: "poor",
+      },
+      held.updatedAt,
+      audit,
+    ))!;
+    expect(missing).toMatchObject({
+      status: "missing",
+      employeeId: ids.employeeA,
+      condition: "good",
+    });
+    const prior = await database
+      .select()
+      .from(assetCheckoutEvents)
+      .where(eq(assetCheckoutEvents.assetId, ids.asset))
+      .orderBy(assetCheckoutEvents.occurredAt);
+    expect(prior[1]).toMatchObject({
+      eventType: "REPORT_MISSING",
+      previousEmployeeId: ids.employeeA,
+      employeeId: ids.employeeA,
+      previousSiteId: null,
+      siteId: null,
+      actorUserId: ids.actor,
+      reason: "Not located at handover",
+      condition: "good",
+    });
+    const recovered = (await repository.custody(
+      branchScope,
+      ids.asset,
+      {
+        action: "RECOVER",
+        siteId: ids.otherSite,
+        reason: "Located in secure cabinet",
+        condition: "poor",
+      },
+      missing.updatedAt,
+      audit,
+    ))!;
+    expect(recovered).toMatchObject({
+      status: "maintenance",
+      siteId: ids.otherSite,
+      condition: "poor",
+    });
+    expect(recovered.employeeId).toBeUndefined();
+    const history = await database
+      .select()
+      .from(assetCheckoutEvents)
+      .where(eq(assetCheckoutEvents.assetId, ids.asset))
+      .orderBy(assetCheckoutEvents.occurredAt);
+    expect(history.slice(0, 2)).toEqual(prior);
+    expect(history[2]).toMatchObject({
+      eventType: "RECOVER",
+      previousEmployeeId: ids.employeeA,
+      employeeId: null,
+      siteId: ids.otherSite,
+      reason: "Located in secure cabinet",
+      condition: "poor",
+    });
+    expect((await counts()).audits).toHaveLength(3);
+    const auditHistory = await database
+      .select()
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.entityId, ids.asset),
+          eq(auditEvents.action, "asset.custody.report_missing"),
+        ),
+      );
+    expect(auditHistory[0]).toMatchObject({
+      organizationId: ids.organization,
+      actorUserId: ids.actor,
+      beforeState: { status: "active", employeeId: ids.employeeA },
+      afterState: {
+        status: "missing",
+        employeeId: ids.employeeA,
+        reason: "Not located at handover",
+      },
+    });
+    await expect(
+      repository.custody(
+        scope,
+        ids.asset,
+        {
+          action: "CHECKOUT",
+          employeeId: ids.employeeA,
+          reason: "Before inspection",
+        },
+        recovered.updatedAt,
+        audit,
+      ),
+    ).rejects.toThrow("not available");
+  });
+
+  it("blocks missing-state bypass, unauthorized scope/destinations, empty reasons, and stale replay without artifacts", async () => {
+    await resetAsset();
+    const initial = (await repository.get(scope, ids.asset))!;
+    await expect(
+      repository.custody(
+        scope,
+        ids.asset,
+        { action: "REPORT_MISSING", reason: " " },
+        initial.updatedAt,
+        audit,
+      ),
+    ).rejects.toThrow();
+    const missing = (await repository.custody(
+      scope,
+      ids.asset,
+      { action: "REPORT_MISSING", reason: "Inventory not found" },
+      initial.updatedAt,
+      audit,
+    ))!;
+    expect(missing.siteId).toBe(ids.site);
+    const before = await counts();
+    for (const action of [
+      "CHECKOUT",
+      "CHECKIN",
+      "TRANSFER",
+      "RELOCATE",
+      "REPORT_MISSING",
+    ] as const)
+      await expect(
+        repository.custody(
+          scope,
+          ids.asset,
+          {
+            action,
+            employeeId: ids.employeeA,
+            siteId: ids.otherSite,
+            reason: "Bypass",
+          },
+          missing.updatedAt,
+          audit,
+        ),
+      ).rejects.toMatchObject({
+        code: "VALIDATION_ERROR",
+        fieldErrors: {
+          action: [
+            "This asset is missing. Use explicit recovery before any other custody change.",
+          ],
+        },
+      });
+    await expect(
+      repository.update(
+        scope,
+        ids.asset,
+        {
+          identifier: missing.identifier,
+          assetType: "radio",
+          status: "active",
+          condition: "good",
+        },
+        missing.updatedAt,
+        audit,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      repository.custody(
+        branchScope,
+        ids.asset,
+        {
+          action: "RECOVER",
+          siteId: ids.unauthorizedSite,
+          reason: "Wrong scope",
+          condition: "good",
+        },
+        missing.updatedAt,
+        audit,
+      ),
+    ).rejects.toThrow("authorized active site");
+    for (const deniedScope of [
+      { ...scope, organizationId: "00000000-0000-4000-8000-000000000099" },
+      { ...branchScope, branchIds: [ids.otherBranch] },
+      { ...branchScope, branchIds: [], siteIds: [ids.unauthorizedSite] },
+    ])
+      expect(
+        await repository.custody(
+          deniedScope,
+          ids.asset,
+          {
+            action: "RECOVER",
+            siteId: ids.site,
+            reason: "Forbidden",
+            condition: "good",
+          },
+          missing.updatedAt,
+          audit,
+        ),
+      ).toBeNull();
+    await expect(
+      repository.custody(
+        scope,
+        ids.asset,
+        { action: "REPORT_MISSING", reason: "Replay" },
+        initial.updatedAt,
+        audit,
+      ),
+    ).rejects.toMatchObject({ code: "STALE_UPDATE" });
+    expect(await repository.get(scope, ids.asset)).toEqual(missing);
+    expect(await counts()).toEqual(before);
+  });
+
+  it("rolls back missing and recovery when the transactional audit fails", async () => {
+    await resetAsset();
+    for (const action of ["REPORT_MISSING", "RECOVER"] as const) {
+      const before = (await repository.get(scope, ids.asset))!;
+      const beforeCounts = await counts();
+      await pool.query(
+        `create function nx63_missing_failure() returns trigger as $$ begin if new.entity_id = '${ids.asset}' then raise exception 'controlled audit failure'; end if; return new; end; $$ language plpgsql; create trigger nx63_missing_failure before insert on audit_events for each row execute function nx63_missing_failure()`,
+      );
+      try {
+        await expect(
+          repository.custody(
+            scope,
+            ids.asset,
+            {
+              action,
+              siteId: ids.site,
+              reason: "Transaction failure",
+              condition: "good",
+            },
+            before.updatedAt,
+            audit,
+          ),
+        ).rejects.toThrow();
+      } finally {
+        await pool.query(
+          "drop trigger nx63_missing_failure on audit_events; drop function nx63_missing_failure()",
+        );
+      }
+      expect(await repository.get(scope, ids.asset)).toEqual(before);
+      expect(await counts()).toEqual(beforeCounts);
+      if (action === "REPORT_MISSING")
+        await repository.custody(
+          scope,
+          ids.asset,
+          { action, reason: "Valid report" },
+          before.updatedAt,
+          audit,
+        );
+    }
+  });
+
+  it("proves row-lock contention for missing versus checkout and competing recoveries", async () => {
+    await resetAsset();
+    async function race(
+      first: Parameters<PostgresAssetRepository["custody"]>[2],
+      second: Parameters<PostgresAssetRepository["custody"]>[2],
+    ) {
+      const before = (await repository.get(scope, ids.asset))!;
+      const beforeCounts = await counts();
+      const gate = await pool.connect();
+      await gate.query("begin");
+      await gate.query("select id from assets where id=$1 for update", [
+        ids.asset,
+      ]);
+      const outcomes = Promise.allSettled([
+        repository.custody(scope, ids.asset, first, before.updatedAt, audit),
+        repository.custody(scope, ids.asset, second, before.updatedAt, audit),
+      ]);
+      try {
+        await expect
+          .poll(
+            async () =>
+              Number(
+                (
+                  await pool.query(
+                    "select count(*) n from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like '%assigned_employee_id%for update%'",
+                  )
+                ).rows[0].n,
+              ),
+            { timeout: 5000 },
+          )
+          .toBe(2);
+      } finally {
+        await gate.query("rollback");
+        gate.release();
+      }
+      const results = await outcomes;
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      const loser = results.find((r) => r.status === "rejected");
+      expect(loser?.status === "rejected" && loser.reason.code).toBe(
+        "STALE_UPDATE",
+      );
+      const after = (await repository.get(scope, ids.asset))!;
+      const accepted = results.find((r) => r.status === "fulfilled");
+      expect(after).toEqual(
+        accepted?.status === "fulfilled" ? accepted.value : null,
+      );
+      expect(after.updatedAt).not.toBe(before.updatedAt);
+      expect((await counts()).events).toHaveLength(
+        beforeCounts.events.length + 1,
+      );
+      expect((await counts()).audits).toHaveLength(
+        beforeCounts.audits.length + 1,
+      );
+      return after;
+    }
+    const first = await race(
+      { action: "REPORT_MISSING", reason: "Cannot locate" },
+      {
+        action: "CHECKOUT",
+        employeeId: ids.employeeA,
+        reason: "Competing issue",
+      },
+    );
+    if (first.status !== "missing")
+      await repository.custody(
+        scope,
+        ids.asset,
+        { action: "REPORT_MISSING", reason: "Report after issue" },
+        first.updatedAt,
+        audit,
+      );
+    await race(
+      {
+        action: "RECOVER",
+        siteId: ids.site,
+        reason: "Located A",
+        condition: "good",
+      },
+      {
+        action: "RECOVER",
+        siteId: ids.otherSite,
+        reason: "Located B",
+        condition: "poor",
+      },
+    );
+  });
 });
