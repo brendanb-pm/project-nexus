@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import {
   assetConditions,
   assetStatuses,
@@ -22,23 +22,46 @@ function CustodyForm({
   actions: Actions;
 }) {
   const asset = state.detail?.asset;
+  const [message, submit, pending] = useActionState(
+    async (_: string, form: FormData) => {
+      try {
+        await actions.custodyAsset(form);
+        return "Custody action recorded.";
+      } catch {
+        return "Custody action could not be confirmed. Refresh to check the current state before retrying; verify the destination, reason, and asset status.";
+      }
+    },
+    "",
+  );
   if (!asset) return null;
   const held = Boolean(asset.employeeId);
-  const action = held ? "CHECKIN" : "CHECKOUT";
+  const missing = asset.status === "missing";
+  const action = missing ? "RECOVER" : held ? "CHECKIN" : "CHECKOUT";
   return (
-    <form action={actions.custodyAsset} className={`${panel} grid gap-3`}>
+    <form action={submit} className={`${panel} grid gap-3`}>
       <h2 className="text-lg font-semibold">Current custody</h2>
       <p>
-        {held
-          ? `Checked out to ${asset.employeeName ?? "an employee"}`
-          : `In inventory at ${asset.siteName}`}
+        {missing
+          ? `Missing — last known custody: ${asset.employeeName ?? asset.siteName ?? "Unassigned"}`
+          : held
+            ? `Checked out to ${asset.employeeName ?? "an employee"}`
+            : `In inventory at ${asset.siteName}`}
       </p>
+      {missing ? (
+        <p>
+          Location unresolved. Recovery records the receiving site and condition
+          and returns the asset to maintenance for inspection, not available
+          custody.
+        </p>
+      ) : null}
       <input type="hidden" name="assetId" value={asset.id} />
       <input type="hidden" name="expectedUpdatedAt" value={asset.updatedAt} />
       <label>
         Action
         <select className={field} name="action" defaultValue={action}>
-          {held ? (
+          {missing ? (
+            <option value="RECOVER">Recover to site for inspection</option>
+          ) : held ? (
             <>
               <option value="CHECKIN">Check in</option>
               <option value="TRANSFER">Transfer</option>
@@ -49,19 +72,24 @@ function CustodyForm({
               <option value="RELOCATE">Move inventory site</option>
             </>
           )}
+          {!missing && asset.status !== "retired" ? (
+            <option value="REPORT_MISSING">Report missing</option>
+          ) : null}
         </select>
       </label>
-      <label>
-        Destination employee
-        <select className={field} name="employeeId" defaultValue="">
-          <option value="">Select employee</option>
-          {state.employees.map((employee) => (
-            <option key={employee.id} value={employee.id}>
-              {employee.displayName}
-            </option>
-          ))}
-        </select>
-      </label>
+      {!missing ? (
+        <label>
+          Destination employee
+          <select className={field} name="employeeId" defaultValue="">
+            <option value="">Select employee</option>
+            {state.employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.displayName}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <label>
         Return site
         <select
@@ -92,9 +120,11 @@ function CustodyForm({
       <button
         className="min-h-11 rounded-lg bg-[var(--accent)] px-4 py-2 font-semibold text-black"
         type="submit"
+        disabled={pending}
       >
-        Record custody action
+        {pending ? "Recording…" : "Record custody action"}
       </button>
+      {message ? <p role="status">{message}</p> : null}
     </form>
   );
 }
@@ -163,7 +193,20 @@ function AssetForm({
       </label>
       <label>
         Status
-        <Select name="status" values={assetStatuses} value={detail?.status} />
+        {detail?.status === "missing" ? (
+          <>
+            <input type="hidden" name="status" value="missing" />
+            <p>
+              Missing — use explicit recovery, not an inventory status edit.
+            </p>
+          </>
+        ) : (
+          <Select
+            name="status"
+            values={assetStatuses.filter((value) => value !== "missing")}
+            value={detail?.status}
+          />
+        )}
       </label>
       <label>
         Condition
@@ -305,6 +348,7 @@ export function AssetInventory({
                   <h2 className="font-semibold">{asset.identifier}</h2>
                   <p className="text-sm text-[var(--text-muted)]">
                     {asset.assetType.replaceAll("_", " ")} ·{" "}
+                    {asset.status === "missing" ? "Last known: " : ""}
                     {asset.employeeName ?? asset.siteName ?? "Unassigned"}
                   </p>
                 </div>
@@ -319,11 +363,22 @@ export function AssetInventory({
           <div className={panel}>No assets match these filters.</div>
         )}
       </section>
-      <AssetForm state={state} actions={actions} />
-      <CustodyForm state={state} actions={actions} />
+      <AssetForm
+        key={`inventory-${state.detail?.asset.updatedAt}`}
+        state={state}
+        actions={actions}
+      />
+      <CustodyForm
+        key={`custody-${state.detail?.asset.updatedAt}`}
+        state={state}
+        actions={actions}
+      />
       {state.detail ? (
         <section className={panel}>
           <h2 className="text-lg font-semibold">Custody history</h2>
+          <p className="text-sm text-[var(--text-muted)]">
+            Latest 100 actions, newest first. Earlier events remain preserved.
+          </p>
           {state.detail.custody.length ? (
             <ol className="mt-3 grid gap-3">
               {state.detail.custody.map((event) => (

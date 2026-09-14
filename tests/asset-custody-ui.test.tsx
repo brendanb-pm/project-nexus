@@ -47,6 +47,38 @@ const actions = {
   custodyAsset: vi.fn(),
 };
 describe("asset custody controls", () => {
+  it("labels missing custody as last known and exposes only explicit recovery", () => {
+    render(
+      <AssetInventory
+        state={{
+          ...state,
+          detail: {
+            ...state.detail!,
+            asset: { ...state.detail!.asset, status: "missing" },
+          },
+        }}
+        actions={actions}
+      />,
+    );
+    expect(
+      screen.getByText("Missing — last known custody: North"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Recover to site for inspection" }),
+    ).toBeInTheDocument();
+    for (const name of [
+      "Check out",
+      "Check in",
+      "Transfer",
+      "Move inventory site",
+      "Report missing",
+    ])
+      expect(screen.queryByRole("option", { name })).toBeNull();
+    expect(
+      screen.getByText(/Missing — use explicit recovery/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Reason" })).toBeRequired();
+  });
   it("renders checkout controls with authorized choices and a required reason", () => {
     render(<AssetInventory state={state} actions={actions} />);
     expect(

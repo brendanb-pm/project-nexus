@@ -48,6 +48,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: NEXUS_POSTGRES_TEST=true npm run test:postgres
+      - run: NEXUS_POSTGRES_TEST=true npx vitest run tests/asset-custody-postgres.integration.test.ts
       - run: npm run db:check
       - run: npm run db:seed:validate
       - run: npm run build
