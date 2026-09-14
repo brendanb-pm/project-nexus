@@ -46,3 +46,9 @@ An incident may reference one originating activity entry but does not replace it
 A handoff is submitted only for the authenticated employee's active assignment. Its unresolved issues, equipment/key status, and follow-up items are retained as a submitted operational record; retries reuse the assignment-scoped submission key rather than creating duplicate handoffs. The next-shift context remains bounded to the same authorized operational hierarchy.
 
 Service types are extensible V1 static/uniformed categories. They contain no vehicle-patrol or Executive Protection behavior.
+
+## Asset custody authority
+
+`AssetCheckoutEvent` is the append-only authoritative custody history. Every checkout, check-in, employee transfer, and inventory-site relocation records the prior and resulting custodian/location, actor, reason, timestamp, and condition in the same database transaction that updates the asset's current projection.
+
+`Asset.assignedEmployeeId` and `Asset.assignedSiteId` are the single current-custody projection. Inventory administration cannot write those fields; custody changes must use the custody transaction. The older `AssetAssignment` structure is retained only as non-authoritative legacy evidence and is not a writable source of current custody. A failed or stale custody transaction commits neither an event, projection change, nor audit entry.

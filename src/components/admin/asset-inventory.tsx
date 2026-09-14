@@ -23,14 +23,14 @@ function CustodyForm({
 }) {
   const asset = state.detail?.asset;
   if (!asset) return null;
-  const held = Boolean(asset.siteId === undefined);
+  const held = Boolean(asset.employeeId);
   const action = held ? "CHECKIN" : "CHECKOUT";
   return (
     <form action={actions.custodyAsset} className={`${panel} grid gap-3`}>
       <h2 className="text-lg font-semibold">Current custody</h2>
       <p>
         {held
-          ? "Checked out to an employee"
+          ? `Checked out to ${asset.employeeName ?? "an employee"}`
           : `In inventory at ${asset.siteName}`}
       </p>
       <input type="hidden" name="assetId" value={asset.id} />
@@ -44,7 +44,10 @@ function CustodyForm({
               <option value="TRANSFER">Transfer</option>
             </>
           ) : (
-            <option value="CHECKOUT">Check out</option>
+            <>
+              <option value="CHECKOUT">Check out</option>
+              <option value="RELOCATE">Move inventory site</option>
+            </>
           )}
         </select>
       </label>
@@ -170,21 +173,23 @@ function AssetForm({
           value={detail?.condition}
         />
       </label>
-      <label>
-        Inventory site
-        <select
-          className={field}
-          name="siteId"
-          required
-          defaultValue={detail?.siteId}
-        >
-          {state.sites.map((site) => (
-            <option key={site.id} value={site.id}>
-              {site.clientName} — {site.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {editing ? (
+        <p className="text-sm text-[var(--text-muted)]">
+          Current custody and inventory location are changed only through the
+          audited custody controls.
+        </p>
+      ) : (
+        <label>
+          Inventory site
+          <select className={field} name="siteId" required>
+            {state.sites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.clientName} — {site.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <label>
           Inspection due
@@ -239,7 +244,7 @@ export function AssetInventory({
   const filtered = state.assets.filter(
     (asset) =>
       (status === "ALL" || asset.status === status) &&
-      `${asset.identifier} ${asset.assetType} ${asset.condition} ${asset.siteName ?? ""}`
+      `${asset.identifier} ${asset.assetType} ${asset.condition} ${asset.siteName ?? ""} ${asset.employeeName ?? ""}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -249,8 +254,8 @@ export function AssetInventory({
         <p className="text-sm text-[var(--text-muted)]">Operations</p>
         <h1 className="text-2xl font-semibold">Asset inventory</h1>
         <p className="mt-2 text-[var(--text-muted)]">
-          Find and maintain organization-owned equipment. Custody workflows are
-          not managed here.
+          Find, maintain, and review the custody of organization-owned
+          equipment.
         </p>
         <a
           className="mt-3 inline-block text-sm font-semibold underline"
@@ -300,7 +305,7 @@ export function AssetInventory({
                   <h2 className="font-semibold">{asset.identifier}</h2>
                   <p className="text-sm text-[var(--text-muted)]">
                     {asset.assetType.replaceAll("_", " ")} ·{" "}
-                    {asset.siteName ?? "Unassigned site"}
+                    {asset.employeeName ?? asset.siteName ?? "Unassigned"}
                   </p>
                 </div>
                 <p className="text-sm">
@@ -330,6 +335,12 @@ export function AssetInventory({
                   </p>
                   <p className="text-sm text-[var(--text-muted)]">
                     {event.reason} · {event.actor}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {new Date(event.occurredAt).toLocaleString()}
+                    {event.condition
+                      ? ` · ${event.condition.replaceAll("_", " ")}`
+                      : ""}
                   </p>
                 </li>
               ))}

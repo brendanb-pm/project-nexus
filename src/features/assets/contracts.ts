@@ -30,6 +30,8 @@ export type AssetSummary = {
   siteId?: string;
   siteName?: string;
   clientName?: string;
+  employeeId?: string;
+  employeeName?: string;
   inspectionDueOn?: string;
   expiresOn?: string;
   updatedAt: string;
@@ -47,7 +49,7 @@ export type AssetDetail = {
 };
 export type AssetCustodyEvent = {
   id: string;
-  action: "CHECKOUT" | "CHECKIN" | "TRANSFER";
+  action: "CHECKOUT" | "CHECKIN" | "TRANSFER" | "RELOCATE";
   occurredAt: string;
   fromEmployee?: string;
   fromSite?: string;

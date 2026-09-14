@@ -1,0 +1,1 @@
+ALTER TABLE "assets" ADD CONSTRAINT "assets_single_custody_projection_check" CHECK ("assets"."assigned_employee_id" is null or "assets"."assigned_site_id" is null);

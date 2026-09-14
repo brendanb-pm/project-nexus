@@ -6,7 +6,12 @@ import type {
   UpdateAssetInput,
 } from "./contracts";
 import type { AssetRepository, TrustedAssetScope } from "./repository";
-import { validateAsset, validateCustody, validateVersion } from "./validation";
+import {
+  validateAsset,
+  validateAssetUpdate,
+  validateCustody,
+  validateVersion,
+} from "./validation";
 export class AssetService {
   constructor(
     private readonly access: AuthorizedDataAccess,
@@ -60,13 +65,10 @@ export class AssetService {
   }
   async update(input: UpdateAssetInput) {
     this.read();
-    const value = validateAsset(input);
+    const value = validateAssetUpdate(input);
     const id = typeof input.assetId === "string" ? input.assetId : "";
     const existing = await this.repository.get(this.scope(), id);
     if (!existing) throw new ResourceNotFoundError("Asset");
-    const sites = await this.repository.listSites(this.scope());
-    if (!sites.some((site) => site.id === value.siteId))
-      throw new ResourceNotFoundError("Inventory site");
     const result = await this.repository.update(
       this.scope(),
       id,

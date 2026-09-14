@@ -1021,6 +1021,10 @@ export const assets = pgTable(
       t.organizationId,
       t.identifier,
     ),
+    check(
+      "assets_single_custody_projection_check",
+      sql`${t.assignedEmployeeId} is null or ${t.assignedSiteId} is null`,
+    ),
   ],
 );
 export const assetAssignments = pgTable("asset_assignments", {
