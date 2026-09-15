@@ -97,6 +97,14 @@ async function main() {
     new Date(now.valueOf() - 3 * 24 * 60 * 60 * 1000),
   ).date;
   try {
+    const identity = await pool.query<{ marker: string }>(
+      "SELECT marker FROM nexus_local_environment_identity WHERE singleton = true",
+    );
+    if (identity.rows[0]?.marker !== "NEXUS_LOCAL_DEMO_V1") {
+      throw new Error(
+        "Demo seed refuses a database without the Nexus local disposable marker.",
+      );
+    }
     await pool.query(
       "TRUNCATE TABLE eosr_passdown_dismissals, end_of_shift_reports, operational_record_revisions, audit_events, handoffs, incident_reports, activity_entries, clock_events, time_records, shift_assignments, shifts, employee_roles, employees, user_memberships, external_identities, users, auth_accounts, auth_sessions, auth_verifications, auth_users, posts, sites, clients, branches, organizations RESTART IDENTITY CASCADE",
     );

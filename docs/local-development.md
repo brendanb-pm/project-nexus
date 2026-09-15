@@ -5,13 +5,19 @@ Project Nexus runs its local PostgreSQL service in Docker on
 the container also creates `nexus_dev` for non-demo development work.
 
 ```powershell
-Copy-Item .env.example .env.local
-docker compose up -d
-npm ci
-npm run db:migrate
-npm run db:demo:reset
-npm run dev
+pwsh -File .\scripts\dev\Setup-DockerPostgres.ps1 -Phase Provision
+npm.cmd run dev
 ```
+
+If Docker Desktop was deliberately installed for all Windows users, add
+`-AllowAllUsersInstall`; the default blocks so an unexpected machine-wide
+installation is never silently accepted.
+
+The setup script generates independent Nexus/Atlas database credentials with
+Windows DPAPI, writes only ignored local environment files with a
+current-user-only ACL, starts the `nexus-local` Compose project, and verifies
+the migration rerun is a no-op. It never connects to or modifies a Windows
+PostgreSQL service.
 
 `db:demo:reset` is intentionally destructive only for the exact local
 `nexus_demo` target. It refuses every other database host or database name.
@@ -33,11 +39,12 @@ unchanged.
 
 ## Troubleshooting and teardown
 
-Use `docker compose ps` to check PostgreSQL health and `docker compose logs
-nexus-postgres` to inspect startup failures. Confirm `DATABASE_URL` in
+Use `docker compose --env-file .env.docker.local ps` to check PostgreSQL health
+and `docker compose --env-file .env.docker.local logs nexus-postgres` to inspect
+startup failures. Confirm `DATABASE_URL` in
 `.env.local` points to `localhost:5434/nexus_demo`, then rerun migration and
 the guarded reset.
 
-Use `docker compose down` to stop the service without losing data. Use
-`docker compose down -v` only when intentionally removing the local Nexus
-database volume; run migrations and the demo reset again afterward.
+Use `docker compose --env-file .env.docker.local down` to stop the service
+without losing data. Volume deletion is intentionally absent from the normal
+setup and verification workflow.
