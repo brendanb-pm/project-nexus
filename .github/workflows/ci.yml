@@ -35,6 +35,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:migrate
+      - name: Mark the disposable CI database
+        run: |
+          docker exec "${{ job.services.postgres.id }}" psql \
+            -v ON_ERROR_STOP=1 \
+            -U nexus_app \
+            -d nexus_demo \
+            -c "CREATE TABLE nexus_local_environment_identity (singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton), marker text NOT NULL CHECK (marker = 'NEXUS_LOCAL_DEMO_V1')); INSERT INTO nexus_local_environment_identity (marker) VALUES ('NEXUS_LOCAL_DEMO_V1');"
       - run: npm run db:demo:reset
       - name: Check changed-surface formatting
         run: |
