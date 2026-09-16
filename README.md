@@ -18,16 +18,15 @@ Persistence uses Drizzle ORM with a PostgreSQL-compatible schema. Better Auth pr
 
 Requires Node.js 22+ and npm.
 
-```bash
-cp .env.example .env.local
-docker compose up -d
-npm ci
-npm run db:migrate
-npm run db:demo:reset
-npm run dev
+```powershell
+pwsh -File .\scripts\dev\Setup-DockerPostgres.ps1 -Phase Provision
+npm.cmd run dev
 ```
 
-Open `http://localhost:3000`. The local database is `nexus-postgres` on `127.0.0.1:5434`, with separate `nexus_dev` and resettable `nexus_demo` databases. `db:demo:reset` refuses non-local or non-`nexus_demo` targets. Set `NEXUS_DEV_AUTH=true` only in `.env.local` to expose the localhost-only Guard A and Operations Manager B sign-in choices; production OIDC remains unchanged. Never commit `.env.local` or credentials. Use `docker compose down` to stop the database and `docker compose down -v` only when intentionally removing Nexus local data.
+Add `-AllowAllUsersInstall` only when Docker Desktop's machine-wide install was
+an intentional, user-approved choice.
+
+Open `http://localhost:3000`. The local database is `nexus-postgres` on `127.0.0.1:5434`, with separate `nexus_dev` and resettable `nexus_demo` databases. `db:demo:reset` refuses non-local or non-`nexus_demo` targets. Set `NEXUS_DEV_AUTH=true` only in `.env.local` to expose the localhost-only Guard A and Operations Manager B sign-in choices; production OIDC remains unchanged. Never commit `.env.local` or credentials. Use `docker compose --env-file .env.docker.local down` to stop the database without deleting its named volume.
 
 See [local-development.md](docs/local-development.md) for the local runtime,
 demo identities, troubleshooting, and teardown details.
