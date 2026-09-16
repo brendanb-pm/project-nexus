@@ -210,6 +210,11 @@ function Invoke-Preflight {
 
   Test-DevelopmentPort $NexusPort 'nexus-local'
   Test-DevelopmentPort $AtlasPort 'atlas-local'
+  if ($NexusPort -eq 5432 -or $AtlasPort -eq 5432) {
+    Write-Check BLOCKED 'Host PostgreSQL port isolation' 'port 5432 is reserved for the Windows PostgreSQL service and cannot be assigned to either Compose project'
+  } else {
+    Write-Check PASS 'Host PostgreSQL port isolation' 'neither Compose project uses reserved host port 5432'
+  }
   if ($NexusPort -eq $AtlasPort) { Write-Check BLOCKED 'Project ports' 'Nexus and Atlas ports must be distinct' } else { Write-Check PASS 'Project ports' "Nexus=$NexusPort; Atlas=$AtlasPort" }
 
   foreach ($repo in @(@{ Name = 'Nexus'; Path = $NexusRepoPath; Marker = 'package.json' }, @{ Name = 'Atlas'; Path = $AtlasRuntimePath; Marker = 'package.json' })) {
@@ -276,6 +281,7 @@ function Get-LocalSecrets {
   } else {
     Write-Check PASS 'Local secret store' 'reusing existing Windows DPAPI-protected credentials'
   }
+  Protect-LocalFile $SecretStorePath
   $stored = Get-Content -Raw -LiteralPath $SecretStorePath | ConvertFrom-Json
   if ($stored.schema -ne 1) { throw 'Unsupported local secret-store schema.' }
   return [pscustomobject]@{
@@ -316,6 +322,7 @@ function Write-ProjectEnvironmentFiles($Secrets) {
     if ($existingUrl -ne $expectedDatabaseUrl) {
       throw 'Existing Nexus .env.local has a different DATABASE_URL. It was not overwritten; reconcile it manually without exposing the value.'
     }
+    Protect-LocalFile $nexusAppEnv
   } else {
     Write-ProtectedEnvironmentFile $nexusAppEnv @(
       'NEXT_PUBLIC_APP_URL=http://localhost:3000',

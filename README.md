@@ -26,7 +26,7 @@ npm.cmd run dev
 Add `-AllowAllUsersInstall` only when Docker Desktop's machine-wide install was
 an intentional, user-approved choice.
 
-Open `http://localhost:3000`. The local database is `nexus-postgres` on `127.0.0.1:5434`, with separate `nexus_dev` and resettable `nexus_demo` databases. `db:demo:reset` refuses non-local or non-`nexus_demo` targets. Set `NEXUS_DEV_AUTH=true` only in `.env.local` to expose the localhost-only Guard A and Operations Manager B sign-in choices; production OIDC remains unchanged. Never commit `.env.local` or credentials. Use `docker compose down` to stop the database and `docker compose down -v` only when intentionally removing Nexus local data.
+Open `http://localhost:3000`. The local database is `nexus-postgres` on `127.0.0.1:5434`, with separate `nexus_dev` and resettable `nexus_demo` databases. `db:demo:reset` refuses non-local or non-`nexus_demo` targets. Set `NEXUS_DEV_AUTH=true` only in `.env.local` to expose the localhost-only Guard A and Operations Manager B sign-in choices; production OIDC remains unchanged. Never commit `.env.local` or credentials. Use `docker compose --env-file .env.docker.local down` to stop the database without deleting its named volume.
 
 See [local-development.md](docs/local-development.md) for the local runtime,
 demo identities, troubleshooting, and teardown details.

@@ -47,6 +47,19 @@ function Get-EnvironmentValue([string]$Path, [string]$Name) {
   return $null
 }
 
+function Test-CurrentUserOnlyAcl([string]$Path) {
+  $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $acl = Get-Acl -LiteralPath $Path
+  if (-not $acl.AreAccessRulesProtected) { return $false }
+  $rules = @($acl.Access)
+  if ($rules.Count -eq 0) { return $false }
+  foreach ($rule in $rules) {
+    $ruleSid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+    if ($ruleSid -ne $currentSid -or $rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow) { return $false }
+  }
+  return [bool]($rules | Where-Object { ($_.FileSystemRights -band [Security.AccessControl.FileSystemRights]::FullControl) -eq [Security.AccessControl.FileSystemRights]::FullControl })
+}
+
 function Invoke-Compose([string]$WorkingDirectory, [string]$EnvironmentFile, [string[]]$Arguments, [switch]$Capture) {
   Push-Location $WorkingDirectory
   try {
@@ -174,7 +187,10 @@ try {
 } catch { Fail 'Docker runtime' $_.Exception.Message }
 
 $requiredFiles = @($NexusEnvPath, $AtlasEnvPath, $NexusAppEnvPath, $SecretStorePath)
-Check 'Local-only secret files' { ($requiredFiles | Where-Object { -not (Test-Path -LiteralPath $_) }).Count -eq 0 } 'DPAPI store and ignored project environment files exist; contents were not printed'
+$localFilesReady = ($requiredFiles | Where-Object { -not (Test-Path -LiteralPath $_) }).Count -eq 0
+Check 'Local-only secret files' { $localFilesReady } 'DPAPI store and ignored project environment files exist; contents were not printed'
+if (-not $localFilesReady) { throw 'Required local-only secret files are missing; verification stopped before reading credentials.' }
+Check 'Secret file ACLs' { ($requiredFiles | Where-Object { -not (Test-CurrentUserOnlyAcl $_) }).Count -eq 0 } 'DPAPI store and project environment files grant access only to the current Windows user'
 
 $secrets = Get-Secrets
 Check 'Credentials distinct' { $secrets.NexusPostgres -ne $secrets.AtlasPostgres } 'Nexus and Atlas generated credential values differ'
@@ -211,17 +227,27 @@ if ($nexusId -and $atlasId) {
     Check 'Database identities' { $nexusDb -eq 'nexus_demo' -and $atlasDb -eq 'postgres' -and $nexusDb -ne $atlasDb } 'each project connected to its own expected container database'
   } catch { Fail 'Database identities' $_.Exception.Message }
 
+  $atlasReachableFromNexus = $false
+  try {
+    [void](Invoke-Compose $NexusRepoPath $NexusEnvPath @('exec', '-T', 'nexus-postgres', 'pg_isready', '-h', 'host.docker.internal', '-p', [string]$AtlasPort) -Capture)
+    $atlasReachableFromNexus = $true
+  } catch {}
   try {
     $nexusCrossCommand = 'PGPASSWORD="$POSTGRES_PASSWORD" psql -w -h host.docker.internal -p {0} -U "$POSTGRES_USER" -d postgres -c "SELECT 1" >/dev/null 2>&1' -f $AtlasPort
     Invoke-Compose $NexusRepoPath $NexusEnvPath @('exec', '-T', 'nexus-postgres', 'sh', '-lc', $nexusCrossCommand)
     $nexusIntoAtlas = $true
   } catch { $nexusIntoAtlas = $false }
+  $nexusReachableFromAtlas = $false
+  try {
+    [void](Invoke-Compose $AtlasRuntimePath $AtlasEnvPath @('exec', '-T', 'atlas-postgres', 'pg_isready', '-h', 'host.docker.internal', '-p', [string]$NexusPort) -Capture)
+    $nexusReachableFromAtlas = $true
+  } catch {}
   try {
     $atlasCrossCommand = 'PGPASSWORD="$POSTGRES_PASSWORD" psql -w -h host.docker.internal -p {0} -U "$POSTGRES_USER" -d nexus_demo -c "SELECT 1" >/dev/null 2>&1' -f $NexusPort
     Invoke-Compose $AtlasRuntimePath $AtlasEnvPath @('exec', '-T', 'atlas-postgres', 'sh', '-lc', $atlasCrossCommand)
     $atlasIntoNexus = $true
   } catch { $atlasIntoNexus = $false }
-  Check 'Cross-project credential denial' { -not $nexusIntoAtlas -and -not $atlasIntoNexus } 'each project credential was rejected by the other project container'
+  Check 'Cross-project credential denial' { $atlasReachableFromNexus -and $nexusReachableFromAtlas -and -not $nexusIntoAtlas -and -not $atlasIntoNexus } 'both target ports were reachable and each project credential was rejected by the other project container'
 
   try {
     [void](Invoke-ContainerPsql $NexusRepoPath $NexusEnvPath 'nexus-postgres' 'nexus_app_local' 'nexus_demo' "CREATE TABLE IF NOT EXISTS nexus_setup_persistence_proof(id text PRIMARY KEY); INSERT INTO nexus_setup_persistence_proof VALUES ('nexus') ON CONFLICT DO NOTHING")
