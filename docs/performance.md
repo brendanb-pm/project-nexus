@@ -88,6 +88,12 @@ non-production `DATABASE_URL`, `NEXUS_PERFORMANCE_TELEMETRY=true`, and a
 `PERFORMANCE_OUTPUT` path. It applies no migrations, seeds only its synthetic
 fixture, and must run only after the checked-in migrations are applied.
 
+`npm run performance:nx72` measures the Operations, Leadership, Reporting,
+and Asset Inventory read paths through their real service and authorization
+boundaries. It is read-only and requires an already-seeded non-production
+fixture with the documented local demo identities. It does not reset, seed,
+or migrate a database.
+
 ## Acceptance checklist
 
 1. The interaction has immediate acknowledgement, meaningful-content, and
