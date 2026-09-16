@@ -105,3 +105,31 @@ Runtime checks also passed for tenant isolation, assignment overlap,
 unavailability, self-only clocking, missing/inaccurate/out-of-radius location
 exceptions, append-only corrections, approval separation, incomplete-pair
 blocking, and exact-second overnight derivation.
+
+## NX-7.2 non-production workflow baseline
+
+**Status: PASS — 2026-09-16.** Measurements used a temporary PostgreSQL 16.8
+container backed by tmpfs, with the checked-in local demo fixture plus 2,000
+additional synthetic shifts and assignments and 300 synthetic assets. The
+existing local `nexus_demo` database on port 5434 was not reset or modified.
+One warm-up preceded 30 successful server-side samples for each path.
+
+| Path                 | Request p50 / p95 | Aggregate DB p50 / p95 | Max queries | Rows max | Result |
+| -------------------- | ----------------: | ---------------------: | ----------: | -------: | ------ |
+| Operations Center    |  41.55 / 48.01 ms |     181.48 / 203.30 ms |           9 |       93 | PASS   |
+| Leadership dashboard |  55.03 / 89.27 ms |      63.94 / 272.14 ms |           7 |      179 | PASS   |
+| Reporting workspace  |  15.30 / 18.09 ms |       29.85 / 36.17 ms |           3 |        3 | PASS   |
+| Asset Inventory      |   5.18 / 12.93 ms |       11.95 / 29.55 ms |           3 |      207 | PASS   |
+
+The Operations Center's query plan over 2,003 assignments completed in
+10.77 ms and used the existing tenant, post, shift-assignment, EOSR, clock,
+and time-record indexes. No N+1 behavior, unbounded returned collection, or
+latency-budget failure was measured. The Operations Center's nine fixed
+queries and Leadership dashboard's seven fixed queries are independent,
+authorized read models; their aggregate database durations are not page wall
+time. No index, cache, authorization, schema, or UI change was justified.
+
+The read-only runner is `npm run performance:nx72`; callers must provide a
+safe pre-seeded non-production `DATABASE_URL`, enable performance telemetry,
+and supply `PERFORMANCE_OUTPUT`. These local server/application measurements
+do not claim browser, network, or production latency.

@@ -15,6 +15,7 @@
     "test:postgres": "vitest run tests/eosr-postgres.integration.test.ts",
     "performance:summarize": "tsx scripts/summarize-performance.ts",
     "performance:run": "tsx --tsconfig scripts/tsconfig.performance.json scripts/measure-sprint-1.ts",
+    "performance:nx72": "tsx --tsconfig scripts/tsconfig.performance.json scripts/measure-nx72.ts",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:migrate": "tsx scripts/db-migrate.ts",
