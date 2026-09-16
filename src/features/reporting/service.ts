@@ -7,14 +7,12 @@ import {
 } from "@/server/request/errors";
 import {
   validateActivity,
-  validateHandoff,
   validateIncident,
   validateAcknowledgement,
   validateAmendment,
 } from "./validation";
 import type {
   CreateActivityInput,
-  CreateHandoffInput,
   CreateIncidentInput,
   AcknowledgeOperationalRecordInput,
   AmendOperationalRecordInput,
@@ -238,40 +236,6 @@ export class ReportingService {
       this.scope(),
       context,
       { ...input, occurredAt: occurredAt.toISOString() },
-      this.access.auditContext(),
-    );
-  }
-  async createHandoff(raw: CreateHandoffInput) {
-    const input = validateHandoff(raw);
-    if (!input.shiftAssignmentId)
-      throw new ResourceNotFoundError("Shift assignment");
-    const context = await this.repository.getActivityContext(
-      this.scope(),
-      input.shiftAssignmentId,
-    );
-    if (!context) throw new ResourceNotFoundError("Shift assignment");
-    this.access.requireHierarchical("SUBMIT_HANDOFF", {
-      ...context,
-      visibility: input.visibility,
-    });
-    if (context.employeeId !== this.access.context.scope.employeeId)
-      throw new PermissionDeniedError();
-    if (context.assignmentStatus === "cancelled")
-      throw new InvariantViolationError(
-        "A cancelled assignment cannot receive a handoff.",
-      );
-    const submittedAt = this.now();
-    if (
-      submittedAt < new Date(context.scheduledStart) ||
-      submittedAt > new Date(context.scheduledEnd)
-    )
-      throw new InvariantViolationError(
-        "Handoffs can only be submitted during the current assignment.",
-      );
-    return this.repository.createHandoff(
-      this.scope(),
-      context,
-      { ...input, submittedAt: submittedAt.toISOString() },
       this.access.auditContext(),
     );
   }

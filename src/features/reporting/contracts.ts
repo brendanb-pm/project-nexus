@@ -97,6 +97,58 @@ export type HandoffSummary = {
   acknowledgedAt?: string;
 };
 
+/** The only primary reporting choices exposed to a Guard. */
+export const guardFacingReportTypes = [
+  "ShiftReport",
+  "SecurityIncidentReport",
+] as const;
+export type GuardFacingReportType = (typeof guardFacingReportTypes)[number];
+
+/**
+ * Shift Report is a composed read model: ActivityEntry records form its
+ * timeline and EOSR supplies its final closeout state.
+ */
+export const shiftReportRecordTypes = [
+  "ActivityEntry",
+  "EndOfShiftReport",
+] as const;
+export type ShiftReportCloseout = {
+  id: string;
+  summary: string;
+  unresolvedIssues: readonly string[];
+  equipmentAccessStatus: string;
+  followUpItems: readonly string[];
+  unusualConditions: string;
+  submittedAt: string;
+  acknowledgedAt?: string;
+};
+export type ShiftReportReadModel = {
+  assignment: ActivityAssignment;
+  timeline: readonly ActivityEntrySummary[];
+  incidents: readonly IncidentReportSummary[];
+  closeout?: ShiftReportCloseout;
+};
+
+/**
+ * Historical Handoffs remain reviewable, but EOSR is the sole end-of-shift
+ * submission path. Handoff is intentionally excluded from guard-facing
+ * reporting taxonomy.
+ */
+export const legacyReportingRecordTypes = ["Handoff"] as const;
+
+/**
+ * `daily_activity_reports` is retained only as legacy evidence. ActivityEntry
+ * is the authoritative DAR path; do not add a writer or read-model authority
+ * for this table without an approved follow-up decision.
+ */
+export const dailyActivityReportDisposition = {
+  table: "daily_activity_reports",
+  authority: "LEGACY_EVIDENCE_ONLY",
+  canonicalReplacement: "ActivityEntry",
+  writePolicy: "NO_NEW_WRITERS",
+} as const;
+
+/** Includes legacy Handoff solely for historical review and amendment. */
 export const operationalRecordTypes = [
   "ActivityEntry",
   "IncidentReport",
@@ -161,15 +213,6 @@ export type CreateIncidentInput = {
   actionsTaken: unknown;
   emergencyServiceInvolvement?: unknown;
   externalReportNumber?: unknown;
-  visibility?: unknown;
-  submissionKey: unknown;
-};
-
-export type CreateHandoffInput = {
-  shiftAssignmentId: unknown;
-  unresolvedIssues?: unknown;
-  equipmentKeyStatus?: unknown;
-  followUpItems?: unknown;
   visibility?: unknown;
   submissionKey: unknown;
 };

@@ -51,26 +51,6 @@ export async function createIncident(form: FormData) {
   });
 }
 
-export async function createHandoff(form: FormData) {
-  return measureServerAction("reporting.create-handoff", async () => {
-    const handoff = await (
-      await createReportingService(
-        await createProductionPrincipalResolver(),
-        "reporting.create-handoff",
-      )
-    ).createHandoff({
-      shiftAssignmentId: form.get("shiftAssignmentId"),
-      unresolvedIssues: form.get("unresolvedIssues"),
-      equipmentKeyStatus: form.get("equipmentKeyStatus"),
-      followUpItems: form.get("followUpItems"),
-      visibility: form.get("visibility"),
-      submissionKey: form.get("submissionKey"),
-    });
-    revalidatePath("/reporting");
-    return handoff;
-  });
-}
-
 export async function acknowledgeOperationalRecord(form: FormData) {
   return measureServerAction(
     "reporting.acknowledge-operational-record",

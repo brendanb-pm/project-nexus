@@ -820,6 +820,8 @@ export const activityEntries = pgTable(
     ),
   ],
 );
+// Legacy evidence only. `activity_entries` is the authoritative DAR model;
+// do not add a writer or read-model authority without an approved follow-up.
 export const dailyActivityReports = pgTable("daily_activity_reports", {
   id: id(),
   shiftAssignmentId: uuid("shift_assignment_id")
