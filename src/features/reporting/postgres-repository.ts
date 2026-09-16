@@ -26,7 +26,6 @@ import { incidentGateFor } from "./incident-gate";
 import type {
   ActivityContext,
   NewIncident,
-  NewHandoff,
   NewActivity,
   ReportingRepository,
   ReportingScope,
@@ -910,79 +909,5 @@ export class PostgresReportingRepository implements ReportingRepository {
       .orderBy(desc(handoffs.submittedAt), desc(handoffs.id))
       .limit(limit);
     return rows.map(handoffDto);
-  }
-  async createHandoff(
-    scope: ReportingScope,
-    context: ActivityContext,
-    input: NewHandoff,
-    audit: AuditContext,
-  ) {
-    return this.database.transaction(async (tx) => {
-      const existing = await tx
-        .select(handoffFields)
-        .from(handoffs)
-        .innerJoin(
-          shiftAssignments,
-          eq(handoffs.shiftAssignmentId, shiftAssignments.id),
-        )
-        .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
-        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
-        .innerJoin(posts, eq(shifts.postId, posts.id))
-        .innerJoin(sites, eq(posts.siteId, sites.id))
-        .innerJoin(clients, eq(sites.clientId, clients.id))
-        .where(
-          and(
-            scopePredicate(scope),
-            eq(handoffs.shiftAssignmentId, context.id),
-            eq(handoffs.submissionKey, input.submissionKey),
-          ),
-        )
-        .limit(1);
-      if (existing[0]) return handoffDto(existing[0]);
-      const inserted = await tx
-        .insert(handoffs)
-        .values({
-          shiftAssignmentId: context.id,
-          unresolvedIssues: input.unresolvedIssues,
-          equipmentKeyStatus: { summary: input.equipmentKeyStatus },
-          followUpItems: input.followUpItems,
-          submittedAt: new Date(input.submittedAt),
-          submissionKey: input.submissionKey,
-          status: "SUBMITTED",
-          visibility: input.visibility,
-        })
-        .returning({ id: handoffs.id });
-      const id = inserted[0]!.id;
-      await tx.insert(auditEvents).values({
-        organizationId: audit.organizationId,
-        actorUserId: audit.actorUserId,
-        action: "handoff.submitted",
-        entityType: "Handoff",
-        entityId: id,
-        requestId: audit.requestId,
-        sessionId: audit.sessionId,
-        afterState: {
-          shiftAssignmentId: context.id,
-          unresolvedIssueCount: input.unresolvedIssues.length,
-          followUpItemCount: input.followUpItems.length,
-          visibility: input.visibility,
-        },
-      });
-      const created = await tx
-        .select(handoffFields)
-        .from(handoffs)
-        .innerJoin(
-          shiftAssignments,
-          eq(handoffs.shiftAssignmentId, shiftAssignments.id),
-        )
-        .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
-        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
-        .innerJoin(posts, eq(shifts.postId, posts.id))
-        .innerJoin(sites, eq(posts.siteId, sites.id))
-        .innerJoin(clients, eq(sites.clientId, clients.id))
-        .where(eq(handoffs.id, id))
-        .limit(1);
-      return handoffDto(created[0]!);
-    });
   }
 }

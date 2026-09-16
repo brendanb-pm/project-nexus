@@ -17,7 +17,6 @@ import type {
   ActivityContext,
   NewActivity,
   NewIncident,
-  NewHandoff,
   ReportingRepository,
   ReportingScope,
 } from "@/features/reporting/repository";
@@ -199,34 +198,6 @@ class Repo implements ReportingRepository {
   }
   async listReviewHandoffs() {
     return this.handoffs;
-  }
-  async createHandoff(
-    _scope: ReportingScope,
-    value: ActivityContext,
-    input: NewHandoff,
-    audit: AuditContext,
-  ) {
-    const existing = this.handoffs.find(
-      (handoff) => handoff.submissionKey === input.submissionKey,
-    );
-    if (existing) return existing;
-    const handoff = {
-      id: `handoff-${this.handoffs.length + 1}`,
-      shiftAssignmentId: value.id,
-      siteName: value.siteName,
-      postName: value.postName,
-      unresolvedIssues: input.unresolvedIssues,
-      equipmentKeyStatus: input.equipmentKeyStatus,
-      followUpItems: input.followUpItems,
-      submittedAt: input.submittedAt,
-      status: "SUBMITTED" as const,
-      visibility: input.visibility,
-      createdAt: input.submittedAt,
-      submissionKey: input.submissionKey,
-      actorUserId: audit.actorUserId,
-    };
-    this.handoffs.push(handoff);
-    return handoff;
   }
 }
 async function subject(
@@ -426,78 +397,6 @@ describe("NX-3.1 activity reporting", () => {
         actionsTaken: "None",
         visibility: "RESTRICTED",
         submissionKey: "restricted-visibility",
-      }),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
-  });
-});
-
-describe("NX-3.4 end-of-shift handoffs", () => {
-  it("submits an idempotent handoff from trusted assignment context", async () => {
-    const { repo, request } = await subject();
-    const service = new ReportingService(
-      new AuthorizedDataAccess(request),
-      repo,
-      () => new Date("2026-08-29T12:00:00.000Z"),
-    );
-    const input = {
-      shiftAssignmentId: "assignment-1",
-      unresolvedIssues: "Door closer needs service\nVisitor log is low",
-      equipmentKeyStatus: "Two radios charging; lobby key secured.",
-      followUpItems: "Notify facilities",
-      submissionKey: "handoff-retry",
-    };
-    const first = await service.createHandoff(input);
-    const second = await service.createHandoff(input);
-    expect(repo.handoffs).toHaveLength(1);
-    expect(first.id).toBe(second.id);
-    expect(first).toMatchObject({
-      shiftAssignmentId: "assignment-1",
-      status: "SUBMITTED",
-      unresolvedIssues: ["Door closer needs service", "Visitor log is low"],
-      actorUserId: "user-1",
-    });
-  });
-
-  it("denies a client user, forged employee, cross-organization, and restricted handoff", async () => {
-    const client = await subject("employee-1", "CLIENT_USER");
-    await expect(
-      new ReportingService(
-        new AuthorizedDataAccess(client.request),
-        client.repo,
-      ).createHandoff({
-        shiftAssignmentId: "assignment-1",
-        submissionKey: "client-handoff",
-      }),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
-    const forged = await subject("employee-2");
-    await expect(
-      new ReportingService(
-        new AuthorizedDataAccess(forged.request),
-        forged.repo,
-      ).createHandoff({
-        shiftAssignmentId: "assignment-1",
-        submissionKey: "forged-handoff",
-      }),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
-    const crossOrg = await subject("employee-1", "GUARD", "org-2");
-    await expect(
-      new ReportingService(
-        new AuthorizedDataAccess(crossOrg.request),
-        crossOrg.repo,
-      ).createHandoff({
-        shiftAssignmentId: "assignment-1",
-        submissionKey: "cross-org-handoff",
-      }),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
-    const guard = await subject();
-    await expect(
-      new ReportingService(
-        new AuthorizedDataAccess(guard.request),
-        guard.repo,
-      ).createHandoff({
-        shiftAssignmentId: "assignment-1",
-        visibility: "RESTRICTED",
-        submissionKey: "restricted-handoff",
       }),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
