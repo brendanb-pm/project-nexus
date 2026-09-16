@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { NexusDatabase } from "@/server/db/client";
 import {
@@ -556,6 +556,45 @@ export class PostgresReportingRepository implements ReportingRepository {
       scheduledEnd: row.scheduledEnd.toISOString(),
     };
   }
+  async getActiveAssignment(
+    scope: ReportingScope,
+    employeeId: string,
+    at: string,
+  ) {
+    const instant = new Date(at);
+    const rows = await this.database
+      .select({
+        id: shiftAssignments.id,
+        siteName: sites.name,
+        postName: posts.name,
+        scheduledStart: shifts.scheduledStart,
+        scheduledEnd: shifts.scheduledEnd,
+      })
+      .from(shiftAssignments)
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(
+          scopePredicate(scope),
+          eq(shiftAssignments.employeeId, employeeId),
+          inArray(shiftAssignments.status, ["assigned", "confirmed"]),
+          lte(shifts.scheduledStart, instant),
+          gte(shifts.scheduledEnd, instant),
+        ),
+      )
+      .orderBy(desc(shifts.scheduledStart), asc(shiftAssignments.id))
+      .limit(1);
+    const row = rows[0];
+    return row
+      ? {
+          ...row,
+          scheduledStart: row.scheduledStart.toISOString(),
+          scheduledEnd: row.scheduledEnd.toISOString(),
+        }
+      : null;
+  }
   async listRecent(scope: ReportingScope, employeeId: string, limit: number) {
     const rows = await this.database
       .select(fields)
@@ -571,6 +610,35 @@ export class PostgresReportingRepository implements ReportingRepository {
       .innerJoin(clients, eq(sites.clientId, clients.id))
       .where(
         and(scopePredicate(scope), eq(shiftAssignments.employeeId, employeeId)),
+      )
+      .orderBy(desc(activityEntries.occurredAt), desc(activityEntries.id))
+      .limit(limit);
+    return rows.map(dto);
+  }
+  async listAssignmentActivities(
+    scope: ReportingScope,
+    employeeId: string,
+    assignmentId: string,
+    limit: number,
+  ) {
+    const rows = await this.database
+      .select(fields)
+      .from(activityEntries)
+      .innerJoin(
+        shiftAssignments,
+        eq(activityEntries.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(
+          scopePredicate(scope),
+          eq(shiftAssignments.employeeId, employeeId),
+          eq(shiftAssignments.id, assignmentId),
+        ),
       )
       .orderBy(desc(activityEntries.occurredAt), desc(activityEntries.id))
       .limit(limit);
@@ -708,6 +776,38 @@ export class PostgresReportingRepository implements ReportingRepository {
       .innerJoin(clients, eq(sites.clientId, clients.id))
       .where(
         and(scopePredicate(scope), eq(shiftAssignments.employeeId, employeeId)),
+      )
+      .orderBy(desc(incidentReports.occurredAt), desc(incidentReports.id))
+      .limit(limit);
+    return rows.map(incidentDto);
+  }
+  async listAssignmentIncidents(
+    scope: ReportingScope,
+    employeeId: string,
+    assignmentId: string,
+    limit: number,
+  ) {
+    const rows = await this.database
+      .select(incidentFields)
+      .from(incidentReports)
+      .innerJoin(
+        shiftAssignments,
+        eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+      )
+      .leftJoin(
+        employees,
+        eq(incidentReports.reportedByUserId, employees.userId),
+      )
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(
+        and(
+          scopePredicate(scope),
+          eq(shiftAssignments.employeeId, employeeId),
+          eq(shiftAssignments.id, assignmentId),
+        ),
       )
       .orderBy(desc(incidentReports.occurredAt), desc(incidentReports.id))
       .limit(limit);

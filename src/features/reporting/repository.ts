@@ -81,6 +81,11 @@ export interface ReportingRepository {
     employeeId: string,
     limit: number,
   ): Promise<readonly ActivityAssignment[]>;
+  getActiveAssignment(
+    scope: ReportingScope,
+    employeeId: string,
+    at: string,
+  ): Promise<ActivityAssignment | null>;
   getActivityContext(
     scope: ReportingScope,
     assignmentId: string,
@@ -88,6 +93,12 @@ export interface ReportingRepository {
   listRecent(
     scope: ReportingScope,
     employeeId: string,
+    limit: number,
+  ): Promise<readonly ActivityEntrySummary[]>;
+  listAssignmentActivities(
+    scope: ReportingScope,
+    employeeId: string,
+    assignmentId: string,
     limit: number,
   ): Promise<readonly ActivityEntrySummary[]>;
   listReviewActivities(
@@ -104,6 +115,12 @@ export interface ReportingRepository {
   listOwnIncidents(
     scope: ReportingScope,
     employeeId: string,
+    limit: number,
+  ): Promise<readonly IncidentReportSummary[]>;
+  listAssignmentIncidents(
+    scope: ReportingScope,
+    employeeId: string,
+    assignmentId: string,
     limit: number,
   ): Promise<readonly IncidentReportSummary[]>;
   listIncidents(

@@ -11,33 +11,24 @@ export async function loadReportingPage(
   try {
     const service = await serviceOrPromise;
     if (service.canReview()) {
-      const [recent, incidents, handoffs] = await Promise.all([
-        service.listAuthorizedActivities(),
-        service.listAuthorizedIncidents(),
-        service.listAuthorizedHandoffs(),
-      ]);
       return {
         kind: "ready",
         assignments: [],
-        recent,
-        incidents,
-        handoffs,
+        recent: [],
+        incidents: [],
+        handoffs: [],
         reviewEnabled: true,
       };
     }
     try {
-      const [assignments, recent, incidents, handoffs] = await Promise.all([
-        service.listOwnAssignments(),
-        service.listOwnRecent(),
-        service.listOwnIncidents(),
-        service.listOwnHandoffs(),
-      ]);
+      const shiftReport = await service.getOwnActiveShiftReport();
       return {
         kind: "ready",
-        assignments,
-        recent,
-        incidents,
-        handoffs,
+        assignments: shiftReport.assignment ? [shiftReport.assignment] : [],
+        recent: shiftReport.timeline,
+        incidents: shiftReport.incidents,
+        handoffs: [],
+        timelineHasMore: shiftReport.timelineHasMore,
         reviewEnabled: service.canReview(),
       };
     } catch (error) {

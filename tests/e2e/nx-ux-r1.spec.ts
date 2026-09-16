@@ -14,12 +14,14 @@ test("walks Guard home and report choices through the rendered navigation", asyn
   ).toBeVisible();
   await page.getByRole("link", { name: "Report", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Report", exact: true }),
+    page.getByRole("heading", { name: "Your active Shift Report" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Activity / DAR" }),
+    page.getByRole("button", { name: /Add activity/ }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Incident" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "File Security Incident" }),
+  ).toBeVisible();
   await page
     .getByRole("navigation", { name: "Guard navigation" })
     .getByRole("link", { name: "More", exact: true })
