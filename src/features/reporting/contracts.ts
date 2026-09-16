@@ -203,6 +203,14 @@ export type CreateActivityInput = {
   submissionKey: unknown;
 };
 
+export type CreateActivityResult =
+  | { kind: "confirmed"; entry: ActivityEntrySummary }
+  | {
+      kind: "validation-error";
+      fieldErrors: Readonly<Record<string, readonly string[]>>;
+    }
+  | { kind: "rejected"; message: string };
+
 export type CreateIncidentInput = {
   shiftAssignmentId: unknown;
   originatingActivityEntryId?: unknown;
@@ -226,6 +234,7 @@ export type ReportingPageState =
       recent: readonly ActivityEntrySummary[];
       incidents: readonly IncidentReportSummary[];
       handoffs: readonly HandoffSummary[];
+      timelineHasMore?: boolean;
       reviewEnabled?: boolean;
     };
 

@@ -3,26 +3,53 @@ import { revalidatePath } from "next/cache";
 import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
 import { createReportingService } from "@/features/reporting/server";
 import { measureServerAction } from "@/server/performance/telemetry";
-export async function createActivity(form: FormData) {
+import {
+  AuthenticationRequiredError,
+  InvariantViolationError,
+  PermissionDeniedError,
+  ResourceNotFoundError,
+  ValidationError,
+} from "@/server/request/errors";
+import type { CreateActivityResult } from "@/features/reporting/contracts";
+export async function createActivity(
+  form: FormData,
+): Promise<CreateActivityResult> {
   return measureServerAction("reporting.create-activity", async () => {
-    const entry = await (
-      await createReportingService(
-        await createProductionPrincipalResolver(),
-        "reporting.create-activity",
+    try {
+      const entry = await (
+        await createReportingService(
+          await createProductionPrincipalResolver(),
+          "reporting.create-activity",
+        )
+      ).createActivity({
+        shiftAssignmentId: form.get("shiftAssignmentId"),
+        category: form.get("category"),
+        occurredAt: form.get("occurredAt"),
+        locationContext: form.get("locationContext"),
+        narrative: form.get("narrative"),
+        actionTaken: form.get("actionTaken"),
+        followUpRequired: form.get("followUpRequired"),
+        visibility: form.get("visibility"),
+        submissionKey: form.get("submissionKey"),
+      });
+      revalidatePath("/reporting");
+      return { kind: "confirmed", entry };
+    } catch (error) {
+      if (error instanceof ValidationError)
+        return { kind: "validation-error", fieldErrors: error.fieldErrors };
+      if (
+        error instanceof AuthenticationRequiredError ||
+        error instanceof PermissionDeniedError ||
+        error instanceof ResourceNotFoundError ||
+        error instanceof InvariantViolationError
       )
-    ).createActivity({
-      shiftAssignmentId: form.get("shiftAssignmentId"),
-      category: form.get("category"),
-      occurredAt: form.get("occurredAt"),
-      locationContext: form.get("locationContext"),
-      narrative: form.get("narrative"),
-      actionTaken: form.get("actionTaken"),
-      followUpRequired: form.get("followUpRequired"),
-      visibility: form.get("visibility"),
-      submissionKey: form.get("submissionKey"),
-    });
-    revalidatePath("/reporting");
-    return entry;
+        return {
+          kind: "rejected",
+          message:
+            "This activity could not be recorded for the current assignment. Refresh the Shift Report and try again.",
+        };
+      throw error;
+    }
   });
 }
 

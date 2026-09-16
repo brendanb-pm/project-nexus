@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AuthorizedDataAccess } from "@/server/request/boundary";
 import { createAuthenticatedRequestContext } from "@/server/request/context";
 import {
@@ -44,6 +44,15 @@ class Repo implements ReportingRepository {
     HandoffSummary & { submissionKey: string; actorUserId: string }
   > = [];
   revisions = new Map<string, ReviewRecord>();
+  private inScope(scope: ReportingScope) {
+    return (
+      scope.organizationId === context.organizationId &&
+      (scope.organizationWide ||
+        scope.branchIds.includes(context.branchId) ||
+        scope.clientIds.includes(context.clientId) ||
+        scope.siteIds.includes(context.siteId))
+    );
+  }
   async getReviewRecord(
     _scope: ReportingScope,
     entityType: "ActivityEntry" | "IncidentReport" | "Handoff",
@@ -103,11 +112,40 @@ class Repo implements ReportingRepository {
   async listOwnAssignments() {
     return [context];
   }
+  async getActiveAssignment(
+    scope: ReportingScope,
+    employeeId: string,
+    at: string,
+  ) {
+    const instant = new Date(at);
+    return this.inScope(scope) &&
+      employeeId === context.employeeId &&
+      instant >= new Date(context.scheduledStart) &&
+      instant <= new Date(context.scheduledEnd)
+      ? context
+      : null;
+  }
   async getActivityContext(_scope: ReportingScope, id: string) {
     return id === context.id ? context : null;
   }
   async listRecent() {
     return this.entries;
+  }
+  async listAssignmentActivities(
+    scope: ReportingScope,
+    employeeId: string,
+    assignmentId: string,
+    limit: number,
+  ) {
+    return this.entries
+      .filter(
+        (entry) =>
+          this.inScope(scope) &&
+          employeeId === context.employeeId &&
+          entry.shiftAssignmentId === assignmentId,
+      )
+      .toReversed()
+      .slice(0, limit);
   }
   async listReviewActivities() {
     return this.entries;
@@ -146,6 +184,21 @@ class Repo implements ReportingRepository {
   }
   async listOwnIncidents() {
     return this.incidents;
+  }
+  async listAssignmentIncidents(
+    scope: ReportingScope,
+    employeeId: string,
+    assignmentId: string,
+    limit: number,
+  ) {
+    return this.incidents
+      .filter(
+        (incident) =>
+          this.inScope(scope) &&
+          employeeId === context.employeeId &&
+          incident.shiftAssignmentId === assignmentId,
+      )
+      .slice(0, limit);
   }
   async listIncidents() {
     return this.incidents;
@@ -204,6 +257,7 @@ async function subject(
   employeeId = "employee-1",
   role: "GUARD" | "CLIENT_USER" = "GUARD",
   organizationId = "org-1",
+  siteIds: readonly string[] = ["site-1"],
 ) {
   const request = await createAuthenticatedRequestContext(
     {
@@ -214,7 +268,7 @@ async function subject(
           roles: [role],
           branchIds: [],
           clientIds: [],
-          siteIds: ["site-1"],
+          siteIds,
           employeeId,
         },
       }),
@@ -224,6 +278,117 @@ async function subject(
   return { repo: new Repo(), request };
 }
 describe("NX-3.1 activity reporting", () => {
+  it("loads one bounded active Shift Report timeline in chronological order", async () => {
+    const { repo, request } = await subject();
+    const activeAssignment = vi.spyOn(repo, "getActiveAssignment");
+    const activities = vi.spyOn(repo, "listAssignmentActivities");
+    const incidents = vi.spyOn(repo, "listAssignmentIncidents");
+    repo.entries.push(
+      {
+        id: "activity-1",
+        shiftAssignmentId: "assignment-1",
+        siteName: "Cedar",
+        postName: "Lobby",
+        occurredAt: "2026-08-29T09:00:00.000Z",
+        category: "OBSERVATION",
+        narrative: "First",
+        followUpRequired: false,
+        visibility: "INTERNAL",
+        status: "SUBMITTED",
+        createdAt: "2026-08-29T09:00:00.000Z",
+        submissionKey: "first",
+        incidentGate: "ROUTINE",
+      },
+      {
+        id: "activity-2",
+        shiftAssignmentId: "assignment-1",
+        siteName: "Cedar",
+        postName: "Lobby",
+        occurredAt: "2026-08-29T10:00:00.000Z",
+        category: "SAFETY_CHECK",
+        narrative: "Second",
+        followUpRequired: false,
+        visibility: "INTERNAL",
+        status: "SUBMITTED",
+        createdAt: "2026-08-29T10:00:00.000Z",
+        submissionKey: "second",
+        incidentGate: "ROUTINE",
+      },
+    );
+    const result = await new ReportingService(
+      new AuthorizedDataAccess(request),
+      repo,
+      () => new Date("2026-08-29T12:00:00.000Z"),
+    ).getOwnActiveShiftReport(1);
+    expect(result.assignment?.id).toBe("assignment-1");
+    expect(result.timeline.map((entry) => entry.id)).toEqual(["activity-2"]);
+    expect(result.timelineHasMore).toBe(true);
+    expect(activeAssignment).toHaveBeenCalledTimes(1);
+    expect(activities).toHaveBeenCalledWith(
+      expect.any(Object),
+      "employee-1",
+      "assignment-1",
+      2,
+    );
+    expect(incidents).toHaveBeenCalledWith(
+      expect.any(Object),
+      "employee-1",
+      "assignment-1",
+      25,
+    );
+  });
+
+  it("does not expose an active assignment or timeline across employee, tenant, or site scope", async () => {
+    for (const { employeeId, organizationId, siteIds } of [
+      {
+        employeeId: "employee-2",
+        organizationId: "org-1",
+        siteIds: ["site-1"],
+      },
+      {
+        employeeId: "employee-1",
+        organizationId: "org-2",
+        siteIds: ["site-1"],
+      },
+      {
+        employeeId: "employee-1",
+        organizationId: "org-1",
+        siteIds: ["site-2"],
+      },
+    ]) {
+      const { repo, request } = await subject(
+        employeeId,
+        "GUARD",
+        organizationId,
+        siteIds,
+      );
+      repo.entries.push({
+        id: "protected-activity",
+        shiftAssignmentId: context.id,
+        siteName: context.siteName,
+        postName: context.postName,
+        occurredAt: "2026-08-29T10:00:00.000Z",
+        category: "OBSERVATION",
+        narrative: "Must remain scoped",
+        followUpRequired: false,
+        visibility: "INTERNAL",
+        status: "SUBMITTED",
+        createdAt: "2026-08-29T10:00:00.000Z",
+        submissionKey: "protected",
+        incidentGate: "ROUTINE",
+      });
+      const result = await new ReportingService(
+        new AuthorizedDataAccess(request),
+        repo,
+        () => new Date("2026-08-29T12:00:00.000Z"),
+      ).getOwnActiveShiftReport();
+      expect(result).toMatchObject({
+        assignment: null,
+        timeline: [],
+        incidents: [],
+      });
+    }
+  });
   it("derives authoritative assignment context and deduplicates safe retry", async () => {
     const { repo, request } = await subject();
     const service = new ReportingService(
