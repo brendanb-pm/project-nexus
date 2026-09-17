@@ -8,6 +8,7 @@ import {
   clients,
   employees,
   incidentReports,
+  incidentParticipants,
   handoffs,
   operationalRecordRevisions,
   posts,
@@ -21,7 +22,9 @@ import type {
   HandoffSummary,
   ReviewRecord,
   IncidentReportSummary,
+  IncidentParticipantRead,
 } from "./contracts";
+import { incidentParticipantTypes } from "./contracts";
 import { incidentGateFor } from "./incident-gate";
 import type {
   ActivityContext,
@@ -352,6 +355,40 @@ export class PostgresReportingRepository implements ReportingRepository {
       )
       .orderBy(desc(operationalRecordRevisions.revision))
       .limit(Math.min(historyLimit, 100));
+    const participants =
+      entityType === "IncidentReport"
+        ? await this.database
+            .select({
+              type: incidentParticipants.participantType,
+              name: incidentParticipants.name,
+              details: incidentParticipants.details,
+              createdAt: incidentParticipants.createdAt,
+            })
+            .from(incidentParticipants)
+            .where(eq(incidentParticipants.incidentReportId, id))
+            .orderBy(
+              asc(incidentParticipants.createdAt),
+              asc(incidentParticipants.id),
+            )
+        : [];
+    const participantSnapshot = participants.map((item) => {
+      const details =
+        item.details && typeof item.details === "object"
+          ? (item.details as Record<string, unknown>)
+          : {};
+      return {
+        ...details,
+        type: item.type,
+        legacy: !incidentParticipantTypes.includes(
+          item.type as (typeof incidentParticipantTypes)[number],
+        ),
+        ...(item.name
+          ? item.type === "AGENCY"
+            ? { agencyName: item.name }
+            : { displayName: item.name }
+          : {}),
+      } as IncidentParticipantRead;
+    });
     return {
       entityType,
       id: row.id,
@@ -370,7 +407,9 @@ export class PostgresReportingRepository implements ReportingRepository {
         ? { acknowledgedAt: row.acknowledgedAt.toISOString() }
         : {}),
       revision: historyRows[0]?.revision ?? 0,
-      snapshot: {},
+      snapshot: participantSnapshot.length
+        ? { participants: participantSnapshot }
+        : {},
       history: historyRows
         .slice()
         .reverse()
@@ -921,8 +960,57 @@ export class PostgresReportingRepository implements ReportingRepository {
           visibility: input.visibility,
           submissionKey: input.submissionKey,
         })
+        .onConflictDoNothing({
+          target: [
+            incidentReports.shiftAssignmentId,
+            incidentReports.submissionKey,
+          ],
+        })
         .returning({ id: incidentReports.id });
-      const id = inserted[0]!.id;
+      if (!inserted[0]) {
+        const replay = await tx
+          .select(incidentFields)
+          .from(incidentReports)
+          .innerJoin(
+            shiftAssignments,
+            eq(incidentReports.shiftAssignmentId, shiftAssignments.id),
+          )
+          .leftJoin(
+            employees,
+            eq(incidentReports.reportedByUserId, employees.userId),
+          )
+          .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+          .innerJoin(posts, eq(shifts.postId, posts.id))
+          .innerJoin(sites, eq(posts.siteId, sites.id))
+          .innerJoin(clients, eq(sites.clientId, clients.id))
+          .where(
+            and(
+              scopePredicate(scope),
+              eq(incidentReports.shiftAssignmentId, context.id),
+              eq(incidentReports.submissionKey, input.submissionKey),
+            ),
+          )
+          .limit(1);
+        if (!replay[0])
+          throw new Error("Incident replay could not be resolved.");
+        return incidentDto(replay[0]);
+      }
+      const id = inserted[0].id;
+      await tx.insert(incidentParticipants).values(
+        input.participants.map((participant) => ({
+          incidentReportId: id,
+          participantType: participant.type,
+          name:
+            participant.type === "AGENCY"
+              ? participant.agencyName
+              : participant.displayName,
+          details: {
+            ...participant,
+            displayName: undefined,
+            agencyName: undefined,
+          },
+        })),
+      );
       await tx.insert(auditEvents).values({
         organizationId: audit.organizationId,
         actorUserId: audit.actorUserId,
@@ -937,6 +1025,7 @@ export class PostgresReportingRepository implements ReportingRepository {
           classification: input.classification,
           severity: input.severity,
           visibility: input.visibility,
+          participantCount: input.participants.length,
         },
       });
       const created = await tx
@@ -956,7 +1045,7 @@ export class PostgresReportingRepository implements ReportingRepository {
         .innerJoin(clients, eq(sites.clientId, clients.id))
         .where(eq(incidentReports.id, id))
         .limit(1);
-      return incidentDto(created[0]!);
+      return { ...incidentDto(created[0]!), participants: input.participants };
     });
   }
   async listOwnHandoffs(

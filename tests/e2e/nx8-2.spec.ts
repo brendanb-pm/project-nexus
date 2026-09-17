@@ -7,11 +7,16 @@ test.afterEach(async () => {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL is required.");
   const url = new URL(databaseUrl);
+  const isolatedTestTarget =
+    process.env.NEXUS_ISOLATED_TEST_DATABASE === "true" &&
+    /^\/nexus_[a-z0-9_]+_test$/.test(url.pathname);
   if (
     !["localhost", "127.0.0.1"].includes(url.hostname) ||
-    url.pathname !== "/nexus_demo"
+    (url.pathname !== "/nexus_demo" && !isolatedTestTarget)
   )
-    throw new Error("NX-8.2 E2E cleanup requires the local demo database.");
+    throw new Error(
+      "NX-8.2 E2E cleanup requires a marked local test database.",
+    );
   const pool = new Pool({ connectionString: databaseUrl });
   try {
     await pool.query(

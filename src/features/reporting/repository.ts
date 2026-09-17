@@ -7,6 +7,7 @@ import type {
   IncidentClassification,
   IncidentReportSummary,
   IncidentSeverity,
+  IncidentParticipant,
   HandoffSummary,
   ReviewRecord,
 } from "./contracts";
@@ -48,6 +49,7 @@ export type NewIncident = {
   emergencyServiceInvolvement: boolean;
   externalReportNumber?: string;
   visibility: VisibilityClassification;
+  participants: readonly IncidentParticipant[];
   submissionKey: string;
 };
 

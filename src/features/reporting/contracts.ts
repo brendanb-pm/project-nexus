@@ -56,6 +56,40 @@ export const incidentSeverities = [
 ] as const;
 export type IncidentSeverity = (typeof incidentSeverities)[number];
 
+export const incidentParticipantTypes = [
+  "SUBJECT",
+  "WITNESS",
+  "AGENCY",
+  "OTHER",
+] as const;
+export type IncidentParticipantType = (typeof incidentParticipantTypes)[number];
+export const participantIdentityStates = [
+  "IDENTIFIED",
+  "UNIDENTIFIED",
+  "DECLINED_TO_IDENTIFY",
+] as const;
+export type ParticipantIdentityState =
+  (typeof participantIdentityStates)[number];
+export type IncidentParticipant = {
+  type: IncidentParticipantType;
+  identityState?: ParticipantIdentityState;
+  displayName?: string;
+  descriptiveIdentifier?: string;
+  involvementSummary: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  contactInformationStatus?: string;
+  relationshipLabel?: string;
+  agencyName?: string;
+  representativeName?: string;
+  badgeOrEmployeeIdentifier?: string;
+  agencyCaseNumber?: string;
+};
+export type IncidentParticipantRead = Omit<IncidentParticipant, "type"> & {
+  type: string;
+  legacy: boolean;
+};
+
 export type IncidentReportSummary = {
   id: string;
   shiftAssignmentId: string;
@@ -70,6 +104,8 @@ export type IncidentReportSummary = {
   actionsTaken: string;
   emergencyServiceInvolvement: boolean;
   externalReportNumber?: string;
+  /** Omitted from client-visible projections and absent on legacy rows. */
+  participants?: readonly IncidentParticipant[];
   status: "SUBMITTED";
   visibility: VisibilityClassification;
   createdAt: string;
@@ -222,6 +258,7 @@ export type CreateIncidentInput = {
   emergencyServiceInvolvement?: unknown;
   externalReportNumber?: unknown;
   visibility?: unknown;
+  participants: unknown;
   submissionKey: unknown;
 };
 

@@ -4,6 +4,7 @@ import { createAuthenticatedRequestContext } from "@/server/request/context";
 import {
   PermissionDeniedError,
   ResourceNotFoundError,
+  ValidationError,
 } from "@/server/request/errors";
 import { ReportingService } from "@/features/reporting/service";
 import type {
@@ -35,6 +36,14 @@ const context: ActivityContext = {
   scheduledStart: "2026-08-29T00:00:00.000Z",
   scheduledEnd: "2026-08-30T00:00:00.000Z",
 };
+const approvedParticipants = [
+  {
+    type: "SUBJECT",
+    identityState: "UNIDENTIFIED",
+    descriptiveIdentifier: "Person in a dark jacket near the east entrance",
+    involvementSummary: "Attempted entry through the secured east entrance.",
+  },
+] as const;
 class Repo implements ReportingRepository {
   entries: Array<ActivityEntrySummary & { submissionKey: string }> = [];
   incidents: Array<
@@ -236,6 +245,7 @@ class Repo implements ReportingRepository {
       emergencyServiceInvolvement: input.emergencyServiceInvolvement,
       status: "SUBMITTED" as const,
       visibility: input.visibility,
+      participants: input.participants,
       createdAt: input.occurredAt,
       submissionKey: input.submissionKey,
       reportedByUserId: audit.actorUserId,
@@ -486,6 +496,7 @@ describe("NX-3.1 activity reporting", () => {
       narrative: "Unauthorized entry attempted.",
       actionsTaken: "Denied entry and notified supervision.",
       visibility: "INTERNAL",
+      participants: approvedParticipants,
       submissionKey: "incident-retry-key",
     };
     const first = await service.createIncident(input);
@@ -497,6 +508,89 @@ describe("NX-3.1 activity reporting", () => {
       reportedByUserId: "user-1",
       status: "SUBMITTED",
     });
+  });
+
+  it("requires participants and rejects participant types outside the Product Owner allowlist", async () => {
+    const { repo, request } = await subject();
+    const service = new ReportingService(
+      new AuthorizedDataAccess(request),
+      repo,
+      () => new Date("2026-08-29T12:00:00.000Z"),
+    );
+    const base = {
+      shiftAssignmentId: "assignment-1",
+      classification: "SECURITY",
+      severity: "LOW",
+      narrative: "Incident detail",
+      actionsTaken: "Secured the area",
+      submissionKey: "participant-validation",
+    };
+    await expect(
+      service.createIncident({ ...base, participants: [] }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      service.createIncident({
+        ...base,
+        participants: [
+          {
+            type: "VICTIM",
+            identityState: "IDENTIFIED",
+            displayName: "A Person",
+            involvementSummary: "Reported the event.",
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(repo.incidents).toHaveLength(0);
+  });
+
+  it("accepts an unidentified subject without a fabricated name and enforces OTHER and AGENCY fields", async () => {
+    const { repo, request } = await subject();
+    const service = new ReportingService(
+      new AuthorizedDataAccess(request),
+      repo,
+      () => new Date("2026-08-29T12:00:00.000Z"),
+    );
+    await service.createIncident({
+      shiftAssignmentId: "assignment-1",
+      classification: "SECURITY",
+      severity: "LOW",
+      narrative: "Unidentified person attempted entry.",
+      actionsTaken: "Entry denied.",
+      participants: approvedParticipants,
+      submissionKey: "unidentified-subject",
+    });
+    expect(repo.incidents[0]?.participants?.[0]).toMatchObject({
+      type: "SUBJECT",
+      identityState: "UNIDENTIFIED",
+    });
+    for (const participants of [
+      [
+        {
+          type: "OTHER",
+          identityState: "IDENTIFIED",
+          displayName: "Resident",
+          involvementSummary: "Provided access context.",
+        },
+      ],
+      [
+        {
+          type: "AGENCY",
+          involvementSummary: "Responded to the scene.",
+        },
+      ],
+    ])
+      await expect(
+        service.createIncident({
+          shiftAssignmentId: "assignment-1",
+          classification: "SECURITY",
+          severity: "LOW",
+          narrative: "Validation case.",
+          actionsTaken: "Documented response.",
+          participants,
+          submissionKey: `invalid-${participants[0]!.type}`,
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("denies client mutation and an originating activity from another assignment", async () => {
@@ -511,6 +605,7 @@ describe("NX-3.1 activity reporting", () => {
         severity: "LOW",
         narrative: "Forbidden",
         actionsTaken: "None",
+        participants: approvedParticipants,
         submissionKey: "client-incident",
       }),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
@@ -527,6 +622,7 @@ describe("NX-3.1 activity reporting", () => {
         severity: "LOW",
         narrative: "Wrong activity",
         actionsTaken: "None",
+        participants: approvedParticipants,
         submissionKey: "wrong-activity",
       }),
     ).rejects.toBeInstanceOf(ResourceNotFoundError);
@@ -545,6 +641,7 @@ describe("NX-3.1 activity reporting", () => {
         severity: "LOW",
         narrative: "Cross organization",
         actionsTaken: "None",
+        participants: approvedParticipants,
         submissionKey: "cross-organization",
       }),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
@@ -561,6 +658,7 @@ describe("NX-3.1 activity reporting", () => {
         narrative: "Restricted visibility",
         actionsTaken: "None",
         visibility: "RESTRICTED",
+        participants: approvedParticipants,
         submissionKey: "restricted-visibility",
       }),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
