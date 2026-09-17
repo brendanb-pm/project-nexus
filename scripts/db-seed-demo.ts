@@ -5,12 +5,15 @@ function localDemoDatabaseUrl() {
   const value = process.env.DATABASE_URL;
   if (!value) throw new Error("DATABASE_URL is required.");
   const url = new URL(value);
+  const isolatedTestTarget =
+    process.env.NEXUS_ISOLATED_TEST_DATABASE === "true" &&
+    /^\/nexus_[a-z0-9_]+_test$/.test(url.pathname);
   if (
     !["localhost", "127.0.0.1"].includes(url.hostname) ||
-    url.pathname !== "/nexus_demo"
+    (url.pathname !== "/nexus_demo" && !isolatedTestTarget)
   )
     throw new Error(
-      "Demo seed refuses non-local or non-nexus_demo DATABASE_URL targets.",
+      "Demo seed refuses non-local, shared, or unmarked test DATABASE_URL targets.",
     );
   return value;
 }

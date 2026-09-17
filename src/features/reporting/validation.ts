@@ -3,8 +3,11 @@ import {
   activityCategories,
   incidentClassifications,
   incidentSeverities,
+  incidentParticipantTypes,
+  participantIdentityStates,
   type CreateActivityInput,
   type CreateIncidentInput,
+  type IncidentParticipant,
   operationalRecordTypes,
   type AcknowledgeOperationalRecordInput,
   type AmendOperationalRecordInput,
@@ -113,6 +116,70 @@ export function validateIncident(input: CreateIncidentInput) {
   const submissionKey = string(input.submissionKey);
   const visibility = string(input.visibility) || "INTERNAL";
   const errors: Record<string, string[]> = {};
+  const participants = Array.isArray(input.participants)
+    ? input.participants
+    : [];
+  if (!participants.length)
+    errors.participants = ["Add at least one participant."];
+  const normalizedParticipants = participants.map((raw, index) => {
+    const item =
+      raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const type = string(item.type);
+    const identityState = string(item.identityState);
+    const displayName = string(item.displayName);
+    const descriptiveIdentifier = string(item.descriptiveIdentifier);
+    const involvementSummary = string(item.involvementSummary);
+    const relationshipLabel = string(item.relationshipLabel);
+    const agencyName = string(item.agencyName);
+    if (
+      !incidentParticipantTypes.includes(
+        type as (typeof incidentParticipantTypes)[number],
+      )
+    )
+      errors[`participants.${index}.type`] = [
+        "Choose an approved participant type.",
+      ];
+    if (!involvementSummary)
+      errors[`participants.${index}.involvementSummary`] = [
+        "Describe this participant's involvement.",
+      ];
+    if (type === "AGENCY") {
+      if (!agencyName)
+        errors[`participants.${index}.agencyName`] = [
+          "Provide the agency name.",
+        ];
+    } else {
+      if (
+        !participantIdentityStates.includes(
+          identityState as (typeof participantIdentityStates)[number],
+        )
+      )
+        errors[`participants.${index}.identityState`] = [
+          "Choose an identity state.",
+        ];
+      if (identityState === "IDENTIFIED" && !displayName)
+        errors[`participants.${index}.displayName`] = [
+          "Provide the identified participant's name.",
+        ];
+      if (identityState !== "IDENTIFIED" && !descriptiveIdentifier)
+        errors[`participants.${index}.descriptiveIdentifier`] = [
+          "Provide a bounded descriptive identifier.",
+        ];
+      if (type === "OTHER" && relationshipLabel.length < 2)
+        errors[`participants.${index}.relationshipLabel`] = [
+          "Provide a specific relationship label.",
+        ];
+    }
+    return {
+      type,
+      ...(identityState ? { identityState } : {}),
+      ...(displayName ? { displayName } : {}),
+      ...(descriptiveIdentifier ? { descriptiveIdentifier } : {}),
+      involvementSummary,
+      ...(relationshipLabel ? { relationshipLabel } : {}),
+      ...(agencyName ? { agencyName } : {}),
+    };
+  });
   if (
     !incidentClassifications.includes(
       classification as (typeof incidentClassifications)[number],
@@ -156,5 +223,6 @@ export function validateIncident(input: CreateIncidentInput) {
       input.emergencyServiceInvolvement === "true" ||
       input.emergencyServiceInvolvement === "on",
     externalReportNumber: string(input.externalReportNumber) || undefined,
+    participants: normalizedParticipants as IncidentParticipant[],
   };
 }

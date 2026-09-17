@@ -7,8 +7,28 @@ import type {
   ActivityEntrySummary,
   CreateActivityResult,
   IncidentReportSummary,
+  IncidentParticipantType,
   ReportingPageState,
 } from "@/features/reporting/contracts";
+
+type ParticipantDraft = {
+  type: IncidentParticipantType;
+  identityState: "IDENTIFIED" | "UNIDENTIFIED" | "DECLINED_TO_IDENTIFY";
+  displayName: string;
+  descriptiveIdentifier: string;
+  involvementSummary: string;
+  relationshipLabel: string;
+  agencyName: string;
+};
+const newParticipant = (): ParticipantDraft => ({
+  type: "SUBJECT",
+  identityState: "UNIDENTIFIED",
+  displayName: "",
+  descriptiveIdentifier: "",
+  involvementSummary: "",
+  relationshipLabel: "",
+  agencyName: "",
+});
 
 const panel = "rounded-2xl border border-white/10 bg-[var(--card)] p-4 md:p-6";
 const input =
@@ -51,6 +71,9 @@ export function ReportingWorkspace({
   );
   const [incidentMessage, setIncidentMessage] = useState("");
   const [submittingIncident, setSubmittingIncident] = useState(false);
+  const [participants, setParticipants] = useState<ParticipantDraft[]>([
+    newParticipant(),
+  ]);
 
   if (state.kind !== "ready")
     return (
@@ -142,6 +165,7 @@ export function ReportingWorkspace({
       const incident = await actions.createIncident(formData);
       setIncidents((current) => [incident, ...current]);
       setIncidentSubmissionKey(newIncidentSubmissionKey());
+      setParticipants([newParticipant()]);
       setIncidentMessage(
         `Security Incident ${incident.incidentNumber} confirmed.`,
       );
@@ -282,6 +306,11 @@ export function ReportingWorkspace({
                   value={incidentSubmissionKey}
                 />
                 <input name="visibility" type="hidden" value="INTERNAL" />
+                <input
+                  name="participants"
+                  type="hidden"
+                  value={JSON.stringify(participants)}
+                />
                 <label className="font-semibold">
                   Related activity{" "}
                   <span className="font-normal text-[var(--text-muted)]">
@@ -346,6 +375,199 @@ export function ReportingWorkspace({
                     rows={3}
                   />
                 </label>
+                <fieldset className="grid gap-3 rounded-xl border border-white/10 p-3">
+                  <legend className="px-1 font-semibold">Participants</legend>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Add at least one involved person, witness, agency, or other
+                    relevant participant. Do not enter unnecessary sensitive
+                    information.
+                  </p>
+                  {participants.map((participant, index) => (
+                    <div
+                      className="grid gap-3 rounded-xl border border-white/10 p-3"
+                      key={index}
+                    >
+                      <label className="font-semibold">
+                        Participant type
+                        <select
+                          aria-label={`Participant ${index + 1} type`}
+                          className={input}
+                          value={participant.type}
+                          onChange={(event) =>
+                            setParticipants((current) =>
+                              current.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...newParticipant(),
+                                      type: event.target
+                                        .value as IncidentParticipantType,
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }
+                        >
+                          <option value="SUBJECT">Subject</option>
+                          <option value="WITNESS">Witness</option>
+                          <option value="AGENCY">Agency</option>
+                          <option value="OTHER">Other</option>
+                        </select>
+                      </label>
+                      {participant.type === "AGENCY" ? (
+                        <label className="font-semibold">
+                          Agency name
+                          <input
+                            className={input}
+                            required
+                            value={participant.agencyName}
+                            onChange={(event) =>
+                              setParticipants((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        agencyName: event.target.value,
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                      ) : (
+                        <>
+                          <label className="font-semibold">
+                            Identity state
+                            <select
+                              className={input}
+                              value={participant.identityState}
+                              onChange={(event) =>
+                                setParticipants((current) =>
+                                  current.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? {
+                                          ...item,
+                                          identityState: event.target
+                                            .value as ParticipantDraft["identityState"],
+                                        }
+                                      : item,
+                                  ),
+                                )
+                              }
+                            >
+                              <option value="IDENTIFIED">Identified</option>
+                              <option value="UNIDENTIFIED">Unidentified</option>
+                              <option value="DECLINED_TO_IDENTIFY">
+                                Declined to identify
+                              </option>
+                            </select>
+                          </label>
+                          <label className="font-semibold">
+                            {participant.identityState === "IDENTIFIED"
+                              ? "Display name"
+                              : "Descriptive identifier"}
+                            <input
+                              className={input}
+                              required
+                              value={
+                                participant.identityState === "IDENTIFIED"
+                                  ? participant.displayName
+                                  : participant.descriptiveIdentifier
+                              }
+                              onChange={(event) =>
+                                setParticipants((current) =>
+                                  current.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? participant.identityState ===
+                                        "IDENTIFIED"
+                                        ? {
+                                            ...item,
+                                            displayName: event.target.value,
+                                          }
+                                        : {
+                                            ...item,
+                                            descriptiveIdentifier:
+                                              event.target.value,
+                                          }
+                                      : item,
+                                  ),
+                                )
+                              }
+                            />
+                          </label>
+                        </>
+                      )}
+                      {participant.type === "OTHER" ? (
+                        <label className="font-semibold">
+                          Relationship label
+                          <input
+                            className={input}
+                            required
+                            value={participant.relationshipLabel}
+                            onChange={(event) =>
+                              setParticipants((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        relationshipLabel: event.target.value,
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                      ) : null}
+                      <label className="font-semibold">
+                        Involvement summary
+                        <textarea
+                          className={`${input} min-h-20`}
+                          required
+                          value={participant.involvementSummary}
+                          onChange={(event) =>
+                            setParticipants((current) =>
+                              current.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      involvementSummary: event.target.value,
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
+                      <button
+                        className="min-h-12 justify-self-start rounded-xl border border-white/15 px-3 font-semibold disabled:opacity-50"
+                        disabled={participants.length === 1}
+                        type="button"
+                        onClick={() =>
+                          setParticipants((current) =>
+                            current.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
+                          )
+                        }
+                      >
+                        Remove participant
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    className="min-h-12 justify-self-start rounded-xl border border-white/15 px-3 font-semibold"
+                    type="button"
+                    onClick={() =>
+                      setParticipants((current) => [
+                        ...current,
+                        newParticipant(),
+                      ])
+                    }
+                  >
+                    Add participant
+                  </button>
+                </fieldset>
                 <label className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 px-3 font-semibold">
                   <input
                     className="h-5 w-5"

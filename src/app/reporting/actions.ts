@@ -55,6 +55,12 @@ export async function createActivity(
 
 export async function createIncident(form: FormData) {
   return measureServerAction("reporting.create-incident", async () => {
+    let participants: unknown = [];
+    try {
+      participants = JSON.parse(String(form.get("participants") || "[]"));
+    } catch {
+      participants = [];
+    }
     const incident = await (
       await createReportingService(
         await createProductionPrincipalResolver(),
@@ -71,6 +77,7 @@ export async function createIncident(form: FormData) {
       emergencyServiceInvolvement: form.get("emergencyServiceInvolvement"),
       externalReportNumber: form.get("externalReportNumber"),
       visibility: form.get("visibility"),
+      participants,
       submissionKey: form.get("submissionKey"),
     });
     revalidatePath("/reporting");

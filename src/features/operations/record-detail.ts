@@ -97,6 +97,28 @@ export async function loadOperationalRecordDetail(
               ? "Involved"
               : "Not involved",
           },
+          ...((
+            review.snapshot.participants as
+              Array<Record<string, unknown>> | undefined
+          )?.map((participant, index) => ({
+            label: `Participant ${index + 1}${participant.legacy ? " (legacy)" : ""}`,
+            value: [
+              String(participant.type ?? ""),
+              String(participant.identityState ?? ""),
+              String(
+                participant.displayName ??
+                  participant.descriptiveIdentifier ??
+                  participant.agencyName ??
+                  "",
+              ),
+              String(participant.involvementSummary ?? ""),
+              participant.relationshipLabel
+                ? `Relationship: ${String(participant.relationshipLabel)}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          })) ?? []),
         ],
         review,
       };
