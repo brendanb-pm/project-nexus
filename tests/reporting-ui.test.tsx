@@ -53,7 +53,7 @@ describe("NX-8.2 unified Shift Report activity workspace", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Closeout Shift Report" }),
-    ).toHaveAttribute("href", "/eosr");
+    ).toHaveAttribute("href", "#shift-closeout");
     expect(screen.queryByText(/Activity \/ DAR/)).not.toBeInTheDocument();
     expect(screen.queryByText(/EOSR/)).not.toBeInTheDocument();
   });

@@ -10,11 +10,14 @@ export function EndOfShiftReportForm({
   passdowns = [],
   submit,
   setPassdownDismissal,
+  embedded = false,
 }: {
   assignments: readonly ActivityAssignment[];
   passdowns?: readonly IncomingPassdown[];
   submit: (form: FormData) => Promise<unknown>;
   setPassdownDismissal: (form: FormData) => Promise<void>;
+  /** When rendered in Shift Report, EOSR is its closeout section, not a route-level product. */
+  embedded?: boolean;
 }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,7 +27,19 @@ export function EndOfShiftReportForm({
     setBusy(true);
     setMessage("Submitting end-of-shift report…");
     try {
-      await submit(form);
+      const result = await submit(form);
+      const outcome =
+        result && typeof result === "object" && "kind" in result
+          ? (result as { kind?: unknown; message?: unknown })
+          : { kind: "confirmed" };
+      if (outcome.kind !== "confirmed") {
+        setMessage(
+          typeof outcome.message === "string"
+            ? outcome.message
+            : "Your report was not submitted. Review the required shift summary and try again.",
+        );
+        return;
+      }
       setMessage(
         "End-of-shift report submitted. Your passdown is available to the incoming Guard.",
       );
@@ -44,7 +59,7 @@ export function EndOfShiftReportForm({
       />
       {!assignments.length ? (
         <section className="rounded-xl border border-white/10 bg-[var(--card)] p-5">
-          <h1 className="text-xl font-semibold">End-of-shift report</h1>
+          <h2 className="text-xl font-semibold">Shift closeout unavailable</h2>
           <p className="mt-2 text-[var(--text-muted)]">
             No authorized active assignment is available.
           </p>
@@ -56,7 +71,11 @@ export function EndOfShiftReportForm({
         >
           <div>
             <p className="text-sm text-[var(--text-muted)]">Shift close</p>
-            <h1 className="text-2xl font-semibold">End-of-shift report</h1>
+            {embedded ? (
+              <h2 className="text-2xl font-semibold">Shift closeout</h2>
+            ) : (
+              <h1 className="text-2xl font-semibold">Shift closeout</h1>
+            )}
             <p className="mt-1 text-sm text-[var(--text-muted)]">
               Submit one canonical close report. Passdown is included below; no
               separate new Handoff is required.

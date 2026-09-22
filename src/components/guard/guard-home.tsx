@@ -138,9 +138,9 @@ export function GuardHome({
         </Link>
         <Link
           className={panel + " min-h-32 hover:border-white/30"}
-          href="/eosr"
+          href="/reporting#shift-closeout"
         >
-          <strong>End-of-shift report</strong>
+          <strong>Closeout Shift Report</strong>
           <span className="mt-2 block text-sm text-[var(--text-muted)]">
             Complete passdown and shift close.
           </span>

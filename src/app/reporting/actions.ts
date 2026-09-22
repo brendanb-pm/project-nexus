@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createProductionPrincipalResolver } from "@/auth/principal-resolver";
 import { createReportingService } from "@/features/reporting/server";
+import { createEndOfShiftReportService } from "@/features/eosr/server";
 import { measureServerAction } from "@/server/performance/telemetry";
 import {
   AuthenticationRequiredError,
@@ -47,6 +48,51 @@ export async function createActivity(
           kind: "rejected",
           message:
             "This activity could not be recorded for the current assignment. Refresh the Shift Report and try again.",
+        };
+      throw error;
+    }
+  });
+}
+
+/** The canonical EOSR transaction, exposed only as the final Shift Report section. */
+export async function submitShiftCloseout(form: FormData) {
+  return measureServerAction("reporting.submit-shift-closeout", async () => {
+    try {
+      const report = await (
+        await createEndOfShiftReportService(
+          await createProductionPrincipalResolver(),
+          "reporting.submit-shift-closeout",
+        )
+      ).submit({
+        shiftAssignmentId: form.get("shiftAssignmentId"),
+        summary: form.get("summary"),
+        unresolvedIssues: form.get("unresolvedIssues"),
+        equipmentAccessStatus: form.get("equipmentAccessStatus"),
+        followUpItems: form.get("followUpItems"),
+        unusualConditions: form.get("unusualConditions"),
+        submissionKey: form.get("submissionKey"),
+      });
+      revalidatePath("/reporting");
+      revalidatePath("/eosr");
+      revalidatePath("/schedule");
+      revalidatePath("/");
+      return { kind: "confirmed" as const, report };
+    } catch (error) {
+      if (error instanceof ValidationError)
+        return {
+          kind: "validation-error" as const,
+          fieldErrors: error.fieldErrors,
+        };
+      if (
+        error instanceof AuthenticationRequiredError ||
+        error instanceof PermissionDeniedError ||
+        error instanceof ResourceNotFoundError ||
+        error instanceof InvariantViolationError
+      )
+        return {
+          kind: "rejected" as const,
+          message:
+            "This closeout could not be submitted for the current assignment. Refresh the Shift Report and try again.",
         };
       throw error;
     }

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { ActivityEntryForm } from "@/components/reporting/activity-entry-form";
 import { ShiftReportTimeline } from "@/components/reporting/shift-report-timeline";
+import { EndOfShiftReportForm } from "@/components/eosr/end-of-shift-report-form";
+import type { IncomingPassdown } from "@/features/eosr/contracts";
 import type {
   ActivityEntrySummary,
   CreateActivityResult,
@@ -51,12 +53,16 @@ function newIncidentSubmissionKey() {
 export function ReportingWorkspace({
   state,
   actions,
+  passdowns = [],
 }: {
   state: ReportingPageState;
   actions?: {
     createActivity(form: FormData): Promise<CreateActivityResult>;
     createIncident(form: FormData): Promise<IncidentReportSummary>;
+    submitCloseout?(form: FormData): Promise<unknown>;
+    setPassdownDismissal?(form: FormData): Promise<void>;
   };
+  passdowns?: readonly IncomingPassdown[];
 }) {
   const [activityFormOpen, setActivityFormOpen] = useState(false);
   const [timeline, setTimeline] = useState<readonly ActivityEntrySummary[]>(
@@ -236,7 +242,7 @@ export function ReportingWorkspace({
           </button>
           <a
             className="flex min-h-12 items-center justify-center rounded-xl border border-white/15 px-4 text-center font-bold hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-            href="/eosr"
+            href="#shift-closeout"
           >
             Closeout Shift Report
           </a>
@@ -270,18 +276,23 @@ export function ReportingWorkspace({
         />
 
         <aside className="grid min-w-0 gap-5">
-          <section className={panel}>
+          <section className={panel} id="shift-closeout">
             <h2 className="text-lg font-bold">Shift closeout</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
               Review this timeline before completing the closeout and passdown.
               The activity narrative is already part of your Shift Report.
             </p>
-            <a
-              className="mt-4 flex min-h-12 items-center justify-center rounded-xl border border-white/15 px-4 text-center font-bold"
-              href="/eosr"
-            >
-              Continue to closeout
-            </a>
+            {actions?.submitCloseout && actions.setPassdownDismissal ? (
+              <div className="mt-4">
+                <EndOfShiftReportForm
+                  assignments={[assignment]}
+                  embedded
+                  passdowns={passdowns}
+                  setPassdownDismissal={actions.setPassdownDismissal}
+                  submit={actions.submitCloseout}
+                />
+              </div>
+            ) : null}
           </section>
 
           <section className={panel} id="incident">
