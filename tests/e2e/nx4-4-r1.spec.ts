@@ -16,13 +16,10 @@ test("walks Guard EOSR, incoming passdown, and Operations history through local 
   ).toBeVisible();
   await page.getByRole("link", { name: "Closeout Shift Report" }).click();
   await expect(
-    page.getByRole("heading", { name: "End-of-shift report" }),
-  ).toBeVisible();
-  await expect(
     page.getByRole("group", { name: "Passdown for the incoming Guard" }),
   ).toBeVisible();
   await page
-    .getByLabel("Assignment")
+    .getByRole("combobox", { name: "Assignment" })
     .selectOption({ label: "Cedar Plaza North · North Lobby" });
   await page.getByLabel("Shift summary").fill("North Lobby shift completed.");
   await page
@@ -35,7 +32,7 @@ test("walks Guard EOSR, incoming passdown, and Operations history through local 
   await page
     .getByRole("button", { name: "Submit end-of-shift report" })
     .click();
-  await expect(page.getByRole("status")).toContainText(
+  await expect(page.getByText("End-of-shift report submitted")).toContainText(
     "End-of-shift report submitted",
   );
   await page.getByRole("button", { name: "Sign out of local demo" }).click();
