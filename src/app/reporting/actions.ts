@@ -79,7 +79,10 @@ export async function submitShiftCloseout(form: FormData) {
       return { kind: "confirmed" as const, report };
     } catch (error) {
       if (error instanceof ValidationError)
-        return { kind: "validation-error" as const, fieldErrors: error.fieldErrors };
+        return {
+          kind: "validation-error" as const,
+          fieldErrors: error.fieldErrors,
+        };
       if (
         error instanceof AuthenticationRequiredError ||
         error instanceof PermissionDeniedError ||

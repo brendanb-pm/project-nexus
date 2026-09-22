@@ -7,11 +7,7 @@ import { loadReportingPage } from "@/features/reporting/application";
 import { createReportingService } from "@/features/reporting/server";
 import { createEndOfShiftReportService } from "@/features/eosr/server";
 import { measureRequest } from "@/server/performance/telemetry";
-import {
-  createActivity,
-  createIncident,
-  submitShiftCloseout,
-} from "./actions";
+import { createActivity, createIncident, submitShiftCloseout } from "./actions";
 import { setPassdownDismissal } from "../eosr/actions";
 export default async function Page() {
   const resolver = await createProductionPrincipalResolver();
