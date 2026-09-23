@@ -10,6 +10,7 @@ import {
   incidentParticipants,
   incidentReports,
   reportingDrafts,
+  shiftAssignments,
 } from "@/server/db/schema";
 import { PostgresReportingDraftRepository } from "@/features/reporting-drafts/postgres-repository";
 import { PostgresReportingRepository } from "@/features/reporting/postgres-repository";
@@ -18,6 +19,9 @@ import type {
   DraftFamily,
   DraftFinalization,
 } from "@/features/reporting-drafts/contracts";
+import { ReportingDraftService } from "@/features/reporting-drafts/service";
+import { AuthorizedDataAccess } from "@/server/request/boundary";
+import { createAuthenticatedRequestContext } from "@/server/request/context";
 
 const suite =
   process.env.NEXUS_POSTGRES_TEST === "true"
@@ -142,6 +146,91 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
       submissionKey: row.submissionKey,
     };
   }
+
+  async function service(
+    role:
+      | "GUARD"
+      | "SUPERVISOR"
+      | "OPERATIONS_MANAGER"
+      | "ADMIN"
+      | "CLIENT_USER"
+      | "LEADERSHIP",
+    userId: string,
+    employeeId?: string,
+    organizationId = ids.org,
+  ) {
+    const request = await createAuthenticatedRequestContext(
+      {
+        resolve: async () => ({
+          principal: {
+            userId,
+            organizationId,
+            roles: [role],
+            employeeId,
+            organizationWide: true,
+            branchIds: [],
+            clientIds: [],
+            siteIds: [],
+          },
+        }),
+      },
+      "nx87-postgres",
+    );
+    return new ReportingDraftService(
+      new AuthorizedDataAccess(request),
+      reporting,
+      drafts,
+    );
+  }
+
+  it("denies other roles/users and enforces the 64 KiB payload bound", async () => {
+    const guard = await service("GUARD", ids.user, ids.employee);
+    const saved = await guard.save({
+      shiftAssignmentId: ids.assignment,
+      family: "SECURITY_INCIDENT",
+      clientDraftKey: nextKey(),
+      submissionKey: nextKey(),
+      saveKey: nextKey(),
+      expectedRevision: 0,
+      payload: { narrative: "Private NX87 participant note", participants: [] },
+    });
+    expect((await guard.get(ids.assignment, "SECURITY_INCIDENT"))?.id).toBe(
+      saved.id,
+    );
+    for (const role of [
+      "SUPERVISOR",
+      "OPERATIONS_MANAGER",
+      "ADMIN",
+      "CLIENT_USER",
+      "LEADERSHIP",
+    ] as const) {
+      const other = await service(role, ids.incomingUser, ids.incomingEmployee);
+      await expect(
+        other.get(ids.assignment, "SECURITY_INCIDENT"),
+      ).rejects.toThrow();
+    }
+    const wrongTenant = await service(
+      "GUARD",
+      ids.user,
+      ids.employee,
+      "00000000-0000-4000-8000-000000000999",
+    );
+    await expect(
+      wrongTenant.get(ids.assignment, "SECURITY_INCIDENT"),
+    ).rejects.toThrow();
+    await expect(
+      guard.save({
+        shiftAssignmentId: ids.assignment,
+        family: "SECURITY_INCIDENT",
+        clientDraftKey: saved.clientDraftKey,
+        submissionKey: saved.submissionKey,
+        saveKey: nextKey(),
+        expectedRevision: saved.revision,
+        payload: { narrative: "x".repeat(65537), participants: [] },
+      }),
+    ).rejects.toThrow();
+    await guard.discard(ids.assignment, saved.id, saved.revision);
+  });
 
   it("enforces one active owner/family, replay-safe saves, revision conflicts, and containment", async () => {
     const { row, clientDraftKey, submissionKey, saveKey } =
@@ -282,6 +371,60 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
     expect(retired[0]).toMatchObject({ payload: {}, disposition: "DISCARDED" });
   });
 
+  it("fails closed after assignment cancellation or reassignment without transferring ownership", async () => {
+    const { row } = await save("SHIFT_ACTIVITY");
+    const guard = await service("GUARD", ids.user, ids.employee);
+    const original = await db
+      .select({
+        status: shiftAssignments.status,
+        employeeId: shiftAssignments.employeeId,
+      })
+      .from(shiftAssignments)
+      .where(eq(shiftAssignments.id, ids.assignment));
+    try {
+      await db
+        .update(shiftAssignments)
+        .set({ status: "cancelled" })
+        .where(eq(shiftAssignments.id, ids.assignment));
+      await expect(
+        guard.get(ids.assignment, "SHIFT_ACTIVITY"),
+      ).rejects.toThrow();
+      await expect(
+        guard.draftForSubmission(ids.assignment, row.id),
+      ).rejects.toThrow();
+      await db
+        .update(shiftAssignments)
+        .set({ status: original[0]!.status, employeeId: ids.incomingEmployee })
+        .where(eq(shiftAssignments.id, ids.assignment));
+      await expect(
+        guard.get(ids.assignment, "SHIFT_ACTIVITY"),
+      ).rejects.toThrow();
+      const incoming = await service(
+        "GUARD",
+        ids.incomingUser,
+        ids.incomingEmployee,
+      );
+      expect(await incoming.get(ids.assignment, "SHIFT_ACTIVITY")).toBeNull();
+    } finally {
+      await db
+        .update(shiftAssignments)
+        .set({
+          status: original[0]!.status,
+          employeeId: original[0]!.employeeId,
+        })
+        .where(eq(shiftAssignments.id, ids.assignment));
+      await drafts.discard(
+        ids.org,
+        ids.user,
+        ids.employee,
+        ids.assignment,
+        row.id,
+        row.revision,
+        audit,
+      );
+    }
+  });
+
   it("atomically submits one ActivityEntry and retires its payload", async () => {
     const context = await reporting.getActivityContext(scope, ids.assignment);
     expect(context).not.toBeNull();
@@ -345,6 +488,125 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
         ),
       );
     expect(canonical).toHaveLength(1);
+  });
+
+  it("rejects stale two-tab writes and resolves a save/submission race without duplicate activity", async () => {
+    const context = await reporting.getActivityContext(scope, ids.assignment);
+    const { row, clientDraftKey, submissionKey } = await save(
+      "SHIFT_ACTIVITY",
+      ids.assignment,
+      ids.user,
+      ids.employee,
+      { category: "OBSERVATION", narrative: "Initial" },
+    );
+    const competing = await Promise.allSettled(
+      ["Tab A", "Tab B"].map((narrative) =>
+        drafts.save(
+          {
+            organizationId: ids.org,
+            ownerUserId: ids.user,
+            ownerEmployeeId: ids.employee,
+            assignmentId: ids.assignment,
+            family: "SHIFT_ACTIVITY",
+            clientDraftKey,
+            submissionKey,
+            saveKey: nextKey(),
+            expectedRevision: 1,
+            payload: { category: "OBSERVATION", narrative },
+          },
+          audit,
+        ),
+      ),
+    );
+    expect(
+      competing.filter((item) => item.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(competing.filter((item) => item.status === "rejected")).toHaveLength(
+      1,
+    );
+    const current = (
+      await db
+        .select()
+        .from(reportingDrafts)
+        .where(eq(reportingDrafts.id, row.id))
+    )[0]!;
+    expect(current.revision).toBe(2);
+    const race = await Promise.allSettled([
+      reporting.createActivity(
+        scope,
+        context!,
+        {
+          category: "OBSERVATION",
+          occurredAt: new Date().toISOString(),
+          narrative: (current.payload as { narrative: string }).narrative,
+          followUpRequired: false,
+          visibility: "INTERNAL",
+          submissionKey,
+        },
+        audit,
+        { ...finalization(row), revision: 2 },
+      ),
+      drafts.save(
+        {
+          organizationId: ids.org,
+          ownerUserId: ids.user,
+          ownerEmployeeId: ids.employee,
+          assignmentId: ids.assignment,
+          family: "SHIFT_ACTIVITY",
+          clientDraftKey,
+          submissionKey,
+          saveKey: nextKey(),
+          expectedRevision: 2,
+          payload: { category: "OBSERVATION", narrative: "Latest edit" },
+        },
+        audit,
+      ),
+    ]);
+    expect(race.filter((item) => item.status === "fulfilled")).toHaveLength(1);
+    const canonical = await db
+      .select()
+      .from(activityEntries)
+      .where(eq(activityEntries.submissionKey, submissionKey));
+    if (canonical[0]) {
+      createdActivityIds.push(canonical[0].id);
+      expect(
+        (
+          await db
+            .select()
+            .from(reportingDrafts)
+            .where(eq(reportingDrafts.id, row.id))
+        )[0],
+      ).toMatchObject({ disposition: "SUBMITTED", payload: {} });
+    } else {
+      const fresh = (
+        await db
+          .select()
+          .from(reportingDrafts)
+          .where(eq(reportingDrafts.id, row.id))
+      )[0]!;
+      expect(fresh.revision).toBe(3);
+      const result = await reporting.createActivity(
+        scope,
+        context!,
+        {
+          category: "OBSERVATION",
+          occurredAt: new Date().toISOString(),
+          narrative: "Latest edit",
+          followUpRequired: false,
+          visibility: "INTERNAL",
+          submissionKey,
+        },
+        audit,
+        { ...finalization(row), revision: 3 },
+      );
+      createdActivityIds.push(result.id);
+    }
+    expect(
+      await db
+        .select()
+        .from(activityEntries)
+        .where(eq(activityEntries.submissionKey, submissionKey)),
+    ).toHaveLength(1);
   });
 
   it("rolls back an Incident and draft retirement when participant insertion fails", async () => {

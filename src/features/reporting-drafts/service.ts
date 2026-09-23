@@ -195,6 +195,18 @@ export class ReportingDraftService {
     );
   }
 
+  async wasExpired(assignmentId: string, rawFamily: unknown) {
+    const draftFamily = family(rawFamily);
+    const employeeId = await this.authorize(assignmentId, draftFamily);
+    return this.repository.expiredForOwner(
+      this.access.context.organizationId,
+      this.access.context.actor.userId,
+      employeeId,
+      assignmentId,
+      draftFamily,
+    );
+  }
+
   async save(raw: SaveDraftInput) {
     const assignmentId = key(raw.shiftAssignmentId, "shiftAssignmentId");
     const draftFamily = family(raw.family);

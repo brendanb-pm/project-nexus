@@ -1,10 +1,11 @@
-import { and, eq, lt, ne, sql } from "drizzle-orm";
+import { and, desc, eq, lte, ne, or, sql } from "drizzle-orm";
 import { isDeepStrictEqual } from "node:util";
 import type { NexusDatabase } from "@/server/db/client";
 import {
   auditEvents,
   clients,
   employees,
+  endOfShiftReports,
   posts,
   reportingDrafts,
   shiftAssignments,
@@ -232,6 +233,70 @@ export class PostgresReportingDraftRepository {
     return rows[0] ? dto(rows[0].draft) : null;
   }
 
+  /** Narrow recovery check. It retires only this owner's elapsed draft and
+   * never scans other users or runs the general cleanup job on a page read. */
+  async expiredForOwner(
+    organizationId: string,
+    ownerUserId: string,
+    ownerEmployeeId: string,
+    assignmentId: string,
+    family: DraftFamily,
+  ) {
+    return this.database.transaction(async (tx) => {
+      await ownerAssignment(
+        tx,
+        organizationId,
+        ownerUserId,
+        ownerEmployeeId,
+        assignmentId,
+      );
+      const rows = await tx
+        .select()
+        .from(reportingDrafts)
+        .where(
+          and(
+            eq(reportingDrafts.organizationId, organizationId),
+            eq(reportingDrafts.ownerUserId, ownerUserId),
+            eq(reportingDrafts.ownerEmployeeId, ownerEmployeeId),
+            eq(reportingDrafts.shiftAssignmentId, assignmentId),
+            eq(reportingDrafts.family, family),
+            or(
+              eq(reportingDrafts.disposition, "EXPIRED"),
+              and(
+                eq(reportingDrafts.disposition, "ACTIVE"),
+                lte(reportingDrafts.expiresAt, new Date()),
+              ),
+            ),
+          ),
+        )
+        .orderBy(desc(reportingDrafts.updatedAt), desc(reportingDrafts.id))
+        .for("update")
+        .limit(1);
+      const row = rows[0];
+      if (!row) return false;
+      if (row.disposition === "ACTIVE") {
+        const now = new Date();
+        await tx
+          .update(reportingDrafts)
+          .set({
+            payload: {},
+            disposition: "EXPIRED",
+            disposedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(reportingDrafts.id, row.id));
+        await tx.insert(auditEvents).values({
+          organizationId,
+          action: "reporting-draft.expired",
+          entityType: "ReportingDraft",
+          entityId: row.id,
+          afterState: { family, disposition: "EXPIRED" },
+        });
+      }
+      return true;
+    });
+  }
+
   async save(
     input: {
       organizationId: string;
@@ -255,6 +320,14 @@ export class PostgresReportingDraftRepository {
         input.ownerEmployeeId,
         input.assignmentId,
       );
+      if (input.family === "SHIFT_CLOSEOUT") {
+        const submitted = await tx
+          .select({ id: endOfShiftReports.id })
+          .from(endOfShiftReports)
+          .where(eq(endOfShiftReports.shiftAssignmentId, input.assignmentId))
+          .limit(1);
+        if (submitted[0]) throw new StaleUpdateError();
+      }
       const rows = await tx
         .select()
         .from(reportingDrafts)
@@ -406,7 +479,7 @@ export class PostgresReportingDraftRepository {
         .where(
           and(
             eq(reportingDrafts.disposition, "ACTIVE"),
-            lt(reportingDrafts.expiresAt, new Date()),
+            lte(reportingDrafts.expiresAt, new Date()),
           ),
         )
         .orderBy(reportingDrafts.expiresAt, reportingDrafts.id)

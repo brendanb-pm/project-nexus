@@ -32,6 +32,7 @@ import type {
   ReportingScope,
 } from "@/features/reporting/repository";
 import type { AuditContext } from "@/server/request/boundary";
+import { StaleUpdateError } from "@/server/request/errors";
 import type { DraftFinalization } from "@/features/reporting-drafts/contracts";
 import {
   lockDraftForFinalization,
@@ -107,6 +108,8 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
         .where(eq(endOfShiftReports.shiftAssignmentId, context.id))
         .limit(1);
       if (existing[0]) {
+        if (draft && existing[0].submissionKey !== draft.submissionKey)
+          throw new StaleUpdateError();
         if (draft) await retireSubmittedDraft(tx, draft, existing[0].id, audit);
         return existing[0];
       }

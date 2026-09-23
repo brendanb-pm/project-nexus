@@ -39,8 +39,9 @@ export async function recoverReportingDraft(
       "reporting-draft.recover",
     );
     const draft = await service.get(assignmentId, family);
-    return draft
-      ? { kind: "found" as const, draft }
+    if (draft) return { kind: "found" as const, draft };
+    return (await service.wasExpired(assignmentId, family))
+      ? { kind: "expired" as const }
       : { kind: "empty" as const };
   } catch (error) {
     if (denied(error)) return { kind: "inaccessible" as const };

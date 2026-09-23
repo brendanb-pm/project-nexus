@@ -27,3 +27,13 @@ Client access is default-deny. Guards can submit only for their own authorized a
 `TimeRecord` and approved timekeeping remain the authority for payroll-adjacent evidence. Reporting does not calculate payroll, wages, tax, overtime, or export files.
 
 This boundary does not add report forms, drafts, offline/deferred sync, a reporting hub, generic exports, BambooHR integration, incident participants, or attachment storage. Those require their separately approved stories.
+
+## NX-8.7 personal draft recovery
+
+Reporting drafts are server-side PostgreSQL working state scoped to the authenticated owner, organization, employee, assignment, and one of SHIFT_ACTIVITY, SECURITY_INCIDENT, or SHIFT_CLOSEOUT. One active draft is allowed per owner/assignment/family. Drafts do not change the submitted authorities above, participate in report browse or client/leadership projections, or create an offline synchronization path. The owner must still satisfy current assignment and capability checks on every operation.
+
+Each acknowledged save advances an optimistic revision and extends expiry to 30 days after that save. A successful canonical submission, explicit discard, or expiry clears the sensitive payload and leaves only a minimal lifecycle row and payload-free audit evidence. Submission and draft retirement occur in the same transaction as the canonical report and its existing audit/history writes. Replayed submissions use the same submission key; a changed or inaccessible assignment fails closed.
+
+The bounded expiry command is `npm run db:expire:reporting-drafts` with `NEXUS_REPORTING_DRAFT_EXPIRY_JOB=true`. It processes at most 1,000 expired rows per invocation in 100-row transactions. Deployment operations must schedule this command at an interval that meets the 30-day deletion policy and monitor failures/backlog. The repository does not include an existing production scheduler; no new scheduler is provisioned by NX-8.7. Active drafts are hidden after expiry even before the job runs.
+
+Before production acceptance, the deployment owner must verify and record the approved PostgreSQL/infrastructure encryption-at-rest protection for database files, backups, and replicas. Repository authentication documentation only establishes provider-token encryption and does not prove database storage protection. NX-8.7 adds no custom field encryption.

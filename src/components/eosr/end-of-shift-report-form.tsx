@@ -1,5 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import {
+  ReportingDraftControls,
+  useReportingDraft,
+} from "@/components/reporting/use-reporting-draft";
 import type { ActivityAssignment } from "@/features/reporting/contracts";
 import type { IncomingPassdown } from "@/features/eosr/contracts";
 import { IncomingPassdownCards } from "./incoming-passdown-cards";
@@ -11,6 +15,7 @@ export function EndOfShiftReportForm({
   submit,
   setPassdownDismissal,
   embedded = false,
+  draftEnabled = false,
 }: {
   assignments: readonly ActivityAssignment[];
   passdowns?: readonly IncomingPassdown[];
@@ -18,15 +23,65 @@ export function EndOfShiftReportForm({
   setPassdownDismissal: (form: FormData) => Promise<void>;
   /** When rendered in Shift Report, EOSR is its closeout section, not a route-level product. */
   embedded?: boolean;
+  draftEnabled?: boolean;
 }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [key] = useState(() => crypto.randomUUID?.() ?? `eosr-${Date.now()}`);
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useReportingDraft({
+    enabled: draftEnabled && Boolean(assignments[0]),
+    assignmentId: assignments[0]?.id ?? "",
+    family: "SHIFT_CLOSEOUT",
+    readPayload: () => {
+      const data = formRef.current
+        ? new FormData(formRef.current)
+        : new FormData();
+      return {
+        summary: String(data.get("summary") ?? ""),
+        unresolvedIssues: String(data.get("unresolvedIssues") ?? ""),
+        equipmentAccessStatus: String(data.get("equipmentAccessStatus") ?? ""),
+        followUpItems: String(data.get("followUpItems") ?? ""),
+        unusualConditions: String(data.get("unusualConditions") ?? ""),
+      };
+    },
+    restorePayload: (payload) => {
+      const form = formRef.current;
+      if (!form) return;
+      for (const name of [
+        "summary",
+        "unresolvedIssues",
+        "equipmentAccessStatus",
+        "followUpItems",
+        "unusualConditions",
+      ]) {
+        const field = form.elements.namedItem(name);
+        if (field instanceof HTMLTextAreaElement)
+          field.value = typeof payload[name] === "string" ? payload[name] : "";
+      }
+    },
+    clearPayload: () => formRef.current?.reset(),
+  });
   async function onSubmit(form: FormData) {
     if (busy) return;
     setBusy(true);
     setMessage("Submitting end-of-shift report…");
     try {
+      if (draftEnabled) {
+        const result = await draft.submit();
+        if (result.kind === "submitted" && result.family === "SHIFT_CLOSEOUT") {
+          setMessage(
+            "End-of-shift report submitted. Your passdown is available to the incoming Guard.",
+          );
+        } else if (result.kind === "already-submitted") {
+          window.location.reload();
+        } else {
+          setMessage(
+            "Your saved closeout needs attention. Review the draft status below.",
+          );
+        }
+        return;
+      }
       const result = await submit(form);
       const outcome =
         result && typeof result === "object" && "kind" in result
@@ -66,8 +121,19 @@ export function EndOfShiftReportForm({
         </section>
       ) : (
         <form
-          action={onSubmit}
+          action={draftEnabled ? undefined : onSubmit}
           className="grid gap-4 rounded-xl border border-white/10 bg-[var(--card)] p-5"
+          onChange={draftEnabled ? draft.changed : undefined}
+          onInput={draftEnabled ? draft.changed : undefined}
+          onSubmit={
+            draftEnabled
+              ? (event) => {
+                  event.preventDefault();
+                  void onSubmit(new FormData(event.currentTarget));
+                }
+              : undefined
+          }
+          ref={formRef}
         >
           <div>
             <p className="text-sm text-[var(--text-muted)]">Shift close</p>
@@ -137,9 +203,20 @@ export function EndOfShiftReportForm({
             </label>
           </fieldset>
           <input type="hidden" name="submissionKey" value={key} />
+          {draftEnabled ? <ReportingDraftControls draft={draft} /> : null}
           <button
             className="rounded-lg bg-white px-4 py-3 font-medium text-black disabled:opacity-60"
-            disabled={busy}
+            disabled={
+              busy ||
+              (draftEnabled &&
+                [
+                  "loading",
+                  "recovery-available",
+                  "inaccessible",
+                  "conflict",
+                  "submitted",
+                ].includes(draft.status))
+            }
           >
             {busy ? "Submitting…" : "Submit end-of-shift report"}
           </button>
