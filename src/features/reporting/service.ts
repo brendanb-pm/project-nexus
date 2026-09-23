@@ -82,6 +82,48 @@ export class ReportingService {
     const timeline = activityRows.slice(0, boundedLimit).toReversed();
     return { assignment, timeline, incidents, timelineHasMore } as const;
   }
+
+  /** A Guard may correct a report for their own completed assignment. The
+   * canonical mutation methods still enforce assignment ownership and timing. */
+  async getOwnShiftReport(assignmentId: string, limit = 50) {
+    const employeeId = this.access.context.scope.employeeId;
+    if (!employeeId) throw new ResourceNotFoundError("Employee relationship");
+    this.access.require("VIEW_OWN_ASSIGNMENTS", {
+      organizationId: this.access.context.organizationId,
+      employeeId,
+    });
+    const assignment = await this.repository.getActivityContext(
+      this.scope(),
+      assignmentId,
+    );
+    if (
+      !assignment ||
+      assignment.employeeId !== employeeId ||
+      assignment.assignmentStatus === "cancelled"
+    )
+      throw new ResourceNotFoundError("Shift assignment");
+    const boundedLimit = Math.min(Math.max(limit, 1), 50);
+    const [activityRows, incidents] = await Promise.all([
+      this.repository.listAssignmentActivities(
+        this.scope(),
+        employeeId,
+        assignment.id,
+        boundedLimit + 1,
+      ),
+      this.repository.listAssignmentIncidents(
+        this.scope(),
+        employeeId,
+        assignment.id,
+        25,
+      ),
+    ]);
+    return {
+      assignment,
+      timeline: activityRows.slice(0, boundedLimit).toReversed(),
+      incidents,
+      timelineHasMore: activityRows.length > boundedLimit,
+    } as const;
+  }
   async listOwnRecent() {
     const employeeId = this.access.context.scope.employeeId;
     if (!employeeId) throw new ResourceNotFoundError("Employee relationship");
@@ -221,12 +263,9 @@ export class ReportingService {
         "A cancelled assignment cannot receive activity entries.",
       );
     const occurredAt = this.now();
-    if (
-      occurredAt < new Date(context.scheduledStart) ||
-      occurredAt > new Date(context.scheduledEnd)
-    )
+    if (occurredAt < new Date(context.scheduledStart))
       throw new InvariantViolationError(
-        "Activity entries can only be recorded during the current assignment.",
+        "Activity entries cannot be recorded before the assignment begins.",
       );
     return this.repository.createActivity(
       this.scope(),
@@ -255,12 +294,9 @@ export class ReportingService {
         "A cancelled assignment cannot receive incident reports.",
       );
     const occurredAt = this.now();
-    if (
-      occurredAt < new Date(context.scheduledStart) ||
-      occurredAt > new Date(context.scheduledEnd)
-    )
+    if (occurredAt < new Date(context.scheduledStart))
       throw new InvariantViolationError(
-        "Incident reports can only be submitted during the current assignment.",
+        "Incident reports cannot be submitted before the assignment begins.",
       );
     if (input.originatingActivityEntryId) {
       const activity = await this.repository.getOriginatingActivity(

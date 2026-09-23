@@ -213,6 +213,34 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
         )}
       </section>
 
+      <section
+        className="grid gap-3"
+        aria-labelledby="reporting-exceptions-heading"
+      >
+        <div>
+          <h2
+            className="text-xl font-semibold"
+            id="reporting-exceptions-heading"
+          >
+            Reporting obligations
+          </h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Review late or missing shift closeout, activity, and incident
+            obligations without changing canonical reports.
+          </p>
+        </div>
+        <a
+          className={`${panel} hover:border-white/30`}
+          href="/operations/reporting-exceptions"
+        >
+          <h3 className="font-semibold">Open reporting exceptions</h3>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Authorized Operations users can acknowledge, request correction,
+            resolve corrected work, escalate, or waive with a reason.
+          </p>
+        </a>
+      </section>
+
       <section className="grid gap-3" aria-labelledby="compliance-heading">
         <div>
           <h2 id="compliance-heading" className="text-xl font-semibold">

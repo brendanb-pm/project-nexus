@@ -5,6 +5,7 @@ import { ActivityEntryForm } from "@/components/reporting/activity-entry-form";
 import { ShiftReportTimeline } from "@/components/reporting/shift-report-timeline";
 import { EndOfShiftReportForm } from "@/components/eosr/end-of-shift-report-form";
 import type { IncomingPassdown } from "@/features/eosr/contracts";
+import type { ReportingExceptionSummary } from "@/features/reporting-exceptions/contracts";
 import type {
   ActivityEntrySummary,
   CreateActivityResult,
@@ -54,6 +55,8 @@ export function ReportingWorkspace({
   state,
   actions,
   passdowns = [],
+  correctionMode = false,
+  reportingExceptions = [],
 }: {
   state: ReportingPageState;
   actions?: {
@@ -63,6 +66,8 @@ export function ReportingWorkspace({
     setPassdownDismissal?(form: FormData): Promise<void>;
   };
   passdowns?: readonly IncomingPassdown[];
+  correctionMode?: boolean;
+  reportingExceptions?: readonly ReportingExceptionSummary[];
 }) {
   const [activityFormOpen, setActivityFormOpen] = useState(false);
   const [timeline, setTimeline] = useState<readonly ActivityEntrySummary[]>(
@@ -80,6 +85,33 @@ export function ReportingWorkspace({
   const [participants, setParticipants] = useState<ParticipantDraft[]>([
     newParticipant(),
   ]);
+  const personalExceptionPanel = reportingExceptions.length ? (
+    <section className={panel} aria-label="Your reporting corrections">
+      <h2 className="text-xl font-bold">Reporting corrections needed</h2>
+      <p className="mt-2 text-sm text-[var(--text-muted)]">
+        These are your reporting obligations only. Use the canonical Shift
+        Report workflow to submit the missing information.
+      </p>
+      <div className="mt-4 grid gap-3">
+        {reportingExceptions.map((item) => (
+          <a
+            className="rounded-xl border border-amber-300/30 bg-amber-300/5 p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            href={item.sourceHref}
+            key={item.id}
+          >
+            <strong>
+              {item.classification.toLowerCase()} ·{" "}
+              {item.obligationType.replaceAll("_", " ").toLowerCase()}
+            </strong>
+            <span className="mt-1 block text-sm text-[var(--text-muted)]">
+              Due {new Date(item.dueAt).toLocaleString()} ·{" "}
+              {item.state.replaceAll("_", " ").toLowerCase()}
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  ) : null;
 
   if (state.kind !== "ready")
     return (
@@ -132,6 +164,9 @@ export function ReportingWorkspace({
           Shift Report
         </p>
         <h1 className="mt-2 text-3xl font-bold">Your Shift Report</h1>
+        {personalExceptionPanel ? (
+          <div className="mt-6">{personalExceptionPanel}</div>
+        ) : null}
         <section className={`${panel} mt-6 text-center`}>
           <h2 className="text-xl font-bold">No active assignment</h2>
           <p className="mx-auto mt-2 max-w-lg leading-6 text-[var(--text-muted)]">
@@ -193,14 +228,18 @@ export function ReportingWorkspace({
               Shift Report
             </p>
             <h1 className="mt-1 text-3xl font-bold">
-              Your active Shift Report
+              {correctionMode
+                ? "Your Shift Report correction"
+                : "Your active Shift Report"}
             </h1>
           </div>
           <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-sm font-bold text-emerald-100">
-            Active now
+            {correctionMode ? "Correction available" : "Active now"}
           </span>
         </div>
       </header>
+
+      {personalExceptionPanel}
 
       <section className={panel} aria-label="Active assignment context">
         <div className="flex flex-wrap items-start justify-between gap-4">

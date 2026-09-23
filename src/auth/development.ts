@@ -16,6 +16,10 @@ export const developmentPersonas = {
     authUserId: "nexus-dev-auth-operations-manager-b",
     callbackPath: "/reporting",
   },
+  "supervisor-a": {
+    authUserId: "nexus-dev-auth-supervisor-a",
+    callbackPath: "/reporting",
+  },
   "leadership-a": {
     authUserId: "nexus-dev-auth-leadership-a",
     callbackPath: "/leadership",

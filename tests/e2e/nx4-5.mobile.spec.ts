@@ -24,7 +24,7 @@ test("keeps Review Queue, History, and reached record details usable at 390x844"
 
   const activity = page.getByRole("link", {
     name: /open canonical activity \/ dar record/i,
-  });
+  }).first();
   await expect(activity).toBeVisible();
   const cardBox = await activity.boundingBox();
   expect(cardBox?.height ?? 0).toBeGreaterThanOrEqual(44);

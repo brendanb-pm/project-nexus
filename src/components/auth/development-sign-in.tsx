@@ -6,6 +6,7 @@ const personas = [
   ["guard-a", "Guard A"],
   ["guard-b", "Incoming Guard B"],
   ["operations-manager-b", "Operations Manager B"],
+  ["supervisor-a", "Supervisor A"],
   ["leadership-a", "Leadership A"],
   ["admin-a", "Admin A"],
   ["client-user-a", "Client User A"],
