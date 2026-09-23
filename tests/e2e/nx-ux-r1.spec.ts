@@ -14,7 +14,7 @@ test("walks Guard home and report choices through the rendered navigation", asyn
   ).toBeVisible();
   await page.getByRole("link", { name: "Report", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Reporting Hub" }),
+    page.getByRole("heading", { name: "Authorized reporting work" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Open Shift Report" }).click();
   await expect(
