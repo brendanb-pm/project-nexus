@@ -871,6 +871,94 @@ export const endOfShiftReports = pgTable(
   ],
 );
 
+// NX-8.5 persists only reporting-obligation lifecycle state. Activity entries,
+// EOSRs, incident reports, and time records remain their respective canonical
+// evidence sources; this ledger never replaces or mutates them.
+export const reportingExceptions = pgTable(
+  "reporting_exceptions",
+  {
+    id: id(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    shiftAssignmentId: uuid("shift_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    triggeringActivityEntryId: uuid("triggering_activity_entry_id").references(
+      () => activityEntries.id,
+    ),
+    obligationKey: text("obligation_key").notNull(),
+    obligationType: text("obligation_type").notNull(),
+    classification: text("classification").notNull(),
+    state: text("state").notNull().default("OPEN"),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    effectiveShiftEndAt: timestamp("effective_shift_end_at", {
+      withTimezone: true,
+    }).notNull(),
+    firstDetectedAt: timestamp("first_detected_at", {
+      withTimezone: true,
+    }).notNull(),
+    correctedAt: timestamp("corrected_at", { withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    assigneeUserId: uuid("assignee_user_id").references(() => users.id),
+    revision: integer("revision").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("reporting_exceptions_obligation_key_uidx").on(t.obligationKey),
+    index("reporting_exceptions_org_state_due_idx").on(
+      t.organizationId,
+      t.state,
+      t.dueAt,
+      t.id,
+    ),
+    index("reporting_exceptions_assignment_idx").on(t.shiftAssignmentId, t.id),
+    check(
+      "reporting_exceptions_obligation_type_check",
+      sql`${t.obligationType} in ('EOSR', 'ACTIVITY_ENTRY', 'INCIDENT_REPORT')`,
+    ),
+    check(
+      "reporting_exceptions_classification_check",
+      sql`${t.classification} in ('LATE', 'MISSING')`,
+    ),
+    check(
+      "reporting_exceptions_state_check",
+      sql`${t.state} in ('OPEN', 'ACKNOWLEDGED', 'CORRECTION_REQUESTED', 'CORRECTED_PENDING_REVIEW', 'RESOLVED', 'ESCALATED', 'WAIVED')`,
+    ),
+    check("reporting_exceptions_revision_check", sql`${t.revision} >= 0`),
+  ],
+);
+
+export const reportingExceptionEvents = pgTable(
+  "reporting_exception_events",
+  {
+    id: id(),
+    reportingExceptionId: uuid("reporting_exception_id")
+      .notNull()
+      .references(() => reportingExceptions.id),
+    previousState: text("previous_state"),
+    nextState: text("next_state").notNull(),
+    reason: text("reason").notNull(),
+    assigneeUserId: uuid("assignee_user_id").references(() => users.id),
+    actorUserId: uuid("actor_user_id").references(() => users.id),
+    actorKind: text("actor_kind").notNull().default("SYSTEM"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("reporting_exception_events_exception_time_idx").on(
+      t.reportingExceptionId,
+      t.occurredAt,
+      t.id,
+    ),
+    check(
+      "reporting_exception_events_actor_kind_check",
+      sql`${t.actorKind} in ('SYSTEM', 'USER')`,
+    ),
+  ],
+);
+
 export const eosrPassdownDismissals = pgTable(
   "eosr_passdown_dismissals",
   {

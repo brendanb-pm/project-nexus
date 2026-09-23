@@ -7,6 +7,7 @@ import type { ReportingPageState } from "./contracts";
 import type { ReportingService } from "./service";
 export async function loadReportingPage(
   serviceOrPromise: ReportingService | Promise<ReportingService>,
+  assignmentId?: string,
 ): Promise<ReportingPageState> {
   try {
     const service = await serviceOrPromise;
@@ -21,7 +22,9 @@ export async function loadReportingPage(
       };
     }
     try {
-      const shiftReport = await service.getOwnActiveShiftReport();
+      const shiftReport = assignmentId
+        ? await service.getOwnShiftReport(assignmentId)
+        : await service.getOwnActiveShiftReport();
       return {
         kind: "ready",
         assignments: shiftReport.assignment ? [shiftReport.assignment] : [],

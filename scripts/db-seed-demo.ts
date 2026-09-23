@@ -30,6 +30,8 @@ const ids = {
   operationsUser: "00000000-0000-4000-8000-000000000052",
   leadershipUser: "00000000-0000-4000-8000-000000000132",
   adminUser: "00000000-0000-4000-8000-000000000134",
+  supervisorUser: "00000000-0000-4000-8000-000000000136",
+  supervisorEmployee: "00000000-0000-4000-8000-000000000137",
   guardEmployee: "00000000-0000-4000-8000-000000000060",
   incomingGuardEmployee: "00000000-0000-4000-8000-000000000061",
   operationsEmployee: "00000000-0000-4000-8000-000000000062",
@@ -220,6 +222,37 @@ async function main() {
       ],
     );
     await pool.query(
+      "INSERT INTO auth_users (id, name, email, email_verified) VALUES ('nexus-dev-auth-supervisor-a', 'Supervisor A', 'supervisor.a@nexus.demo.invalid', true)",
+    );
+    await pool.query(
+      "INSERT INTO users (id, organization_id, email, status) VALUES ($1, $2, 'supervisor.a@nexus.demo.invalid', 'active')",
+      [ids.supervisorUser, ids.organization],
+    );
+    await pool.query(
+      "INSERT INTO external_identities (issuer, subject, user_id) VALUES ('local-dev://nexus', 'supervisor-a', $1)",
+      [ids.supervisorUser],
+    );
+    await pool.query(
+      "INSERT INTO auth_accounts (id, issuer, account_id, provider_id, user_id) VALUES ('nexus-dev-account-supervisor-a', 'local-dev://nexus', 'supervisor-a', 'nexus-oidc', 'nexus-dev-auth-supervisor-a')",
+    );
+    await pool.query(
+      "INSERT INTO user_memberships (user_id, organization_id, status) VALUES ($1, $2, 'active')",
+      [ids.supervisorUser, ids.organization],
+    );
+    await pool.query(
+      "INSERT INTO employees (id, organization_id, user_id, employee_number, employment_status, primary_branch_id, profile) VALUES ($1, $2, $3, 'NPS-250', 'active', $4, '{\"name\":\"Supervisor A\"}'::jsonb)",
+      [
+        ids.supervisorEmployee,
+        ids.organization,
+        ids.supervisorUser,
+        ids.branch,
+      ],
+    );
+    await pool.query(
+      "INSERT INTO employee_roles (employee_id, role, branch_id, site_id) VALUES ($1, 'SUPERVISOR', $2, $3)",
+      [ids.supervisorEmployee, ids.branch, ids.site],
+    );
+    await pool.query(
       "INSERT INTO auth_users (id, name, email, email_verified) VALUES ('nexus-dev-auth-client-user-a', 'Client User A', 'client.a@nexus.demo.invalid', true)",
     );
     await pool.query(
@@ -353,6 +386,10 @@ async function main() {
     await pool.query(
       "INSERT INTO clock_events (id, shift_assignment_id, event_type, occurred_at, effective_at, recorded_by_user_id, verification_status) VALUES ($1, $2, 'CLOCK_IN', $3, $3, $4, 'NORMAL'), ($5, $2, 'CLOCK_OUT', $6, $6, $4, 'NORMAL')",
       [ids.clockIn, ids.assignment, startsAt, ids.guardUser, ids.clockOut, now],
+    );
+    await pool.query(
+      "INSERT INTO clock_events (id, shift_assignment_id, event_type, occurred_at, effective_at, recorded_by_user_id, verification_status) VALUES ('00000000-0000-4000-8000-000000008500', $1, 'CLOCK_IN', $2, $2, $3, 'NORMAL')",
+      [ids.incompleteAssignment, incompleteStartsAt, ids.guardUser],
     );
     await pool.query(
       "INSERT INTO time_records (id, shift_assignment_id, starts_at, ends_at, minutes_worked, seconds_worked, pairs, status, approved_by_user_id, approved_at) VALUES ($1, $2, $3, $4, 420, 25200, $5::jsonb, 'APPROVED', $6, $4)",

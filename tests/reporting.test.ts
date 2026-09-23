@@ -447,7 +447,7 @@ describe("NX-3.1 activity reporting", () => {
     ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
-  it("uses the server time and rejects an assignment outside its active window", async () => {
+  it("uses the server time and permits an owned completed assignment to be corrected", async () => {
     const { repo, request } = await subject();
     const service = new ReportingService(
       new AuthorizedDataAccess(request),
@@ -462,8 +462,8 @@ describe("NX-3.1 activity reporting", () => {
         occurredAt: "2020-01-01T00:00:00.000Z",
         submissionKey: "late",
       }),
-    ).rejects.toThrow(/current assignment/i);
-    expect(repo.entries).toHaveLength(0);
+    ).resolves.toMatchObject({ occurredAt: "2026-08-31T12:00:00.000Z" });
+    expect(repo.entries).toHaveLength(1);
   });
 
   it("persists an explainable reportable-incident gate without creating an incident", async () => {
