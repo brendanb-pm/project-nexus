@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 const navigation = [
   { href: "/home", label: "Home" },
   { href: "/schedule", label: "Schedule" },
-  { href: "/reporting", label: "Report" },
+  { href: "/reports", label: "Report" },
   { href: "/more", label: "More" },
 ] as const;
 
@@ -37,7 +37,8 @@ export function GuardShell({ children }: { children: ReactNode }) {
           {navigation.map((item) => {
             const active =
               pathname === item.href ||
-              (item.href === "/reporting" && pathname === "/eosr");
+              (item.href === "/reports" &&
+                ["/reporting", "/eosr"].includes(pathname));
             return (
               <Link
                 aria-current={active ? "page" : undefined}
