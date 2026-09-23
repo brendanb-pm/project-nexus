@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 const navigation = [
   { href: "/home", label: "Home" },
   { href: "/schedule", label: "Schedule" },
-  { href: "/reports", label: "Reports" },
+  { href: "/reports", label: "Report" },
   { href: "/more", label: "More" },
 ] as const;
 
