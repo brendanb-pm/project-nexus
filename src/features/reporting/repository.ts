@@ -1,5 +1,6 @@
 import type { AuditContext } from "@/server/request/boundary";
 import type { VisibilityClassification } from "@/domain/model";
+import type { DraftFinalization } from "@/features/reporting-drafts/contracts";
 import type {
   ActivityAssignment,
   ActivityEntrySummary,
@@ -113,6 +114,7 @@ export interface ReportingRepository {
     context: ActivityContext,
     input: NewActivity,
     audit: AuditContext,
+    draft?: DraftFinalization,
   ): Promise<ActivityEntrySummary>;
   listOwnIncidents(
     scope: ReportingScope,
@@ -140,6 +142,7 @@ export interface ReportingRepository {
     context: ActivityContext,
     input: NewIncident,
     audit: AuditContext,
+    draft?: DraftFinalization,
   ): Promise<IncidentReportSummary>;
   listOwnHandoffs(
     scope: ReportingScope,

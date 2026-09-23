@@ -18,6 +18,7 @@ import type {
   AmendOperationalRecordInput,
 } from "./contracts";
 import type { ReportingRepository, ReportingScope } from "./repository";
+import type { DraftFinalization } from "@/features/reporting-drafts/contracts";
 
 export class ReportingService {
   constructor(
@@ -246,7 +247,7 @@ export class ReportingService {
     if (!changed) throw new StaleUpdateError();
     return changed;
   }
-  async createActivity(raw: CreateActivityInput) {
+  async createActivity(raw: CreateActivityInput, draft?: DraftFinalization) {
     const input = validateActivity(raw);
     if (!input.shiftAssignmentId)
       throw new ResourceNotFoundError("Shift assignment");
@@ -272,9 +273,10 @@ export class ReportingService {
       context,
       { ...input, occurredAt: occurredAt.toISOString() },
       this.access.auditContext(),
+      draft,
     );
   }
-  async createIncident(raw: CreateIncidentInput) {
+  async createIncident(raw: CreateIncidentInput, draft?: DraftFinalization) {
     const input = validateIncident(raw);
     if (!input.shiftAssignmentId)
       throw new ResourceNotFoundError("Shift assignment");
@@ -311,6 +313,7 @@ export class ReportingService {
       context,
       { ...input, occurredAt: occurredAt.toISOString() },
       this.access.auditContext(),
+      draft,
     );
   }
 }

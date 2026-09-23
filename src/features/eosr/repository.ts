@@ -1,4 +1,5 @@
 import type { AuditContext } from "@/server/request/boundary";
+import type { DraftFinalization } from "@/features/reporting-drafts/contracts";
 import type {
   ReportingScope,
   ActivityContext,
@@ -27,6 +28,7 @@ export interface EndOfShiftReportRepository {
       | "acknowledgedAt"
     > & { submissionKey: string },
     audit: AuditContext,
+    draft?: DraftFinalization,
   ): Promise<EndOfShiftReport>;
   listIncomingPassdowns(
     scope: ReportingScope,

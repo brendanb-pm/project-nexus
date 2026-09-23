@@ -836,6 +836,69 @@ export const dailyActivityReports = pgTable("daily_activity_reports", {
   updatedAt: updatedAt(),
 });
 
+/** Recoverable personal working state only. Submitted reporting authorities stay
+ * in activity_entries, incident_reports, and end_of_shift_reports. */
+export const reportingDrafts = pgTable(
+  "reporting_drafts",
+  {
+    id: id(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id),
+    ownerEmployeeId: uuid("owner_employee_id")
+      .notNull()
+      .references(() => employees.id),
+    shiftAssignmentId: uuid("shift_assignment_id")
+      .notNull()
+      .references(() => shiftAssignments.id),
+    family: text("family").notNull(),
+    clientDraftKey: text("client_draft_key").notNull(),
+    submissionKey: text("submission_key").notNull(),
+    payload: jsonb("payload").notNull(),
+    revision: integer("revision").notNull().default(1),
+    lastSaveKey: text("last_save_key").notNull(),
+    disposition: text("disposition").notNull().default("ACTIVE"),
+    canonicalRecordId: uuid("canonical_record_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    disposedAt: timestamp("disposed_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("reporting_drafts_active_owner_family_uidx")
+      .on(t.organizationId, t.ownerUserId, t.shiftAssignmentId, t.family)
+      .where(sql`${t.disposition} = 'ACTIVE'`),
+    uniqueIndex("reporting_drafts_owner_client_key_uidx").on(
+      t.organizationId,
+      t.ownerUserId,
+      t.clientDraftKey,
+    ),
+    index("reporting_drafts_owner_assignment_idx").on(
+      t.organizationId,
+      t.ownerUserId,
+      t.shiftAssignmentId,
+      t.disposition,
+    ),
+    index("reporting_drafts_expiry_idx").on(t.expiresAt, t.id),
+    check(
+      "reporting_drafts_family_check",
+      sql`${t.family} in ('SHIFT_ACTIVITY', 'SECURITY_INCIDENT', 'SHIFT_CLOSEOUT')`,
+    ),
+    check(
+      "reporting_drafts_disposition_check",
+      sql`${t.disposition} in ('ACTIVE', 'SUBMITTED', 'DISCARDED', 'EXPIRED')`,
+    ),
+    check("reporting_drafts_revision_check", sql`${t.revision} >= 1`),
+    check(
+      "reporting_drafts_payload_bound_check",
+      sql`octet_length(${t.payload}::text) <= 65536`,
+    ),
+  ],
+);
+
 export const endOfShiftReports = pgTable(
   "end_of_shift_reports",
   {

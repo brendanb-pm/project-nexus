@@ -17,6 +17,11 @@ import {
   sites,
 } from "@/server/db/schema";
 import type { AuditContext } from "@/server/request/boundary";
+import type { DraftFinalization } from "@/features/reporting-drafts/contracts";
+import {
+  lockDraftForFinalization,
+  retireSubmittedDraft,
+} from "@/features/reporting-drafts/postgres-repository";
 import type {
   ActivityEntrySummary,
   HandoffSummary,
@@ -715,8 +720,10 @@ export class PostgresReportingRepository implements ReportingRepository {
     context: ActivityContext,
     input: NewActivity,
     audit: AuditContext,
+    draft?: DraftFinalization,
   ) {
     return this.database.transaction(async (tx) => {
+      if (draft) await lockDraftForFinalization(tx, draft);
       const existing = await tx
         .select(fields)
         .from(activityEntries)
@@ -737,7 +744,10 @@ export class PostgresReportingRepository implements ReportingRepository {
           ),
         )
         .limit(1);
-      if (existing[0]) return dto(existing[0]);
+      if (existing[0]) {
+        if (draft) await retireSubmittedDraft(tx, draft, existing[0].id, audit);
+        return dto(existing[0]);
+      }
       const inserted = await tx
         .insert(activityEntries)
         .values({
@@ -790,6 +800,7 @@ export class PostgresReportingRepository implements ReportingRepository {
         .innerJoin(clients, eq(sites.clientId, clients.id))
         .where(eq(activityEntries.id, id))
         .limit(1);
+      if (draft) await retireSubmittedDraft(tx, draft, id, audit);
       return dto(created[0]!);
     });
   }
@@ -914,8 +925,10 @@ export class PostgresReportingRepository implements ReportingRepository {
     context: ActivityContext,
     input: NewIncident,
     audit: AuditContext,
+    draft?: DraftFinalization,
   ) {
     return this.database.transaction(async (tx) => {
+      if (draft) await lockDraftForFinalization(tx, draft);
       const existing = await tx
         .select(incidentFields)
         .from(incidentReports)
@@ -939,7 +952,10 @@ export class PostgresReportingRepository implements ReportingRepository {
           ),
         )
         .limit(1);
-      if (existing[0]) return incidentDto(existing[0]);
+      if (existing[0]) {
+        if (draft) await retireSubmittedDraft(tx, draft, existing[0].id, audit);
+        return incidentDto(existing[0]);
+      }
       const incidentNumber = `INC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
       const inserted = await tx
         .insert(incidentReports)
@@ -993,6 +1009,7 @@ export class PostgresReportingRepository implements ReportingRepository {
           .limit(1);
         if (!replay[0])
           throw new Error("Incident replay could not be resolved.");
+        if (draft) await retireSubmittedDraft(tx, draft, replay[0].id, audit);
         return incidentDto(replay[0]);
       }
       const id = inserted[0].id;
@@ -1045,6 +1062,7 @@ export class PostgresReportingRepository implements ReportingRepository {
         .innerJoin(clients, eq(sites.clientId, clients.id))
         .where(eq(incidentReports.id, id))
         .limit(1);
+      if (draft) await retireSubmittedDraft(tx, draft, id, audit);
       return { ...incidentDto(created[0]!), participants: input.participants };
     });
   }
