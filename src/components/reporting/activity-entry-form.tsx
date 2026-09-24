@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import {
   activityCategories,
   type ActivityAssignment,
@@ -63,6 +63,19 @@ export function ActivityEntryForm({
   });
   const formRef = useRef<HTMLFormElement>(null);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!hidden) requestAnimationFrame(() => headingRef.current?.focus());
+  }, [hidden]);
+  useEffect(() => {
+    if (
+      ["validation-error", "failed", "confirmation-unknown"].includes(
+        submission.kind,
+      )
+    ) {
+      requestAnimationFrame(() => errorSummaryRef.current?.focus());
+    }
+  }, [submission.kind]);
   const draft = useReportingDraft({
     enabled: draftEnabled,
     assignmentId: assignment.id,
@@ -165,13 +178,19 @@ export function ActivityEntryForm({
     <section
       aria-labelledby="add-activity-heading"
       className={`${hidden ? "hidden" : "block"} rounded-2xl border border-white/10 bg-[var(--card)] p-4 shadow-xl md:p-6`}
+      id="add-activity"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
             Shift Report · Activity
           </p>
-          <h2 className="mt-1 text-2xl font-bold" id="add-activity-heading">
+          <h2
+            className="mt-1 text-2xl font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            id="add-activity-heading"
+            ref={headingRef}
+            tabIndex={-1}
+          >
             Add activity
           </h2>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -211,6 +230,17 @@ export function ActivityEntryForm({
                 ? "Nexus could not confirm the result. Your information is preserved. Retry uses the same submission key, so it cannot create a duplicate entry."
                 : submission.message}
           </p>
+          {submission.kind === "validation-error" ? (
+            <ul className="mt-2 list-disc pl-5 text-sm">
+              {Object.entries(submission.fieldErrors).map(([field, errors]) => (
+                <li key={field}>
+                  <a className="underline" href={`#activity-${field}`}>
+                    {errors[0]}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
@@ -242,6 +272,7 @@ export function ActivityEntryForm({
             }
             aria-invalid={Boolean(fieldError("category"))}
             className={input}
+            id="activity-category"
             name="category"
             required
           >
@@ -269,6 +300,7 @@ export function ActivityEntryForm({
             }
             aria-invalid={Boolean(fieldError("narrative"))}
             className={`${input} min-h-32`}
+            id="activity-narrative"
             name="narrative"
             required
             rows={5}
@@ -311,7 +343,7 @@ export function ActivityEntryForm({
 
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <button
-            className="min-h-12 rounded-xl bg-[var(--accent)] px-5 font-bold text-white shadow-lg shadow-black/20 disabled:cursor-wait disabled:opacity-65 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="min-h-12 rounded-xl bg-[var(--accent-control)] px-5 font-bold text-white shadow-lg shadow-black/20 disabled:cursor-wait disabled:opacity-65 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             disabled={
               submission.kind === "submitting" ||
               (draftEnabled &&

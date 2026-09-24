@@ -177,6 +177,7 @@ test("Incident draft restores participants and excludes attachments", async ({
 }) => {
   const narrative = "NX87 synthetic incident recovery note";
   await signIn(page);
+  await page.getByRole("button", { name: "File Security Incident" }).click();
   const form = page
     .getByRole("heading", { name: "Security Incident Report" })
     .locator("xpath=ancestor::section[1]");
@@ -364,6 +365,7 @@ test("EOSR draft survives navigation and reauthentication, then submits once", a
   }
   const summary = "NX87 synthetic closeout and passdown recovery";
   await signIn(page);
+  await page.getByRole("button", { name: "Closeout Shift Report" }).click();
   const form = page.locator("#shift-closeout");
   await form.getByLabel("Shift summary").fill(summary);
   await form.getByLabel("Unresolved issues").fill("Door service pending.");
@@ -376,6 +378,7 @@ test("EOSR draft survives navigation and reauthentication, then submits once", a
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Sign in as Guard A" }).click();
   await page.getByRole("link", { name: "Open reporting" }).click();
+  await page.getByRole("button", { name: "Closeout Shift Report" }).click();
   const recovered = page.locator("#shift-closeout");
   await recovered.getByRole("button", { name: "Restore saved draft" }).click();
   await expect(recovered.getByLabel("Shift summary")).toHaveValue(summary);

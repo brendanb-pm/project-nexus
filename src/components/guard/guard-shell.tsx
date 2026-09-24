@@ -42,7 +42,7 @@ export function GuardShell({ children }: { children: ReactNode }) {
             return (
               <Link
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-12 items-center justify-center rounded-lg px-3 text-sm font-semibold ${active ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:bg-white/5 hover:text-white"}`}
+                className={`flex min-h-12 items-center justify-center rounded-lg px-3 text-sm font-semibold ${active ? "bg-[var(--accent-control)] text-white" : "text-[var(--text-muted)] hover:bg-white/5 hover:text-white"}`}
                 href={item.href}
                 key={item.href}
               >

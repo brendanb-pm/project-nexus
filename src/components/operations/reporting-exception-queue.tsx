@@ -21,11 +21,15 @@ export function ReportingExceptionQueue({
 }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
+  const [invalidId, setInvalidId] = useState<string | null>(null);
   function submit(form: HTMLFormElement) {
     if (!String(new FormData(form).get("reason") ?? "").trim()) {
       setMessage("A reason is required before updating a reporting exception.");
+      setInvalidId(String(new FormData(form).get("exceptionId")));
+      (form.elements.namedItem("reason") as HTMLInputElement | null)?.focus();
       return;
     }
+    setInvalidId(null);
     startTransition(async () => {
       const result = await transition(new FormData(form));
       setMessage(result.message);
@@ -71,6 +75,7 @@ export function ReportingExceptionQueue({
             </div>
             <form
               className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto]"
+              noValidate
               onSubmit={(event) => {
                 event.preventDefault();
                 submit(event.currentTarget);
@@ -82,29 +87,48 @@ export function ReportingExceptionQueue({
                 type="hidden"
                 value={item.revision}
               />
-              <input
-                className="min-h-11 rounded-lg border border-white/15 bg-[var(--background)] px-3"
-                name="reason"
-                required
-                placeholder="Reason for lifecycle action"
-              />
-              <select
-                className="min-h-11 rounded-lg border border-white/15 bg-[var(--background)] px-3"
-                name="nextState"
-                defaultValue="ACKNOWLEDGED"
-              >
-                <option value="ACKNOWLEDGED">Acknowledge</option>
-                <option value="CORRECTION_REQUESTED">Request correction</option>
-                <option value="RESOLVED">Resolve corrected report</option>
-                {lifecycleRole === "FULL" ? (
-                  <option value="ESCALATED">Escalate</option>
+              <label className="grid gap-1 text-sm font-semibold">
+                Reason for action
+                <input
+                  aria-label="Reason for action"
+                  aria-describedby={
+                    invalidId === item.id
+                      ? `reason-error-${item.id}`
+                      : undefined
+                  }
+                  aria-invalid={invalidId === item.id}
+                  className="min-h-11 rounded-lg border border-white/15 bg-[var(--background)] px-3"
+                  name="reason"
+                  required
+                />
+                {invalidId === item.id ? (
+                  <span className="text-red-200" id={`reason-error-${item.id}`}>
+                    {message}
+                  </span>
                 ) : null}
-                {lifecycleRole === "FULL" ? (
-                  <option value="WAIVED">Waive</option>
-                ) : null}
-              </select>
+              </label>
+              <label className="grid gap-1 text-sm font-semibold">
+                Action
+                <select
+                  className="min-h-11 rounded-lg border border-white/15 bg-[var(--background)] px-3"
+                  name="nextState"
+                  defaultValue="ACKNOWLEDGED"
+                >
+                  <option value="ACKNOWLEDGED">Acknowledge</option>
+                  <option value="CORRECTION_REQUESTED">
+                    Request correction
+                  </option>
+                  <option value="RESOLVED">Resolve corrected report</option>
+                  {lifecycleRole === "FULL" ? (
+                    <option value="ESCALATED">Escalate</option>
+                  ) : null}
+                  {lifecycleRole === "FULL" ? (
+                    <option value="WAIVED">Waive</option>
+                  ) : null}
+                </select>
+              </label>
               <button
-                className="min-h-11 rounded-lg bg-[var(--accent)] px-4 font-bold text-white disabled:opacity-60"
+                className="min-h-11 rounded-lg bg-[var(--accent-control)] px-4 font-bold text-white disabled:opacity-60"
                 disabled={pending}
                 type="submit"
               >

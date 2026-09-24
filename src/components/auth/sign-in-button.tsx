@@ -26,7 +26,7 @@ export function SignInButton() {
   return (
     <div>
       <button
-        className="rounded-lg bg-[var(--accent)] px-4 py-2 font-semibold text-white disabled:opacity-60"
+        className="rounded-lg bg-[var(--accent-control)] px-4 py-2 font-semibold text-white disabled:opacity-60"
         disabled={pending}
         onClick={signIn}
         type="button"

@@ -27,7 +27,10 @@ const ready: ReportingPageState = {
   handoffs: [],
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, "", "/");
+});
 
 describe("NX-8.2 unified Shift Report activity workspace", () => {
   it("uses human-readable authoritative assignment context", () => {
@@ -52,8 +55,8 @@ describe("NX-8.2 unified Shift Report activity workspace", () => {
       screen.getByRole("button", { name: "File Security Incident" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Closeout Shift Report" }),
-    ).toHaveAttribute("href", "#shift-closeout");
+      screen.getByRole("button", { name: "Closeout Shift Report" }),
+    ).toHaveAttribute("aria-controls", "shift-closeout");
     expect(screen.queryByText(/Activity \/ DAR/)).not.toBeInTheDocument();
     expect(screen.queryByText(/EOSR/)).not.toBeInTheDocument();
   });
@@ -68,7 +71,9 @@ describe("NX-8.2 unified Shift Report activity workspace", () => {
         state={{ kind: "permission-denied", message: "Not authorized." }}
       />,
     );
-    expect(screen.getByRole("alert")).toHaveTextContent("Not authorized");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This page is unavailable for this account.",
+    );
   });
 
   it("adds a server-confirmed activity to the timeline", async () => {
@@ -127,7 +132,7 @@ describe("NX-8.2 unified Shift Report activity workspace", () => {
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveFocus());
     expect(narrative).toHaveValue("Preserve this entry");
-    expect(screen.getByText("Describe what happened.")).toBeVisible();
+    expect(screen.getAllByText("Describe what happened.")[0]).toBeVisible();
   });
 
   it("retries an uncertain result with the same idempotency key", async () => {
@@ -213,6 +218,58 @@ describe("NX-8.2 unified Shift Report activity workspace", () => {
       "href",
       "#incident-incident-1",
     );
+  });
+
+  it("reveals tasks deliberately, updates the deep link, and restores focus", async () => {
+    render(
+      <ReportingWorkspace
+        actions={{ createActivity: vi.fn(), createIncident: vi.fn() }}
+        state={ready}
+      />,
+    );
+    const incident = screen.getByRole("button", {
+      name: "File Security Incident",
+    });
+    fireEvent.click(incident);
+    expect(window.location.hash).toBe("#incident");
+    const heading = screen.getByRole("heading", {
+      name: "Security Incident Report",
+    });
+    await waitFor(() => expect(heading).toHaveFocus());
+    fireEvent.click(screen.getByRole("button", { name: "Close task" }));
+    await waitFor(() => expect(incident).toHaveFocus());
+    expect(window.location.hash).toBe("");
+    const closeout = screen.getByRole("button", {
+      name: "Closeout Shift Report",
+    });
+    fireEvent.click(closeout);
+    expect(window.location.hash).toBe("#shift-closeout");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Shift closeout" }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it("moves focus into Add activity and returns it to the single launcher", async () => {
+    render(
+      <ReportingWorkspace
+        actions={{ createActivity: vi.fn(), createIncident: vi.fn() }}
+        state={ready}
+      />,
+    );
+    const launcher = screen.getByRole("button", { name: /Add activity/ });
+    expect(
+      screen.getAllByRole("button", { name: /Add activity/ }),
+    ).toHaveLength(1);
+    fireEvent.click(launcher);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Add activity" }),
+      ).toHaveFocus(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(launcher).toHaveFocus());
   });
 });
 

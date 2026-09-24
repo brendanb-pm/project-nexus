@@ -76,7 +76,7 @@ function InternalBrowse({ state }: { state: InternalReportHub }) {
               <option value="">All record families</option>
               <option value="activity">Activity Entry</option>
               <option value="incident">Security Incident Report</option>
-              <option value="eosr">EOSR / Shift Closeout</option>
+              <option value="eosr">Shift Report closeout</option>
               <option value="exception">Reporting Exception</option>
             </select>
           </label>
@@ -119,7 +119,7 @@ function InternalBrowse({ state }: { state: InternalReportHub }) {
               <option value="720">Previous 30 days</option>
             </select>
           </label>
-          <button className="min-h-11 rounded-lg bg-[var(--accent)] px-4 py-2 font-semibold md:col-span-4 md:w-fit">
+          <button className="min-h-11 rounded-lg bg-[var(--accent-control)] px-4 py-2 font-semibold text-white md:col-span-4 md:w-fit">
             Apply filters
           </button>
         </form>
@@ -239,7 +239,7 @@ export function ReportingHub({ state }: { state: ReportHubPageState }) {
       {state.kind === "guard"
         ? destination(
             "Your Shift Report",
-            "Record Activity Entries, create a separate Security Incident Report, and complete EOSR closeout and passdown.",
+            "Add shift activity, create a separate Security Incident Report, and complete closeout and passdown.",
             "/reporting",
             "Open Shift Report",
           )

@@ -14,7 +14,7 @@ test("keeps the Guard EOSR and incoming passdown usable at 390 by 844", async ({
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Sign in as Guard A" }).click();
   await page.getByRole("link", { name: "Open reporting" }).click();
-  await page.getByRole("link", { name: "Closeout Shift Report" }).click();
+  await page.getByRole("button", { name: "Closeout Shift Report" }).click();
   await expect(
     page.getByRole("group", { name: "Passdown for the incoming Guard" }),
   ).toBeVisible();

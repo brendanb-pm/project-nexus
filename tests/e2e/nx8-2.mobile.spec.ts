@@ -9,7 +9,7 @@ test("keeps Shift Report actions and bottom content usable at 390 by 844", async
 
   const add = page.getByRole("button", { name: /Add activity/ });
   const incident = page.getByRole("button", { name: "File Security Incident" });
-  const closeout = page.getByRole("link", { name: "Closeout Shift Report" });
+  const closeout = page.getByRole("button", { name: "Closeout Shift Report" });
   for (const target of [add, incident, closeout]) {
     await expect(target).toBeVisible();
     expect((await target.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(
