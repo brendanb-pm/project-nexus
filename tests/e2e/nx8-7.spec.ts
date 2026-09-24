@@ -248,6 +248,35 @@ test("same-user recovery conflicts safely across devices and other roles see no 
     await expect(original.getByLabel("What happened")).toHaveValue(
       "NX87 stale first-device edit",
     );
+    for (const [persona, route] of [
+      [
+        "Incoming Guard B",
+        "/reporting?assignmentId=00000000-0000-4000-8000-000000000090",
+      ],
+      ["Client User A", "/portal"],
+      ["Leadership A", "/leadership"],
+      ["Operations Manager B", "/reports"],
+      ["Operations Manager B", "/operations/reporting-exceptions"],
+    ] as const) {
+      const outsiderContext = await browser.newContext();
+      try {
+        const outsider = await outsiderContext.newPage();
+        await outsider.goto("/sign-in");
+        await outsider
+          .getByRole("button", { name: `Sign in as ${persona}` })
+          .click();
+        await expect(
+          outsider.getByRole("button", { name: "Sign out of local demo" }),
+        ).toBeVisible();
+        await outsider.goto(route);
+        await expect(outsider.getByText(narrative)).toHaveCount(0);
+        await expect(
+          outsider.getByText("NX87 revised on second device"),
+        ).toHaveCount(0);
+      } finally {
+        await outsiderContext.close();
+      }
+    }
     second.once("dialog", (dialog) => void dialog.accept());
     await recovered.getByRole("button", { name: "Discard draft" }).click();
     await expect(recovered.getByText(/Draft discarded/)).toBeVisible();
@@ -258,35 +287,6 @@ test("same-user recovery conflicts safely across devices and other roles see no 
     ).toHaveCount(0);
   } finally {
     await secondContext.close();
-  }
-
-  for (const [persona, route] of [
-    [
-      "Incoming Guard B",
-      "/reporting?assignmentId=00000000-0000-4000-8000-000000000090",
-    ],
-    ["Client User A", "/portal"],
-    ["Leadership A", "/leadership"],
-  ] as const) {
-    const context = await browser.newContext();
-    try {
-      const outsider = await context.newPage();
-      await outsider.goto("/sign-in");
-      await outsider
-        .getByRole("button", { name: `Sign in as ${persona}` })
-        .click();
-      await expect(outsider).toHaveURL(
-        persona === "Incoming Guard B" ? /\/schedule/ : new RegExp(route),
-      );
-      await outsider.waitForLoadState("load");
-      if (persona === "Incoming Guard B") await outsider.goto(route);
-      await expect(outsider.getByText(narrative)).toHaveCount(0);
-      await expect(
-        outsider.getByText("NX87 revised on second device"),
-      ).toHaveCount(0);
-    } finally {
-      await context.close();
-    }
   }
 });
 

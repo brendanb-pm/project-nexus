@@ -30,8 +30,8 @@ const dto = (row: DraftRow): ReportingDraft => ({
   id: row.id,
   shiftAssignmentId: row.shiftAssignmentId,
   family: row.family as DraftFamily,
-  clientDraftKey: row.clientDraftKey,
-  submissionKey: row.submissionKey,
+  clientDraftKey: row.clientDraftKey ?? "",
+  submissionKey: row.submissionKey ?? "",
   payload: row.payload as Record<string, unknown>,
   revision: row.revision,
   disposition: row.disposition as ReportingDraft["disposition"],
@@ -136,6 +136,9 @@ export async function retireSubmittedDraft(
     .update(reportingDrafts)
     .set({
       payload: {},
+      clientDraftKey: null,
+      submissionKey: null,
+      lastSaveKey: null,
       disposition: "SUBMITTED",
       canonicalRecordId,
       disposedAt: now,
@@ -280,6 +283,9 @@ export class PostgresReportingDraftRepository {
           .update(reportingDrafts)
           .set({
             payload: {},
+            clientDraftKey: null,
+            submissionKey: null,
+            lastSaveKey: null,
             disposition: "EXPIRED",
             disposedAt: now,
             updatedAt: now,
@@ -351,6 +357,9 @@ export class PostgresReportingDraftRepository {
           .update(reportingDrafts)
           .set({
             payload: {},
+            clientDraftKey: null,
+            submissionKey: null,
+            lastSaveKey: null,
             disposition: "EXPIRED",
             disposedAt: now,
             updatedAt: now,
@@ -457,6 +466,9 @@ export class PostgresReportingDraftRepository {
         .update(reportingDrafts)
         .set({
           payload: {},
+          clientDraftKey: null,
+          submissionKey: null,
+          lastSaveKey: null,
           disposition: "DISCARDED",
           disposedAt: now,
           updatedAt: now,
@@ -491,6 +503,9 @@ export class PostgresReportingDraftRepository {
           .update(reportingDrafts)
           .set({
             payload: {},
+            clientDraftKey: null,
+            submissionKey: null,
+            lastSaveKey: null,
             disposition: "EXPIRED",
             disposedAt: now,
             updatedAt: now,

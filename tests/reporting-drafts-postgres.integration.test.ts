@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { Pool } from "pg";
 import * as schema from "@/server/db/schema";
 import {
@@ -70,14 +70,34 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
     eosr = new PostgresEndOfShiftReportRepository(db);
     await db
       .delete(reportingDrafts)
-      .where(like(reportingDrafts.clientDraftKey, "nx87-%"));
+      .where(
+        and(
+          eq(reportingDrafts.organizationId, ids.org),
+          inArray(reportingDrafts.ownerUserId, [ids.user, ids.incomingUser]),
+          inArray(reportingDrafts.shiftAssignmentId, [
+            ids.assignment,
+            ids.oldAssignment,
+            ids.incomingAssignment,
+          ]),
+        ),
+      );
   });
 
   afterAll(async () => {
     if (!db || !pool) return;
     await db
       .delete(reportingDrafts)
-      .where(like(reportingDrafts.clientDraftKey, "nx87-%"));
+      .where(
+        and(
+          eq(reportingDrafts.organizationId, ids.org),
+          inArray(reportingDrafts.ownerUserId, [ids.user, ids.incomingUser]),
+          inArray(reportingDrafts.shiftAssignmentId, [
+            ids.assignment,
+            ids.oldAssignment,
+            ids.incomingAssignment,
+          ]),
+        ),
+      );
     if (createdIncidentIds.length) {
       await db
         .delete(incidentParticipants)
@@ -197,6 +217,12 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
     expect((await guard.get(ids.assignment, "SECURITY_INCIDENT"))?.id).toBe(
       saved.id,
     );
+    await expect(
+      db
+        .update(reportingDrafts)
+        .set({ clientDraftKey: null })
+        .where(eq(reportingDrafts.id, saved.id)),
+    ).rejects.toThrow();
     for (const role of [
       "SUPERVISOR",
       "OPERATIONS_MANAGER",
@@ -228,6 +254,38 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
         expectedRevision: saved.revision,
         payload: { narrative: "x".repeat(65537), participants: [] },
       }),
+    ).rejects.toThrow();
+    await expect(
+      guard.save({
+        shiftAssignmentId: ids.assignment,
+        family: "SECURITY_INCIDENT",
+        clientDraftKey: saved.clientDraftKey,
+        submissionKey: saved.submissionKey,
+        saveKey: nextKey(),
+        expectedRevision: saved.revision,
+        payload: JSON.parse('{"__proto__":{"isAdmin":true},"participants":[]}'),
+      }),
+    ).rejects.toThrow();
+    await expect(
+      guard.save({
+        shiftAssignmentId: ids.assignment,
+        family: "SECURITY_INCIDENT",
+        clientDraftKey: saved.clientDraftKey,
+        submissionKey: saved.submissionKey,
+        saveKey: nextKey(),
+        expectedRevision: saved.revision,
+        payload: {
+          participants: [
+            { type: "SUBJECT", attachmentUrl: "https://example.invalid/file" },
+          ],
+        },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db
+        .update(reportingDrafts)
+        .set({ payload: { narrative: "x".repeat(65537) } })
+        .where(eq(reportingDrafts.id, saved.id)),
     ).rejects.toThrow();
     await guard.discard(ids.assignment, saved.id, saved.revision);
   });
@@ -368,7 +426,13 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
       .select()
       .from(reportingDrafts)
       .where(eq(reportingDrafts.id, row.id));
-    expect(retired[0]).toMatchObject({ payload: {}, disposition: "DISCARDED" });
+    expect(retired[0]).toMatchObject({
+      payload: {},
+      disposition: "DISCARDED",
+      clientDraftKey: null,
+      submissionKey: null,
+      lastSaveKey: null,
+    });
   });
 
   it("fails closed after assignment cancellation or reassignment without transferring ownership", async () => {
@@ -461,6 +525,9 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
       payload: {},
       disposition: "SUBMITTED",
       canonicalRecordId: entry.id,
+      clientDraftKey: null,
+      submissionKey: null,
+      lastSaveKey: null,
     });
     await expect(
       reporting.createActivity(
@@ -763,6 +830,12 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
           .from(reportingDrafts)
           .where(eq(reportingDrafts.id, row.id))
       )[0],
-    ).toMatchObject({ disposition: "EXPIRED", payload: {} });
+    ).toMatchObject({
+      disposition: "EXPIRED",
+      payload: {},
+      clientDraftKey: null,
+      submissionKey: null,
+      lastSaveKey: null,
+    });
   });
 });

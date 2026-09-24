@@ -55,7 +55,14 @@ export async function saveReportingDraft(form: FormData) {
       await createProductionPrincipalResolver(),
       "reporting-draft.save",
     );
-    const payload = JSON.parse(String(form.get("payload") ?? "{}")) as unknown;
+    let payload: unknown;
+    try {
+      payload = JSON.parse(String(form.get("payload") ?? "{}")) as unknown;
+    } catch {
+      throw new ValidationError({
+        payload: ["Draft data is malformed. Review and retry."],
+      });
+    }
     const draft = await service.save({
       shiftAssignmentId: form.get("shiftAssignmentId"),
       family: form.get("family"),

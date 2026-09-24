@@ -855,11 +855,11 @@ export const reportingDrafts = pgTable(
       .notNull()
       .references(() => shiftAssignments.id),
     family: text("family").notNull(),
-    clientDraftKey: text("client_draft_key").notNull(),
-    submissionKey: text("submission_key").notNull(),
+    clientDraftKey: text("client_draft_key"),
+    submissionKey: text("submission_key"),
     payload: jsonb("payload").notNull(),
     revision: integer("revision").notNull().default(1),
-    lastSaveKey: text("last_save_key").notNull(),
+    lastSaveKey: text("last_save_key"),
     disposition: text("disposition").notNull().default("ACTIVE"),
     canonicalRecordId: uuid("canonical_record_id"),
     createdAt: createdAt(),
@@ -892,6 +892,10 @@ export const reportingDrafts = pgTable(
       sql`${t.disposition} in ('ACTIVE', 'SUBMITTED', 'DISCARDED', 'EXPIRED')`,
     ),
     check("reporting_drafts_revision_check", sql`${t.revision} >= 1`),
+    check(
+      "reporting_drafts_active_keys_check",
+      sql`${t.disposition} <> 'ACTIVE' or (${t.clientDraftKey} is not null and ${t.submissionKey} is not null and ${t.lastSaveKey} is not null)`,
+    ),
     check(
       "reporting_drafts_payload_bound_check",
       sql`octet_length(${t.payload}::text) <= 65536`,
