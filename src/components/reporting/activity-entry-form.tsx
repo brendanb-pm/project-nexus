@@ -7,6 +7,10 @@ import {
   type ActivityEntrySummary,
   type CreateActivityResult,
 } from "@/features/reporting/contracts";
+import {
+  ReportingDraftControls,
+  useReportingDraft,
+} from "./use-reporting-draft";
 
 const input =
   "mt-1.5 min-h-12 w-full rounded-xl border border-white/15 bg-[var(--background)] px-3 py-2 text-base outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/35";
@@ -42,12 +46,14 @@ export function ActivityEntryForm({
   assignment,
   hidden,
   createActivity,
+  draftEnabled = false,
   onCancel,
   onConfirmed,
 }: {
   assignment: ActivityAssignment;
   hidden: boolean;
   createActivity(form: FormData): Promise<CreateActivityResult>;
+  draftEnabled?: boolean;
   onCancel(): void;
   onConfirmed(entry: ActivityEntrySummary): void;
 }) {
@@ -57,6 +63,45 @@ export function ActivityEntryForm({
   });
   const formRef = useRef<HTMLFormElement>(null);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
+  const draft = useReportingDraft({
+    enabled: draftEnabled,
+    assignmentId: assignment.id,
+    family: "SHIFT_ACTIVITY",
+    readPayload: () => {
+      const form = formRef.current;
+      const data = form ? new FormData(form) : new FormData();
+      return {
+        category: String(data.get("category") ?? "OBSERVATION"),
+        narrative: String(data.get("narrative") ?? ""),
+        locationContext: String(data.get("locationContext") ?? ""),
+        actionTaken: String(data.get("actionTaken") ?? ""),
+        followUpRequired: data.has("followUpRequired"),
+        visibility: "INTERNAL",
+      };
+    },
+    restorePayload: (payload) => {
+      const form = formRef.current;
+      if (!form) return;
+      for (const name of [
+        "category",
+        "narrative",
+        "locationContext",
+        "actionTaken",
+      ]) {
+        const field = form.elements.namedItem(name);
+        if (
+          field instanceof HTMLInputElement ||
+          field instanceof HTMLTextAreaElement ||
+          field instanceof HTMLSelectElement
+        )
+          field.value = typeof payload[name] === "string" ? payload[name] : "";
+      }
+      const followUp = form.elements.namedItem("followUpRequired");
+      if (followUp instanceof HTMLInputElement)
+        followUp.checked = payload.followUpRequired === true;
+    },
+    clearPayload: () => formRef.current?.reset(),
+  });
 
   const fieldError = (name: string) =>
     submission.kind === "validation-error"
@@ -67,6 +112,29 @@ export function ActivityEntryForm({
     if (submission.kind === "submitting") return;
     setSubmission({ kind: "submitting" });
     try {
+      if (draftEnabled) {
+        const result = await draft.submit();
+        if (result.kind === "submitted" && result.family === "SHIFT_ACTIVITY") {
+          onConfirmed(result.record as ActivityEntrySummary);
+          formRef.current?.reset();
+          setSubmission({ kind: "confirmed" });
+        } else if (result.kind === "already-submitted") {
+          window.location.reload();
+        } else if (result.kind === "validation-error") {
+          setSubmission({
+            kind: "validation-error",
+            fieldErrors: result.fieldErrors,
+          });
+        } else {
+          setSubmission({
+            kind: "failed",
+            message:
+              draft.message ||
+              "Draft submission needs attention. Review the draft status below.",
+          });
+        }
+        return;
+      }
       const result = await createActivity(formData);
       if (result.kind === "validation-error") {
         setSubmission(result);
@@ -155,7 +223,13 @@ export function ActivityEntryForm({
         </p>
       ) : null}
 
-      <form className="mt-5 grid gap-5" onSubmit={handleSubmit} ref={formRef}>
+      <form
+        className="mt-5 grid gap-5"
+        onChange={draftEnabled ? draft.changed : undefined}
+        onInput={draftEnabled ? draft.changed : undefined}
+        onSubmit={handleSubmit}
+        ref={formRef}
+      >
         <input name="shiftAssignmentId" type="hidden" value={assignment.id} />
         <input name="submissionKey" type="hidden" value={submissionKey} />
         <input name="visibility" type="hidden" value="INTERNAL" />
@@ -238,7 +312,16 @@ export function ActivityEntryForm({
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <button
             className="min-h-12 rounded-xl bg-[var(--accent)] px-5 font-bold text-white shadow-lg shadow-black/20 disabled:cursor-wait disabled:opacity-65 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            disabled={submission.kind === "submitting"}
+            disabled={
+              submission.kind === "submitting" ||
+              (draftEnabled &&
+                [
+                  "loading",
+                  "recovery-available",
+                  "inaccessible",
+                  "conflict",
+                ].includes(draft.status))
+            }
             type="submit"
           >
             {submission.kind === "submitting"
@@ -255,6 +338,7 @@ export function ActivityEntryForm({
             Cancel
           </button>
         </div>
+        {draftEnabled ? <ReportingDraftControls draft={draft} /> : null}
         <p aria-live="polite" className="sr-only" role="status">
           {submission.kind === "submitting" ? "Submitting activity" : ""}
         </p>

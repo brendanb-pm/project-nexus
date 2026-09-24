@@ -7,7 +7,8 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgresql://nexus_app:nexus_local_only@127.0.0.1:5432/nexus_demo
+      DATABASE_URL: postgresql://nexus_app:nexus_local_only@127.0.0.1:5432/nexus_ci_test
+      NEXUS_ISOLATED_TEST_DATABASE: "true"
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       BETTER_AUTH_SECRET: nexus-ci-only-secret-at-least-32-characters
       NEXUS_DEV_AUTH: "true"
@@ -15,13 +16,13 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_DB: nexus_demo
+          POSTGRES_DB: nexus_ci_test
           POSTGRES_USER: nexus_app
           POSTGRES_PASSWORD: nexus_local_only
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U nexus_app -d nexus_demo"
+          --health-cmd "pg_isready -U nexus_app -d nexus_ci_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -40,7 +41,7 @@ jobs:
           docker exec "${{ job.services.postgres.id }}" psql \
             -v ON_ERROR_STOP=1 \
             -U nexus_app \
-            -d nexus_demo \
+            -d nexus_ci_test \
             -c "CREATE TABLE nexus_local_environment_identity (singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton), marker text NOT NULL CHECK (marker = 'NEXUS_LOCAL_DEMO_V1')); INSERT INTO nexus_local_environment_identity (marker) VALUES ('NEXUS_LOCAL_DEMO_V1');"
       - run: npm run db:demo:reset
       - name: Check changed-surface formatting
@@ -55,6 +56,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: NEXUS_POSTGRES_TEST=true npm run test:postgres
+      - run: NEXUS_POSTGRES_TEST=true npx vitest run tests/reporting-drafts-postgres.integration.test.ts
       - run: NEXUS_POSTGRES_TEST=true npx vitest run tests/asset-custody-postgres.integration.test.ts
       - run: npm run db:check
       - run: npm run db:seed:validate

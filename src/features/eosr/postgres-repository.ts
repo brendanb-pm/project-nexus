@@ -32,6 +32,12 @@ import type {
   ReportingScope,
 } from "@/features/reporting/repository";
 import type { AuditContext } from "@/server/request/boundary";
+import { StaleUpdateError } from "@/server/request/errors";
+import type { DraftFinalization } from "@/features/reporting-drafts/contracts";
+import {
+  lockDraftForFinalization,
+  retireSubmittedDraft,
+} from "@/features/reporting-drafts/postgres-repository";
 import type {
   EndOfShiftReport,
   IncomingPassdown,
@@ -92,14 +98,21 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
     context: ActivityContext,
     input: Parameters<EndOfShiftReportRepository["create"]>[2],
     audit: AuditContext,
+    draft?: DraftFinalization,
   ) {
     const row = await this.database.transaction(async (tx) => {
+      if (draft) await lockDraftForFinalization(tx, draft);
       const existing = await tx
         .select()
         .from(endOfShiftReports)
         .where(eq(endOfShiftReports.shiftAssignmentId, context.id))
         .limit(1);
-      if (existing[0]) return existing[0];
+      if (existing[0]) {
+        if (draft && existing[0].submissionKey !== draft.submissionKey)
+          throw new StaleUpdateError();
+        if (draft) await retireSubmittedDraft(tx, draft, existing[0].id, audit);
+        return existing[0];
+      }
       const inserted = await tx
         .insert(endOfShiftReports)
         .values({
@@ -136,6 +149,7 @@ export class PostgresEndOfShiftReportRepository implements EndOfShiftReportRepos
           ),
         },
       });
+      if (draft) await retireSubmittedDraft(tx, draft, created.id, audit);
       return created;
     });
     return dto(row, context.siteName, context.postName);

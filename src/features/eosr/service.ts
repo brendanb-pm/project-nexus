@@ -6,6 +6,7 @@ import {
 } from "@/server/request/errors";
 import type { CreateEndOfShiftReportInput } from "./contracts";
 import type { EndOfShiftReportRepository } from "./repository";
+import type { DraftFinalization } from "@/features/reporting-drafts/contracts";
 import { validateEndOfShiftReport } from "./validation";
 
 export class EndOfShiftReportService {
@@ -18,7 +19,7 @@ export class EndOfShiftReportService {
     const { context } = this.access;
     return { organizationId: context.organizationId, ...context.scope };
   }
-  async submit(raw: CreateEndOfShiftReportInput) {
+  async submit(raw: CreateEndOfShiftReportInput, draft?: DraftFinalization) {
     const input = validateEndOfShiftReport(raw);
     const context = await this.repository.getAssignment(
       this.scope(),
@@ -52,6 +53,7 @@ export class EndOfShiftReportService {
         submittedByUserId: this.access.context.actor.userId,
       },
       this.access.auditContext(),
+      draft,
     );
   }
   async listIncomingPassdowns(limit = 25) {

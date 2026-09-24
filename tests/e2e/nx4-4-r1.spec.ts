@@ -32,8 +32,11 @@ test("walks Guard EOSR, incoming passdown, and Operations history through local 
   await page
     .getByRole("button", { name: "Submit end-of-shift report" })
     .click();
-  await expect(page.getByText("End-of-shift report submitted")).toContainText(
-    "End-of-shift report submitted",
+  await expect(
+    page.getByText(/Your saved closeout needs attention/),
+  ).toBeVisible();
+  await expect(page.getByLabel("Shift summary")).toHaveValue(
+    "North Lobby shift completed.",
   );
   await page.getByRole("button", { name: "Sign out of local demo" }).click();
 

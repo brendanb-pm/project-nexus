@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import {
+  ReportingDraftControls,
+  useReportingDraft,
+} from "./use-reporting-draft";
 import { ActivityEntryForm } from "@/components/reporting/activity-entry-form";
 import { ShiftReportTimeline } from "@/components/reporting/shift-report-timeline";
 import { EndOfShiftReportForm } from "@/components/eosr/end-of-shift-report-form";
@@ -57,6 +61,7 @@ export function ReportingWorkspace({
   passdowns = [],
   correctionMode = false,
   reportingExceptions = [],
+  draftEnabled = false,
 }: {
   state: ReportingPageState;
   actions?: {
@@ -68,6 +73,7 @@ export function ReportingWorkspace({
   passdowns?: readonly IncomingPassdown[];
   correctionMode?: boolean;
   reportingExceptions?: readonly ReportingExceptionSummary[];
+  draftEnabled?: boolean;
 }) {
   const [activityFormOpen, setActivityFormOpen] = useState(false);
   const [timeline, setTimeline] = useState<readonly ActivityEntrySummary[]>(
@@ -85,6 +91,64 @@ export function ReportingWorkspace({
   const [participants, setParticipants] = useState<ParticipantDraft[]>([
     newParticipant(),
   ]);
+  const incidentFormRef = useRef<HTMLFormElement>(null);
+  const incidentAssignmentId =
+    state.kind === "ready" ? (state.assignments[0]?.id ?? "") : "";
+  const incidentDraft = useReportingDraft({
+    enabled:
+      draftEnabled &&
+      Boolean(incidentAssignmentId) &&
+      !(state.kind === "ready" && state.reviewEnabled),
+    assignmentId: incidentAssignmentId,
+    family: "SECURITY_INCIDENT",
+    readPayload: () => {
+      const data = incidentFormRef.current
+        ? new FormData(incidentFormRef.current)
+        : new FormData();
+      return {
+        originatingActivityEntryId: relatedActivityId,
+        classification: String(data.get("classification") ?? "SECURITY"),
+        severity: String(data.get("severity") ?? "LOW"),
+        narrative: String(data.get("narrative") ?? ""),
+        actionsTaken: String(data.get("actionsTaken") ?? ""),
+        emergencyServiceInvolvement: data.has("emergencyServiceInvolvement"),
+        visibility: "INTERNAL",
+        participants,
+      };
+    },
+    restorePayload: (payload) => {
+      const form = incidentFormRef.current;
+      if (!form) return;
+      for (const name of [
+        "classification",
+        "severity",
+        "narrative",
+        "actionsTaken",
+      ]) {
+        const field = form.elements.namedItem(name);
+        if (
+          field instanceof HTMLSelectElement ||
+          field instanceof HTMLTextAreaElement
+        )
+          field.value = typeof payload[name] === "string" ? payload[name] : "";
+      }
+      setRelatedActivityId(
+        typeof payload.originatingActivityEntryId === "string"
+          ? payload.originatingActivityEntryId
+          : "",
+      );
+      const emergency = form.elements.namedItem("emergencyServiceInvolvement");
+      if (emergency instanceof HTMLInputElement)
+        emergency.checked = payload.emergencyServiceInvolvement === true;
+      if (Array.isArray(payload.participants))
+        setParticipants(payload.participants as ParticipantDraft[]);
+    },
+    clearPayload: () => {
+      incidentFormRef.current?.reset();
+      setRelatedActivityId("");
+      setParticipants([newParticipant()]);
+    },
+  });
   const personalExceptionPanel = reportingExceptions.length ? (
     <section className={panel} aria-label="Your reporting corrections">
       <h2 className="text-xl font-bold">Reporting corrections needed</h2>
@@ -203,6 +267,29 @@ export function ReportingWorkspace({
     setSubmittingIncident(true);
     setIncidentMessage("Submitting Security Incident Report…");
     try {
+      if (draftEnabled) {
+        const result = await incidentDraft.submit();
+        if (
+          result.kind === "submitted" &&
+          result.family === "SECURITY_INCIDENT"
+        ) {
+          const incident = result.record as IncidentReportSummary;
+          setIncidents((current) => [incident, ...current]);
+          setParticipants([newParticipant()]);
+          incidentFormRef.current?.reset();
+          setRelatedActivityId("");
+          setIncidentMessage(
+            `Security Incident ${incident.incidentNumber} confirmed.`,
+          );
+        } else if (result.kind === "already-submitted") {
+          window.location.reload();
+        } else {
+          setIncidentMessage(
+            "The saved incident needs attention. Review the draft status below.",
+          );
+        }
+        return;
+      }
       const incident = await actions.createIncident(formData);
       setIncidents((current) => [incident, ...current]);
       setIncidentSubmissionKey(newIncidentSubmissionKey());
@@ -292,6 +379,7 @@ export function ReportingWorkspace({
         <ActivityEntryForm
           assignment={assignment}
           createActivity={actions.createActivity}
+          draftEnabled={draftEnabled}
           hidden={!activityFormOpen}
           onCancel={() => setActivityFormOpen(false)}
           onConfirmed={(entry) => {
@@ -325,6 +413,7 @@ export function ReportingWorkspace({
               <div className="mt-4">
                 <EndOfShiftReportForm
                   assignments={[assignment]}
+                  draftEnabled={draftEnabled}
                   embedded
                   passdowns={passdowns}
                   setPassdownDismissal={actions.setPassdownDismissal}
@@ -344,7 +433,21 @@ export function ReportingWorkspace({
               event. Nexus preserves any originating activity link.
             </p>
             {actions?.createIncident ? (
-              <form action={submitIncident} className="mt-5 grid gap-4">
+              <form
+                action={draftEnabled ? undefined : submitIncident}
+                className="mt-5 grid gap-4"
+                onChange={draftEnabled ? incidentDraft.changed : undefined}
+                onInput={draftEnabled ? incidentDraft.changed : undefined}
+                onSubmit={
+                  draftEnabled
+                    ? (event) => {
+                        event.preventDefault();
+                        void submitIncident(new FormData(event.currentTarget));
+                      }
+                    : undefined
+                }
+                ref={incidentFormRef}
+              >
                 <input
                   name="shiftAssignmentId"
                   type="hidden"
@@ -593,13 +696,14 @@ export function ReportingWorkspace({
                         className="min-h-12 justify-self-start rounded-xl border border-white/15 px-3 font-semibold disabled:opacity-50"
                         disabled={participants.length === 1}
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
                           setParticipants((current) =>
                             current.filter(
                               (_, itemIndex) => itemIndex !== index,
                             ),
-                          )
-                        }
+                          );
+                          if (draftEnabled) incidentDraft.changed();
+                        }}
                       >
                         Remove participant
                       </button>
@@ -608,16 +712,20 @@ export function ReportingWorkspace({
                   <button
                     className="min-h-12 justify-self-start rounded-xl border border-white/15 px-3 font-semibold"
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
                       setParticipants((current) => [
                         ...current,
                         newParticipant(),
-                      ])
-                    }
+                      ]);
+                      if (draftEnabled) incidentDraft.changed();
+                    }}
                   >
                     Add participant
                   </button>
                 </fieldset>
+                {draftEnabled ? (
+                  <ReportingDraftControls draft={incidentDraft} />
+                ) : null}
                 <label className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 px-3 font-semibold">
                   <input
                     className="h-5 w-5"
@@ -628,7 +736,16 @@ export function ReportingWorkspace({
                 </label>
                 <button
                   className="min-h-12 rounded-xl border border-red-400/40 bg-red-400/10 px-4 font-bold text-red-50 disabled:opacity-60"
-                  disabled={submittingIncident}
+                  disabled={
+                    submittingIncident ||
+                    (draftEnabled &&
+                      [
+                        "loading",
+                        "recovery-available",
+                        "inaccessible",
+                        "conflict",
+                      ].includes(incidentDraft.status))
+                  }
                   type="submit"
                 >
                   {submittingIncident
