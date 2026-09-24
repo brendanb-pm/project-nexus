@@ -51,6 +51,13 @@ test("Guard task hierarchy, focus, reflow and rendered contrast at four viewport
     await expect(
       page.getByRole("heading", { name: "Your active Shift Report" }),
     ).toBeVisible();
+    if (width >= 768) {
+      expect(
+        await page
+          .getByRole("navigation", { name: "Guard navigation" })
+          .evaluate((element) => getComputedStyle(element).position),
+      ).toBe("static");
+    }
     await assertNoOverflow(page);
     await capture(page, `${width}x${height}-shift-report`);
 

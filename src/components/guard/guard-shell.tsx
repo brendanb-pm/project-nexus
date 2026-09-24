@@ -31,7 +31,7 @@ export function GuardShell({ children }: { children: ReactNode }) {
       </main>
       <nav
         aria-label="Guard navigation"
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-[var(--sidebar)]/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur md:sticky md:top-0 md:mx-auto md:mt-6 md:max-w-6xl md:rounded-xl md:border"
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-[var(--sidebar)]/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:mx-auto md:mt-6 md:max-w-6xl md:rounded-xl md:border"
       >
         <div className="mx-auto grid max-w-md grid-cols-4 md:max-w-none">
           {navigation.map((item) => {
