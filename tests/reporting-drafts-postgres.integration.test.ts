@@ -288,6 +288,14 @@ suite("NX-8.7 durable reporting drafts in PostgreSQL", () => {
         .where(eq(reportingDrafts.id, saved.id)),
     ).rejects.toThrow();
     await guard.discard(ids.assignment, saved.id, saved.revision);
+    const draftAudit = await db
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.entityId, saved.id));
+    expect(draftAudit).toHaveLength(2);
+    expect(JSON.stringify(draftAudit)).not.toContain(
+      "Private NX87 participant note",
+    );
   });
 
   it("enforces one active owner/family, replay-safe saves, revision conflicts, and containment", async () => {
