@@ -209,13 +209,14 @@ export function EndOfShiftReportForm({
             disabled={
               busy ||
               (draftEnabled &&
-                [
-                  "loading",
-                  "recovery-available",
-                  "inaccessible",
-                  "conflict",
-                  "submitted",
-                ].includes(draft.status))
+                (!draft.readyToSave ||
+                  [
+                    "loading",
+                    "recovery-available",
+                    "inaccessible",
+                    "conflict",
+                    "submitted",
+                  ].includes(draft.status)))
             }
           >
             {busy ? "Submitting…" : "Submit end-of-shift report"}

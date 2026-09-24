@@ -90,17 +90,15 @@ export function useReportingDraft({
         setStatus("recovery-available");
         setMessage(
           pendingEditRef.current
-            ? "A saved draft exists. Your current unsaved changes remain on this device until you choose how to proceed."
-            : "A saved draft is available for recovery.",
+            ? "Saved draft available. Your current unsaved changes remain on this device until you choose how to proceed."
+            : "Saved draft available. Restore it or discard it before continuing.",
         );
       } else if (result.kind === "empty" || result.kind === "expired") {
         readyRef.current = true;
         setReadyToSave(true);
         setStatus(result.kind === "expired" ? "expired" : "ready");
         if (result.kind === "expired")
-          setMessage(
-            "Your previous draft expired after 30 days and cannot be recovered.",
-          );
+          setMessage("Draft expired after 30 days and cannot be recovered.");
         if (pendingEditRef.current) {
           pendingEditRef.current = false;
           setTimeout(() => void flushRef.current(), 0);
@@ -191,16 +189,16 @@ export function useReportingDraft({
         );
         setMessage(
           result.kind === "conflict"
-            ? "This draft changed in another tab or device. Your current text is still here. Refresh to review the saved version."
+            ? "Saved draft changed elsewhere. Your current text is still here. Refresh to review the saved version."
             : result.kind === "inaccessible"
-              ? "This assignment is no longer available to your account."
-              : "The draft could not be saved. Correct the content and retry.",
+              ? "Assignment no longer accessible to your account."
+              : "Save failed—your text is still here. Correct the content and retry.",
         );
         return false;
       } catch {
         setStatus("retry");
         setMessage(
-          "Could not save this draft. Your text remains on this page. Retry when connected.",
+          "Save failed—your text is still here. Could not save this draft. Retry when connected.",
         );
         return false;
       }
@@ -257,9 +255,7 @@ export function useReportingDraft({
         clientKeyRef.current = freshKey();
         submissionKeyRef.current = freshKey();
         setStatus("submitted");
-        setMessage(
-          "Draft retired after submission; it is no longer recoverable.",
-        );
+        setMessage("Submitted. Draft retired and no longer recoverable.");
       } else {
         setStatus(
           result.kind === "conflict"
@@ -270,9 +266,9 @@ export function useReportingDraft({
         );
         setMessage(
           result.kind === "conflict"
-            ? "The saved draft changed. Review and retry."
+            ? "Saved draft changed elsewhere. Review and retry."
             : result.kind === "inaccessible"
-              ? "This assignment is no longer available to your account."
+              ? "Assignment no longer accessible to your account."
               : "Submission needs correction. Your saved draft is retained.",
         );
       }
@@ -352,7 +348,9 @@ export function ReportingDraftControls({
       <p aria-live="polite" role="status">
         {draft.status === "loading"
           ? "Checking for a saved draft…"
-          : draft.message || "Draft ready."}
+          : draft.status === "saving"
+            ? "Saving…"
+            : draft.message || "Draft ready."}
       </p>
       {draft.pendingRecovery ? (
         <div className="flex flex-wrap gap-2">

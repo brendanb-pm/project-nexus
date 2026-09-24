@@ -347,12 +347,13 @@ export function ActivityEntryForm({
             disabled={
               submission.kind === "submitting" ||
               (draftEnabled &&
-                [
-                  "loading",
-                  "recovery-available",
-                  "inaccessible",
-                  "conflict",
-                ].includes(draft.status))
+                (!draft.readyToSave ||
+                  [
+                    "loading",
+                    "recovery-available",
+                    "inaccessible",
+                    "conflict",
+                  ].includes(draft.status)))
             }
             type="submit"
           >

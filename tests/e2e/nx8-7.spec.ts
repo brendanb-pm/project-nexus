@@ -244,7 +244,7 @@ test("same-user recovery conflicts safely across devices and other roles see no 
       .getByLabel("What happened")
       .fill("NX87 stale first-device edit");
     await expect(
-      original.getByText(/changed in another tab or device/),
+      original.getByText(/Saved draft changed elsewhere/),
     ).toBeVisible();
     await expect(original.getByLabel("What happened")).toHaveValue(
       "NX87 stale first-device edit",

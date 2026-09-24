@@ -16,6 +16,7 @@ async function capture(page: Page, name: string) {
 async function signIn(page: Page, persona: string) {
   await page.goto("/sign-in");
   await page.getByRole("button", { name: `Sign in as ${persona}` }).click();
+  await expect(page).not.toHaveURL(/\/sign-in(?:\?|$)/);
 }
 
 async function assertNoOverflow(page: Page) {
@@ -29,6 +30,7 @@ async function assertNoOverflow(page: Page) {
 test("Guard task hierarchy, focus, reflow and rendered contrast at four viewports", async ({
   page,
 }) => {
+  test.setTimeout(90000);
   await signIn(page, "Guard A");
   for (const [width, height] of [
     [390, 844],
@@ -40,6 +42,11 @@ test("Guard task hierarchy, focus, reflow and rendered contrast at four viewport
     await page.goto("/home");
     await capture(page, `${width}x${height}-guard-home`);
     await expect(page.getByText("Activity / DAR")).toHaveCount(0);
+    await page.goto("/reports");
+    await expect(
+      page.getByRole("heading", { name: "Authorized reporting work" }),
+    ).toBeVisible();
+    await capture(page, `${width}x${height}-reporting-hub`);
     await page.goto("/reporting");
     await expect(
       page.getByRole("heading", { name: "Your active Shift Report" }),
@@ -100,13 +107,85 @@ test("Guard task hierarchy, focus, reflow and rendered contrast at four viewport
       .locator("#incident")
       .getByRole("button", { name: "Close task" })
       .click();
-    await page.getByRole("button", { name: "Closeout Shift Report" }).click();
+    const closeoutAction = page.getByRole("button", {
+      name: "Closeout Shift Report",
+    });
+    await closeoutAction.scrollIntoViewIfNeeded();
+    if (width === 390) {
+      const [actionBox, addBox, navBox] = await Promise.all([
+        closeoutAction.boundingBox(),
+        add.boundingBox(),
+        page
+          .getByRole("navigation", { name: "Guard navigation" })
+          .boundingBox(),
+      ]);
+      expect(actionBox).not.toBeNull();
+      expect(addBox).not.toBeNull();
+      expect(navBox).not.toBeNull();
+      expect(actionBox!.y + actionBox!.height).toBeLessThan(addBox!.y);
+      expect(actionBox!.y + actionBox!.height).toBeLessThan(navBox!.y);
+    }
+    await closeoutAction.click();
     await expect(
-      page.getByRole("heading", { name: "Shift closeout" }),
+      page.getByRole("heading", { name: "Closeout and passdown" }),
     ).toBeFocused();
     await capture(page, `${width}x${height}-closeout`);
     await assertNoOverflow(page);
+    if (width === 390) {
+      const submit = page.getByRole("button", {
+        name: "Submit end-of-shift report",
+      });
+      await submit.scrollIntoViewIfNeeded();
+      const [submitBox, navBox] = await Promise.all([
+        submit.boundingBox(),
+        page
+          .getByRole("navigation", { name: "Guard navigation" })
+          .boundingBox(),
+      ]);
+      expect(submitBox!.y + submitBox!.height).toBeLessThan(navBox!.y);
+    }
   }
+});
+
+test("server-acknowledged draft recovery and retry states remain honest", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, "Guard A");
+  await page.goto("/reporting");
+  await page.getByRole("button", { name: "+ Add activity" }).click();
+  const form = page.getByRole("region", { name: "Add activity" });
+  await form
+    .getByLabel("What happened")
+    .fill("NX88 synthetic draft presentation check");
+  await expect(form.getByText(/Saved securely/)).toBeVisible();
+  await capture(page, "390x844-draft-saved");
+  await page.reload();
+  await page.getByRole("button", { name: "+ Add activity" }).click();
+  await expect(form.getByText(/Saved draft available/)).toBeVisible();
+  await capture(page, "390x844-draft-available");
+  await form.getByRole("button", { name: "Restore saved draft" }).click();
+  await expect(form.getByLabel("What happened")).toHaveValue(
+    "NX88 synthetic draft presentation check",
+  );
+  await capture(page, "390x844-draft-recovered");
+  await page.route("**/reporting*", async (route) => {
+    if (route.request().method() === "POST") await route.abort("failed");
+    else await route.continue();
+  });
+  await form
+    .getByLabel("What happened")
+    .fill("NX88 synthetic draft retry check");
+  await expect(
+    form.getByText(/Save failed—your text is still here/),
+  ).toBeVisible();
+  await capture(page, "390x844-draft-retry");
+  await page.unroute("**/reporting*");
+  await form.getByRole("button", { name: "Save now / retry" }).click();
+  await expect(form.getByText(/Saved securely/)).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await form.getByRole("button", { name: "Discard draft" }).click();
+  await expect(form.getByText(/Draft discarded/)).toBeVisible();
 });
 
 test("client denial is neutral and role projections remain distinct", async ({

@@ -246,7 +246,7 @@ describe("NX-8.2 unified Shift Report activity workspace", () => {
     expect(window.location.hash).toBe("#shift-closeout");
     await waitFor(() =>
       expect(
-        screen.getByRole("heading", { name: "Shift closeout" }),
+        screen.getByRole("heading", { name: "Closeout and passdown" }),
       ).toHaveFocus(),
     );
   });

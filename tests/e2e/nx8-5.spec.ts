@@ -29,7 +29,7 @@ test("Operations and Supervisor manage only their authorized reporting lifecycle
     exception.getByRole("link", { name: "Open canonical report" }),
   ).toBeVisible();
   await exception
-    .getByPlaceholder("Reason for lifecycle action")
+    .getByRole("textbox", { name: "Reason for action" })
     .fill("Reviewed by Operations");
   await exception.getByRole("button", { name: "Update" }).click();
   await expect(operations.getByRole("status")).toContainText("updated");
@@ -54,7 +54,7 @@ test("Operations and Supervisor manage only their authorized reporting lifecycle
     .filter({ hasText: "eosr" })
     .first();
   await closeout
-    .getByPlaceholder("Reason for lifecycle action")
+    .getByRole("textbox", { name: "Reason for action" })
     .fill("Guard correction requested");
   await closeout.getByRole("combobox").selectOption("CORRECTION_REQUESTED");
   await closeout.getByRole("button", { name: "Update" }).click();
@@ -75,7 +75,7 @@ test("Guard corrects only their own deficiency through the canonical report", as
   await expect(corrections).toBeVisible();
   await corrections
     .getByRole("link")
-    .filter({ hasText: "activity entry" })
+    .filter({ hasText: "shift activity" })
     .click();
   await guard.getByRole("button", { name: /Add activity/ }).click();
   const activity = guard.getByRole("region", { name: "Add activity" });
@@ -111,9 +111,12 @@ test("blank reason is blocked before the lifecycle server action", async ({
   await signIn(page, "Operations Manager B");
   await openQueue(page);
   const exception = page.locator("section").filter({ hasText: "eosr" }).first();
-  const before = await exception.textContent();
-  await exception.getByPlaceholder("Reason for lifecycle action").fill("   ");
+  await exception
+    .getByRole("textbox", { name: "Reason for action" })
+    .fill("   ");
   await exception.getByRole("button", { name: "Update" }).click();
   await expect(page.getByRole("status")).toContainText("reason is required");
-  expect(await exception.textContent()).toBe(before);
+  await expect(
+    exception.getByRole("textbox", { name: "Reason for action" }),
+  ).toHaveAttribute("aria-invalid", "true");
 });

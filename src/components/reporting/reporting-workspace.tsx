@@ -231,7 +231,11 @@ export function ReportingWorkspace({
           >
             <strong>
               {item.classification.toLowerCase()} ·{" "}
-              {item.obligationType.replaceAll("_", " ").toLowerCase()}
+              {item.obligationType === "EOSR"
+                ? "shift closeout"
+                : item.obligationType === "ACTIVITY_ENTRY"
+                  ? "shift activity"
+                  : "security incident"}
             </strong>
             <span className="mt-1 block text-sm text-[var(--text-muted)]">
               Due {new Date(item.dueAt).toLocaleString()} ·{" "}
@@ -247,7 +251,7 @@ export function ReportingWorkspace({
     return (
       <section className={`${panel} mx-auto max-w-2xl`} role="alert">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
-          Shift Report
+          {state.kind === "permission-denied" ? "Nexus" : "Shift Report"}
         </p>
         <h1
           className="mt-2 text-2xl font-bold outline-none"
@@ -433,7 +437,7 @@ export function ReportingWorkspace({
           <button
             aria-controls="add-activity"
             aria-expanded={activityFormOpen}
-            className={`${activityFormOpen ? "hidden sm:block" : "fixed sm:static"} inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 min-h-12 rounded-xl bg-[var(--accent-control)] px-4 font-bold text-white shadow-lg shadow-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white`}
+            className={`${activityFormOpen || activeTask ? "hidden sm:block" : "fixed sm:static"} inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 min-h-12 rounded-xl bg-[var(--accent-control)] px-4 font-bold text-white shadow-lg shadow-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white`}
             onClick={openActivity}
             ref={activityLauncherRef}
             type="button"
@@ -505,7 +509,7 @@ export function ReportingWorkspace({
                 id="shift-closeout-heading"
                 tabIndex={-1}
               >
-                Shift closeout
+                Closeout and passdown
               </h2>
               <button
                 className="min-h-12 rounded-xl border border-white/15 px-4 font-semibold"
@@ -868,12 +872,13 @@ export function ReportingWorkspace({
                   disabled={
                     submittingIncident ||
                     (draftEnabled &&
-                      [
-                        "loading",
-                        "recovery-available",
-                        "inaccessible",
-                        "conflict",
-                      ].includes(incidentDraft.status))
+                      (!incidentDraft.readyToSave ||
+                        [
+                          "loading",
+                          "recovery-available",
+                          "inaccessible",
+                          "conflict",
+                        ].includes(incidentDraft.status)))
                   }
                   type="submit"
                 >
