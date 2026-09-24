@@ -12,9 +12,9 @@ test("walks Guard EOSR, incoming passdown, and Operations history through local 
   await expect(page).toHaveURL(/\/schedule$/);
   await page.getByRole("link", { name: "Open reporting" }).click();
   await expect(
-    page.getByRole("link", { name: "Closeout Shift Report" }),
+    page.getByRole("button", { name: "Closeout Shift Report" }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Closeout Shift Report" }).click();
+  await page.getByRole("button", { name: "Closeout Shift Report" }).click();
   await expect(
     page.getByRole("group", { name: "Passdown for the incoming Guard" }),
   ).toBeVisible();

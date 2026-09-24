@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ReportingDraftControls,
   useReportingDraft,
@@ -76,6 +76,12 @@ export function ReportingWorkspace({
   draftEnabled?: boolean;
 }) {
   const [activityFormOpen, setActivityFormOpen] = useState(false);
+  const [activeTask, setActiveTask] = useState<
+    "incident" | "shift-closeout" | null
+  >(null);
+  const activityLauncherRef = useRef<HTMLButtonElement>(null);
+  const incidentLauncherRef = useRef<HTMLButtonElement>(null);
+  const closeoutLauncherRef = useRef<HTMLButtonElement>(null);
   const [timeline, setTimeline] = useState<readonly ActivityEntrySummary[]>(
     state.kind === "ready" ? state.recent : [],
   );
@@ -92,6 +98,66 @@ export function ReportingWorkspace({
     newParticipant(),
   ]);
   const incidentFormRef = useRef<HTMLFormElement>(null);
+  const unavailableHeadingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (state.kind === "permission-denied")
+      unavailableHeadingRef.current?.focus();
+  }, [state.kind]);
+  useEffect(() => {
+    const syncTask = () => {
+      const hash = window.location.hash.slice(1);
+      setActiveTask(
+        hash === "incident" || hash === "shift-closeout" ? hash : null,
+      );
+    };
+    syncTask();
+    window.addEventListener("hashchange", syncTask);
+    return () => window.removeEventListener("hashchange", syncTask);
+  }, []);
+  useEffect(() => {
+    if (activeTask)
+      requestAnimationFrame(() =>
+        document.getElementById(`${activeTask}-heading`)?.focus(),
+      );
+  }, [activeTask]);
+
+  function openTask(task: "incident" | "shift-closeout") {
+    setActivityFormOpen(false);
+    window.location.hash = task;
+    setActiveTask(task);
+  }
+
+  function openActivity() {
+    if (activeTask) {
+      history.pushState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}`,
+      );
+      setActiveTask(null);
+    }
+    setActivityFormOpen(true);
+  }
+
+  function closeTask() {
+    const previous = activeTask;
+    history.pushState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
+    setActiveTask(null);
+    requestAnimationFrame(() =>
+      (previous === "incident"
+        ? incidentLauncherRef
+        : closeoutLauncherRef
+      ).current?.focus(),
+    );
+  }
+
+  function restoreActivityFocus() {
+    requestAnimationFrame(() => activityLauncherRef.current?.focus());
+  }
   const incidentAssignmentId =
     state.kind === "ready" ? (state.assignments[0]?.id ?? "") : "";
   const incidentDraft = useReportingDraft({
@@ -165,7 +231,11 @@ export function ReportingWorkspace({
           >
             <strong>
               {item.classification.toLowerCase()} ·{" "}
-              {item.obligationType.replaceAll("_", " ").toLowerCase()}
+              {item.obligationType === "EOSR"
+                ? "shift closeout"
+                : item.obligationType === "ACTIVITY_ENTRY"
+                  ? "shift activity"
+                  : "security incident"}
             </strong>
             <span className="mt-1 block text-sm text-[var(--text-muted)]">
               Due {new Date(item.dueAt).toLocaleString()} ·{" "}
@@ -181,12 +251,30 @@ export function ReportingWorkspace({
     return (
       <section className={`${panel} mx-auto max-w-2xl`} role="alert">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent)]">
-          Shift Report
+          {state.kind === "permission-denied" ? "Nexus" : "Shift Report"}
         </p>
-        <h1 className="mt-2 text-2xl font-bold">Shift Report unavailable</h1>
+        <h1
+          className="mt-2 text-2xl font-bold outline-none"
+          ref={unavailableHeadingRef}
+          tabIndex={-1}
+        >
+          {state.kind === "permission-denied"
+            ? "Page unavailable"
+            : "Shift Report unavailable"}
+        </h1>
         <p className="mt-3 leading-6 text-[var(--text-muted)]">
-          {state.message}
+          {state.kind === "permission-denied"
+            ? "This page is unavailable for this account."
+            : state.message}
         </p>
+        {state.kind === "permission-denied" ? (
+          <a
+            className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-white/15 px-4 font-bold"
+            href="/reports"
+          >
+            Return to reports
+          </a>
+        ) : null}
         {state.kind === "error" && state.retryable ? (
           <a
             className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-white/15 px-4 font-bold"
@@ -212,7 +300,7 @@ export function ReportingWorkspace({
           remains in the authorized Operations Center.
         </p>
         <a
-          className="mt-5 inline-flex min-h-12 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white"
+          className="mt-5 inline-flex min-h-12 items-center rounded-xl bg-[var(--accent-control)] px-4 font-bold text-white"
           href="/operations"
         >
           Open Operations Center
@@ -253,13 +341,7 @@ export function ReportingWorkspace({
 
   function fileIncident(activityEntryId = "") {
     setRelatedActivityId(activityEntryId);
-    requestAnimationFrame(() => {
-      document.getElementById("incident")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-      document.getElementById("incident-classification")?.focus();
-    });
+    openTask("incident");
   }
 
   async function submitIncident(formData: FormData) {
@@ -353,25 +435,35 @@ export function ReportingWorkspace({
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <button
-            className="min-h-12 rounded-xl bg-[var(--accent)] px-4 font-bold text-white shadow-lg shadow-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            onClick={() => setActivityFormOpen(true)}
+            aria-controls="add-activity"
+            aria-expanded={activityFormOpen}
+            className={`${activityFormOpen || activeTask ? "hidden sm:block" : "fixed sm:static"} inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 min-h-12 rounded-xl bg-[var(--accent-control)] px-4 font-bold text-white shadow-lg shadow-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white`}
+            onClick={openActivity}
+            ref={activityLauncherRef}
             type="button"
           >
             + Add activity
           </button>
           <button
+            aria-controls="incident"
+            aria-expanded={activeTask === "incident"}
             className="min-h-12 rounded-xl border border-white/15 px-4 font-bold hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
             onClick={() => fileIncident()}
+            ref={incidentLauncherRef}
             type="button"
           >
             File Security Incident
           </button>
-          <a
+          <button
+            aria-controls="shift-closeout"
+            aria-expanded={activeTask === "shift-closeout"}
             className="flex min-h-12 items-center justify-center rounded-xl border border-white/15 px-4 text-center font-bold hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-            href="#shift-closeout"
+            onClick={() => openTask("shift-closeout")}
+            ref={closeoutLauncherRef}
+            type="button"
           >
             Closeout Shift Report
-          </a>
+          </button>
         </div>
       </section>
 
@@ -381,7 +473,10 @@ export function ReportingWorkspace({
           createActivity={actions.createActivity}
           draftEnabled={draftEnabled}
           hidden={!activityFormOpen}
-          onCancel={() => setActivityFormOpen(false)}
+          onCancel={() => {
+            setActivityFormOpen(false);
+            restoreActivityFocus();
+          }}
           onConfirmed={(entry) => {
             setTimeline((current) =>
               [...current, entry].toSorted((left, right) =>
@@ -394,7 +489,7 @@ export function ReportingWorkspace({
         />
       ) : null}
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+      <div className="grid min-w-0 gap-5 pb-24 sm:pb-0">
         <ShiftReportTimeline
           entries={timeline}
           hasMore={Boolean(state.timelineHasMore)}
@@ -402,9 +497,28 @@ export function ReportingWorkspace({
           onFileIncident={fileIncident}
         />
 
-        <aside className="grid min-w-0 gap-5">
-          <section className={panel} id="shift-closeout">
-            <h2 className="text-lg font-bold">Shift closeout</h2>
+        <div className="grid min-w-0 max-w-4xl gap-5">
+          <section
+            className={panel}
+            hidden={activeTask !== "shift-closeout"}
+            id="shift-closeout"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2
+                className="text-lg font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                id="shift-closeout-heading"
+                tabIndex={-1}
+              >
+                Closeout and passdown
+              </h2>
+              <button
+                className="min-h-12 rounded-xl border border-white/15 px-4 font-semibold"
+                onClick={closeTask}
+                type="button"
+              >
+                Close task
+              </button>
+            </div>
             <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
               Review this timeline before completing the closeout and passdown.
               The activity narrative is already part of your Shift Report.
@@ -423,11 +537,30 @@ export function ReportingWorkspace({
             ) : null}
           </section>
 
-          <section className={panel} id="incident">
+          <section
+            className={panel}
+            hidden={activeTask !== "incident"}
+            id="incident"
+          >
+            <div className="flex justify-end">
+              <button
+                className="min-h-12 rounded-xl border border-white/15 px-4 font-semibold"
+                onClick={closeTask}
+                type="button"
+              >
+                Close task
+              </button>
+            </div>
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-red-200">
               Separate formal workflow
             </p>
-            <h2 className="mt-2 text-xl font-bold">Security Incident Report</h2>
+            <h2
+              className="mt-2 text-xl font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              id="incident-heading"
+              tabIndex={-1}
+            >
+              Security Incident Report
+            </h2>
             <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
               File a formal report for a security, safety, access, or property
               event. Nexus preserves any originating activity link.
@@ -739,12 +872,13 @@ export function ReportingWorkspace({
                   disabled={
                     submittingIncident ||
                     (draftEnabled &&
-                      [
-                        "loading",
-                        "recovery-available",
-                        "inaccessible",
-                        "conflict",
-                      ].includes(incidentDraft.status))
+                      (!incidentDraft.readyToSave ||
+                        [
+                          "loading",
+                          "recovery-available",
+                          "inaccessible",
+                          "conflict",
+                        ].includes(incidentDraft.status)))
                   }
                   type="submit"
                 >
@@ -795,7 +929,7 @@ export function ReportingWorkspace({
               </div>
             </section>
           ) : null}
-        </aside>
+        </div>
       </div>
     </div>
   );

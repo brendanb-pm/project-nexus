@@ -13,7 +13,7 @@ export default function ErrorPage({ reset }: { reset: () => void }) {
           No changes were assumed. Retry to load authoritative data.
         </p>
         <button
-          className="mt-4 rounded-lg bg-[var(--accent)] px-4 py-2"
+          className="mt-4 rounded-lg bg-[var(--accent-control)] px-4 py-2 text-white"
           onClick={reset}
         >
           Retry

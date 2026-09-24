@@ -58,8 +58,17 @@ describe("NX-8.5 reporting exception queue", () => {
       .closest("form")!;
     fireEvent.submit(form);
     expect(transition).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("textbox", { name: "Reason for action" }),
+    ).toHaveFocus();
+    expect(
+      screen.getByRole("textbox", { name: "Reason for action" }),
+    ).toHaveAttribute("aria-invalid", "true");
+    expect(
+      screen.getByRole("combobox", { name: "Action" }),
+    ).toBeInTheDocument();
     fireEvent.change(
-      screen.getByPlaceholderText(/Reason for lifecycle action/i),
+      screen.getByRole("textbox", { name: "Reason for action" }),
       { target: { value: "Reviewed by Operations" } },
     );
     fireEvent.submit(form);
@@ -96,7 +105,7 @@ describe("NX-8.5 reporting exception queue", () => {
       />,
     );
     fireEvent.change(
-      screen.getByPlaceholderText(/Reason for lifecycle action/i),
+      screen.getByRole("textbox", { name: "Reason for action" }),
       { target: { value: "Attempted update" } },
     );
     fireEvent.submit(

@@ -76,13 +76,14 @@ test("adapts the authorized workspace at tablet and desktop viewports", async ({
   page,
 }) => {
   await signInToReporting(page);
-  for (const { width, height, split } of [
-    { width: 768, height: 1024, split: false },
-    { width: 1024, height: 768, split: true },
-    { width: 1440, height: 900, split: true },
+  for (const { width, height } of [
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize({ width, height });
     await page.reload();
+    await page.getByRole("button", { name: "File Security Incident" }).click();
     const timeline = page.getByRole("region", { name: "Today’s timeline" });
     const incident = page
       .getByRole("heading", { name: "Security Incident Report" })
@@ -98,7 +99,7 @@ test("adapts the authorized workspace at tablet and desktop viewports", async ({
     const incidentBox = await incident.boundingBox();
     expect(timelineBox).not.toBeNull();
     expect(incidentBox).not.toBeNull();
-    if (split) expect(incidentBox!.x).toBeGreaterThan(timelineBox!.x);
-    else expect(incidentBox!.y).toBeGreaterThan(timelineBox!.y);
+    expect(incidentBox!.y).toBeGreaterThan(timelineBox!.y);
+    expect(incidentBox!.width).toBeGreaterThan(600);
   }
 });

@@ -14,7 +14,7 @@ export default function ErrorPage({
         The request could not be completed. Your changes were not confirmed.
       </p>
       <button
-        className="mt-4 rounded-lg bg-[var(--accent)] px-4 py-2 font-semibold text-white"
+        className="mt-4 rounded-lg bg-[var(--accent-control)] px-4 py-2 font-semibold text-white"
         onClick={reset}
         type="button"
       >

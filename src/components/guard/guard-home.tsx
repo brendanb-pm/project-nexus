@@ -122,7 +122,7 @@ export function GuardHome({
           className={panel + " min-h-32 hover:border-white/30"}
           href="/reporting#activity"
         >
-          <strong>Activity / DAR</strong>
+          <strong>Shift Report activity</strong>
           <span className="mt-2 block text-sm text-[var(--text-muted)]">
             Record routine shift activity.
           </span>
