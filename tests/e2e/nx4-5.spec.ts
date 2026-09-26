@@ -45,10 +45,16 @@ test("walks Operations review queue and history into canonical records", async (
 
   await expect(page.locator(incidentLink)).toContainText("Resolved");
   await page.locator(activityLink).click();
-  await page.getByLabel("Amendment reason").fill("Clarifies patrol result");
-  await page
-    .getByLabel("Corrected detail")
-    .fill("Routine patrol completed; north entrance verified.");
+  const amendmentReason = page.getByLabel("Amendment reason");
+  const correctedDetail = page.getByLabel("Corrected detail");
+  await amendmentReason.fill("Clarifies patrol result");
+  await correctedDetail.fill(
+    "Routine patrol completed; north entrance verified.",
+  );
+  await expect(amendmentReason).toHaveValue("Clarifies patrol result");
+  await expect(correctedDetail).toHaveValue(
+    "Routine patrol completed; north entrance verified.",
+  );
   await page.getByRole("button", { name: "Record amendment" }).click();
   await expect(page.getByRole("status")).toContainText(
     "original submission remains unchanged",

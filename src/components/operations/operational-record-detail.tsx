@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { OperationalRecordDetailState } from "@/features/operations/record-detail";
 import type { ReviewRecord } from "@/features/reporting/contracts";
 import { PresentationStatusBadge } from "@/components/ui/presentation-status";
@@ -8,6 +8,7 @@ import { PresentationStatusBadge } from "@/components/ui/presentation-status";
 const panel = "rounded-xl border border-white/10 bg-[var(--card)] p-5";
 const input =
   "mt-1 w-full rounded-lg border border-white/15 bg-[var(--background)] px-3 py-2";
+const subscribeToHydration = () => () => {};
 
 export function OperationalRecordDetail({
   state,
@@ -26,6 +27,11 @@ export function OperationalRecordDetail({
   const [message, setMessage] = useState("");
   const [reason, setReason] = useState("");
   const [detail, setDetail] = useState("");
+  const interactive = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
 
   if (state.kind === "unavailable")
     return (
@@ -58,7 +64,7 @@ export function OperationalRecordDetail({
   const acknowledged = Boolean(review?.acknowledgedAt) || !record.actionable;
 
   async function acknowledge() {
-    if (!actions || !review || busy) return;
+    if (!interactive || !actions || !review || busy) return;
     setBusy(true);
     setMessage("Acknowledging record…");
     try {
@@ -75,7 +81,7 @@ export function OperationalRecordDetail({
   }
 
   async function amend() {
-    if (!actions || !review || busy) return;
+    if (!interactive || !actions || !review || busy) return;
     if (reason.trim().length < 3 || !detail.trim()) {
       setMessage(
         "Enter a reason and corrected detail before recording an amendment.",
@@ -228,7 +234,7 @@ export function OperationalRecordDetail({
             <button
               type="button"
               className="mt-4 min-h-11 rounded-lg bg-[var(--accent)] px-4 py-2 font-medium text-black disabled:opacity-60"
-              disabled={busy}
+              disabled={busy || !interactive}
               onClick={acknowledge}
             >
               {busy ? "Working…" : "Acknowledge record"}
@@ -247,6 +253,7 @@ export function OperationalRecordDetail({
                 rows={2}
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
+                disabled={!interactive || busy}
               />
             </label>
             <label className="text-sm">
@@ -256,12 +263,13 @@ export function OperationalRecordDetail({
                 rows={3}
                 value={detail}
                 onChange={(event) => setDetail(event.target.value)}
+                disabled={!interactive || busy}
               />
             </label>
             <button
               type="button"
               className="min-h-11 justify-self-start rounded-lg border border-white/20 px-4 py-2 font-medium disabled:opacity-60"
-              disabled={busy}
+              disabled={busy || !interactive}
               onClick={amend}
             >
               {busy ? "Working…" : "Record amendment"}
