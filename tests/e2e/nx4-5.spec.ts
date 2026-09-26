@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const incidentId = "00000000-0000-4000-8000-000000000092";
+const activityId = "00000000-0000-4000-8000-000000000091";
+const incidentLink = `a[href="/operations/records/incident/${incidentId}"]`;
+const activityLink = `a[href="/operations/records/activity/${activityId}"]`;
 
 async function signIn(page: Page, name: string) {
   await page.goto("/sign-in");
@@ -23,16 +26,10 @@ test("walks Operations review queue and history into canonical records", async (
     page.getByRole("heading", { name: "History / Recent Activity" }),
   ).toBeVisible();
   await expect(attention).not.toContainText("Incident awaiting review");
-  await expect(
-    page.getByRole("link", { name: /open canonical activity \/ dar record/i }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: /open canonical incident record/i }),
-  ).toBeVisible();
+  await expect(page.locator(activityLink)).toBeVisible();
+  await expect(page.locator(incidentLink)).toBeVisible();
 
-  await page
-    .getByRole("link", { name: /open canonical incident record/i })
-    .click();
+  await page.locator(incidentLink).click();
   await expect(page).toHaveURL(
     new RegExp(`/operations/records/incident/${incidentId}$`),
   );
@@ -46,12 +43,8 @@ test("walks Operations review queue and history into canonical records", async (
   );
   await page.getByRole("link", { name: "Operations" }).click();
 
-  await expect(
-    page.getByRole("link", { name: /open canonical incident record/i }),
-  ).toContainText("Resolved");
-  await page
-    .getByRole("link", { name: /open canonical activity \/ dar record/i })
-    .click();
+  await expect(page.locator(incidentLink)).toContainText("Resolved");
+  await page.locator(activityLink).click();
   await page.getByLabel("Amendment reason").fill("Clarifies patrol result");
   await page
     .getByLabel("Corrected detail")
@@ -75,7 +68,11 @@ test("walks Operations review queue and history into canonical records", async (
   ).toBeVisible();
   await page.getByRole("link", { name: "Operations" }).click();
 
-  await page.getByRole("link", { name: /open canonical eosr record/i }).click();
+  await page
+    .locator(
+      'a[href="/operations/records/eosr/00000000-0000-4000-8000-000000000095"]',
+    )
+    .click();
   await expect(
     page.getByRole("heading", { name: "Original record" }),
   ).toBeVisible();

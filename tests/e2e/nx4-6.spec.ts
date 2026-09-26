@@ -58,7 +58,7 @@ test("walks Operations through Site and Post scorecards into canonical workflows
   );
 
   await page.getByRole("link", { name: "Return to Operations" }).click();
-  await page.getByRole("link", { name: "Inspect Site and Posts" }).click();
+  await site.getByRole("link", { name: "Inspect Site and Posts" }).click();
   await north.getByRole("link", { name: "Inspect Post scorecard" }).click();
   await expect(
     page.getByText("1 incident in this scorecard window."),

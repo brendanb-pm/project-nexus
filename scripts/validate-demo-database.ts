@@ -64,7 +64,7 @@ async function main() {
     const sites = await expectCount("sites", "SELECT count(*) FROM sites", 4);
     await expectCount(
       "seven authenticated personas",
-      "SELECT count(*) FROM external_identities ei JOIN users u ON u.id = ei.user_id JOIN user_memberships m ON m.user_id = u.id AND m.organization_id = u.organization_id AND m.status = 'active' WHERE ei.issuer = 'local-dev://nexus' AND u.status = 'active'",
+      "SELECT count(DISTINCT ei.subject) FROM external_identities ei JOIN users u ON u.id = ei.user_id JOIN user_memberships m ON m.user_id = u.id AND m.organization_id = u.organization_id AND m.status = 'active' WHERE ei.issuer = 'local-dev://nexus' AND u.status = 'active' AND ei.subject IN ('guard-a', 'guard-b', 'operations-manager-b', 'supervisor-a', 'client-user-a', 'leadership-a', 'admin-a')",
       7,
     );
     await expectCount(
@@ -97,6 +97,21 @@ async function main() {
       "SELECT count(DISTINCT shift_assignment_id) FROM clock_events WHERE event_type = 'CLOCK_IN'",
       2,
     );
+    await expectCount(
+      "late unresolved obligations",
+      "SELECT count(*) FROM reporting_exceptions WHERE classification = 'LATE' AND state = 'OPEN'",
+      1,
+    );
+    await expectCount(
+      "missing unresolved obligations",
+      "SELECT count(*) FROM reporting_exceptions WHERE classification = 'MISSING' AND state = 'OPEN'",
+      1,
+    );
+    await expectCount(
+      "corrected pending review obligations",
+      "SELECT count(*) FROM reporting_exceptions WHERE state = 'CORRECTED_PENDING_REVIEW' AND corrected_at IS NOT NULL",
+      1,
+    );
     const checks: Array<[string, string]> = [
       [
         "overlapping employee assignments",
@@ -113,6 +128,14 @@ async function main() {
       [
         "events after scheduled end or before start",
         "SELECT count(*) FROM clock_events e JOIN shift_assignments a ON a.id = e.shift_assignment_id JOIN shifts s ON s.id = a.shift_id WHERE e.effective_at < s.scheduled_start OR e.effective_at > s.scheduled_end",
+      ],
+      [
+        "exception state without matching latest immutable event",
+        "SELECT count(*) FROM reporting_exceptions e LEFT JOIN LATERAL (SELECT next_state FROM reporting_exception_events ev WHERE ev.reporting_exception_id = e.id ORDER BY ev.occurred_at DESC, ev.id DESC LIMIT 1) latest ON true WHERE latest.next_state IS DISTINCT FROM e.state",
+      ],
+      [
+        "contradictory corrected obligation state",
+        "SELECT count(*) FROM reporting_exceptions WHERE (state = 'CORRECTED_PENDING_REVIEW' AND corrected_at IS NULL) OR (state = 'OPEN' AND corrected_at IS NOT NULL)",
       ],
     ];
     for (const [label, query] of checks) {
