@@ -53,7 +53,11 @@ export default async function Page({
         passdowns={passdowns}
         reportingExceptions={personalExceptions}
       />
-      {isLocalDevelopmentAuthEnabled() ? <DevelopmentSignOut /> : null}
+      {isLocalDevelopmentAuthEnabled() ? (
+        <div className="pb-16 md:pb-0">
+          <DevelopmentSignOut />
+        </div>
+      ) : null}
     </>
   );
   return state.kind !== "ready" || state.reviewEnabled ? (
