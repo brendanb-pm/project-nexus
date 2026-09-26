@@ -22,13 +22,17 @@ test("walks Guard EOSR, incoming passdown, and Operations history through local 
     .getByRole("combobox", { name: "Assignment" })
     .selectOption({ label: "Cedar Plaza North · North Lobby" });
   await page.getByLabel("Shift summary").fill("North Lobby shift completed.");
+  await page.getByRole("button", { name: "Issues remain" }).click();
   await page
     .getByLabel("Unresolved issues")
     .fill("Door closer service remains pending.");
+  await page.getByRole("button", { name: "Issue or exception" }).click();
   await page
     .getByLabel("Equipment or access status")
     .fill("Keys accounted for; radio charging.");
+  await page.getByRole("button", { name: "Follow-up required" }).click();
   await page.getByLabel("Follow-up items").fill("Confirm maintenance arrival.");
+  await page.getByRole("button", { name: "Review before submitting" }).click();
   await page
     .getByRole("button", { name: "Submit end-of-shift report" })
     .click();

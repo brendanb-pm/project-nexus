@@ -368,6 +368,7 @@ test("EOSR draft survives navigation and reauthentication, then submits once", a
   await page.getByRole("button", { name: "Closeout Shift Report" }).click();
   const form = page.locator("#shift-closeout");
   await form.getByLabel("Shift summary").fill(summary);
+  await form.getByRole("button", { name: "Issues remain" }).click();
   await form.getByLabel("Unresolved issues").fill("Door service pending.");
   await expect(form.getByText(/Saved securely/)).toBeVisible();
   await trackDraft("summary", summary);
@@ -382,6 +383,9 @@ test("EOSR draft survives navigation and reauthentication, then submits once", a
   const recovered = page.locator("#shift-closeout");
   await recovered.getByRole("button", { name: "Restore saved draft" }).click();
   await expect(recovered.getByLabel("Shift summary")).toHaveValue(summary);
+  await recovered
+    .getByRole("button", { name: "Review before submitting" })
+    .click();
   await recovered
     .getByRole("button", { name: "Submit end-of-shift report" })
     .click();
