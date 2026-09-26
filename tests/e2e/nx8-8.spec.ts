@@ -140,7 +140,7 @@ test("Guard task hierarchy, focus, reflow and rendered contrast at four viewport
     await assertNoOverflow(page);
     if (width === 390) {
       const submit = page.getByRole("button", {
-        name: "Submit end-of-shift report",
+        name: "Review before submitting",
       });
       await submit.scrollIntoViewIfNeeded();
       const [submitBox, navBox] = await Promise.all([

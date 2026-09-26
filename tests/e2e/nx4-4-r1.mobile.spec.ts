@@ -19,7 +19,7 @@ test("keeps the Guard EOSR and incoming passdown usable at 390 by 844", async ({
     page.getByRole("group", { name: "Passdown for the incoming Guard" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Submit end-of-shift report" }),
+    page.getByRole("button", { name: "Review before submitting" }),
   ).toBeVisible();
   await assertNoHorizontalOverflow(page);
   await page.getByRole("button", { name: "Sign out of local demo" }).click();
