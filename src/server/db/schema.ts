@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   check,
   date,
@@ -1022,6 +1023,133 @@ export const reportingExceptionEvents = pgTable(
     check(
       "reporting_exception_events_actor_kind_check",
       sql`${t.actorKind} in ('SYSTEM', 'USER')`,
+    ),
+  ],
+);
+
+// Drafts are internal composition state. They never authorize client reads.
+export const clientReportDrafts = pgTable(
+  "client_report_drafts",
+  {
+    id: id(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    scopeKey: text("scope_key").notNull(),
+    siteIds: jsonb("site_ids").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    executiveSummary: text("executive_summary").notNull().default(""),
+    completionSummary: text("completion_summary").notNull().default(""),
+    followUps: jsonb("follow_ups").notNull().default([]),
+    selectedSources: jsonb("selected_sources").notNull().default([]),
+    revision: integer("revision").notNull().default(0),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    updatedByUserId: uuid("updated_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("client_report_drafts_scope_uidx").on(
+      t.organizationId,
+      t.clientId,
+      t.scopeKey,
+      t.periodStart,
+      t.periodEnd,
+    ),
+    index("client_report_drafts_org_client_idx").on(
+      t.organizationId,
+      t.clientId,
+      t.updatedAt,
+    ),
+    check(
+      "client_report_drafts_period_check",
+      sql`${t.periodEnd} > ${t.periodStart}`,
+    ),
+    check("client_report_drafts_revision_check", sql`${t.revision} >= 0`),
+    check(
+      "client_report_drafts_sites_check",
+      sql`case when jsonb_typeof(${t.siteIds}) = 'array' then jsonb_array_length(${t.siteIds}) > 0 else false end`,
+    ),
+    check(
+      "client_report_drafts_sources_check",
+      sql`jsonb_typeof(${t.selectedSources}) = 'array'`,
+    ),
+    check(
+      "client_report_drafts_followups_check",
+      sql`jsonb_typeof(${t.followUps}) = 'array'`,
+    ),
+  ],
+);
+
+// Published snapshots are append-only client-safe projections. Source records
+// remain authoritative and are never changed by publication.
+export const clientReportPublications = pgTable(
+  "client_report_publications",
+  {
+    id: id(),
+    draftId: uuid("draft_id")
+      .notNull()
+      .references(() => clientReportDrafts.id),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    siteIds: jsonb("site_ids").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    version: integer("version").notNull(),
+    supersedesId: uuid("supersedes_id").references(
+      (): AnyPgColumn => clientReportPublications.id,
+    ),
+    confirmationKey: text("confirmation_key").notNull(),
+    snapshot: jsonb("snapshot").notNull(),
+    publishedByUserId: uuid("published_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    publishedAt: timestamp("published_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("client_report_publications_draft_version_uidx").on(
+      t.draftId,
+      t.version,
+    ),
+    uniqueIndex("client_report_publications_draft_key_uidx").on(
+      t.draftId,
+      t.confirmationKey,
+    ),
+    uniqueIndex("client_report_publications_supersedes_uidx").on(
+      t.supersedesId,
+    ),
+    index("client_report_publications_org_client_idx").on(
+      t.organizationId,
+      t.clientId,
+      t.publishedAt,
+      t.id,
+    ),
+    check("client_report_publications_version_check", sql`${t.version} > 0`),
+    check(
+      "client_report_publications_period_check",
+      sql`${t.periodEnd} > ${t.periodStart}`,
+    ),
+    check(
+      "client_report_publications_sites_check",
+      sql`case when jsonb_typeof(${t.siteIds}) = 'array' then jsonb_array_length(${t.siteIds}) > 0 else false end`,
+    ),
+    check(
+      "client_report_publications_snapshot_check",
+      sql`jsonb_typeof(${t.snapshot}) = 'object'`,
     ),
   ],
 );

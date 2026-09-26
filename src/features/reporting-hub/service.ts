@@ -34,6 +34,9 @@ export class ReportingHubService {
       );
       return {
         kind: "internal",
+        canPublishClientReports:
+          context.capabilities.has("PUBLISH_CLIENT_REPORTS") &&
+          (roles.has("OPERATIONS_MANAGER") || roles.has("ADMIN")),
         scopeLabel: context.scope.organizationWide
           ? "Organization"
           : "Authorized portfolio",

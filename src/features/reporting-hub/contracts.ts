@@ -49,6 +49,7 @@ export type ReportHubRow = {
 
 export type InternalReportHub = {
   kind: "internal";
+  canPublishClientReports: boolean;
   scopeLabel: "Organization" | "Authorized portfolio";
   sites: readonly ReportHubSite[];
   sitesLimited: boolean;
