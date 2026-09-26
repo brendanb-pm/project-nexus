@@ -227,6 +227,61 @@ suite("NX-8.5 PostgreSQL reporting-exception integrity", () => {
     ]);
   });
 
+  it("reads a bounded scoped dossier without reconciling or changing immutable history", async () => {
+    await fixture();
+    await database.insert(activityEntries).values({
+      id: ids.activity,
+      shiftAssignmentId: ids.assignment,
+      occurredAt: new Date("2026-09-22T18:00:00.000Z"),
+      category: "ROUTINE_PATROL",
+      description: { narrative: "Internal activity evidence" },
+      status: "SUBMITTED",
+      visibility: "INTERNAL",
+      submissionKey: "nx85-dossier-activity",
+    });
+    await repository.reconcile(scope, "2026-09-22T20:30:00.000Z");
+    const [record] = await database
+      .select()
+      .from(reportingExceptions)
+      .where(eq(reportingExceptions.shiftAssignmentId, ids.assignment));
+    const before = await database
+      .select()
+      .from(reportingExceptionEvents)
+      .where(eq(reportingExceptionEvents.reportingExceptionId, record.id));
+    const dossier = await repository.dossier(scope, record.id);
+    expect(dossier).toMatchObject({
+      exception: { id: record.id, assignmentId: ids.assignment },
+      evidence: {
+        activities: [{ id: ids.activity }],
+        clockOutAt: clockOut.toISOString(),
+        activityHasMore: false,
+      },
+    });
+    expect(JSON.stringify(dossier)).not.toContain("Internal activity evidence");
+    expect(
+      await repository.dossier(
+        { ...scope, organizationId: "00000000-0000-4000-8000-000000000099" },
+        record.id,
+      ),
+    ).toBeNull();
+    expect(
+      await repository.dossier(
+        {
+          ...scope,
+          organizationWide: false,
+          siteIds: ["00000000-0000-4000-8000-000000000099"],
+        },
+        record.id,
+      ),
+    ).toBeNull();
+    expect(
+      await database
+        .select()
+        .from(reportingExceptionEvents)
+        .where(eq(reportingExceptionEvents.reportingExceptionId, record.id)),
+    ).toEqual(before);
+  });
+
   it("rejects stale updates and rolls back state when event insertion fails", async () => {
     await fixture();
     await repository.reconcile(scope, "2026-09-22T20:30:00.000Z");

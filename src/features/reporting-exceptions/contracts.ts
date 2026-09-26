@@ -67,6 +67,40 @@ export type ReportingExceptionDetail = {
   history: readonly ReportingExceptionEvent[];
 };
 
+export type ReportingExceptionDossier = ReportingExceptionDetail & {
+  context: {
+    clientName: string;
+    siteName: string;
+    siteTimezone: string;
+    postName: string;
+    employeeNumber: string;
+    employeeEmail?: string;
+    scheduledStart: string;
+    scheduledEnd: string;
+    assignmentStatus: string;
+  };
+  evidence: {
+    activities: readonly {
+      id: string;
+      category: string;
+      occurredAt: string;
+      incidentGate: string;
+    }[];
+    incidents: readonly {
+      id: string;
+      incidentNumber: string;
+      occurredAt: string;
+      classification: string;
+      severity: string;
+    }[];
+    closeout?: { id: string; submittedAt: string };
+    clockOutAt?: string;
+    activityHasMore: boolean;
+    incidentHasMore: boolean;
+  };
+  actors: Readonly<Record<string, string>>;
+};
+
 export type ReportingExceptionTransition = {
   exceptionId: string;
   nextState: ReportingExceptionState;
