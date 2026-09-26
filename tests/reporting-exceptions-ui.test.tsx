@@ -51,8 +51,8 @@ describe("NX-8.5 reporting exception queue", () => {
       />,
     );
     expect(
-      screen.getByRole("link", { name: /Open canonical report/i }),
-    ).toHaveAttribute("href", item.sourceHref);
+      screen.getByRole("link", { name: /Review evidence and history/i }),
+    ).toHaveAttribute("href", `/operations/reporting-exceptions/${item.id}`);
     const form = screen
       .getByRole("button", { name: "Update" })
       .closest("form")!;

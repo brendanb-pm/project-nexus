@@ -29,12 +29,40 @@ const exception = {
 
 class Repo implements ReportingExceptionRepository {
   transitions: any[] = [];
-  async reconcile() {}
+  reconciliations = 0;
+  async reconcile() {
+    this.reconciliations += 1;
+  }
   async list() {
     return [exception];
   }
   async detail(_scope: any, id: string) {
     return id === exception.id ? { exception, history: [] } : null;
+  }
+  async dossier(_scope: any, id: string) {
+    return id === exception.id
+      ? {
+          exception,
+          history: [],
+          context: {
+            clientName: "Client",
+            siteName: "Site",
+            siteTimezone: "America/Los_Angeles",
+            postName: "Post",
+            employeeNumber: "G-1",
+            scheduledStart: "2026-09-22T12:00:00.000Z",
+            scheduledEnd: "2026-09-22T20:00:00.000Z",
+            assignmentStatus: "confirmed",
+          },
+          evidence: {
+            activities: [],
+            incidents: [],
+            activityHasMore: false,
+            incidentHasMore: false,
+          },
+          actors: {},
+        }
+      : null;
   }
   async transition(_scope: any, input: any) {
     this.transitions.push(input);
@@ -46,7 +74,13 @@ class Repo implements ReportingExceptionRepository {
 }
 
 async function subject(
-  role: "GUARD" | "SUPERVISOR" | "OPERATIONS_MANAGER" | "ADMIN" | "LEADERSHIP",
+  role:
+    | "GUARD"
+    | "SUPERVISOR"
+    | "OPERATIONS_MANAGER"
+    | "ADMIN"
+    | "LEADERSHIP"
+    | "CLIENT_USER",
   employeeId = "employee-1",
 ) {
   const context = await createAuthenticatedRequestContext(
@@ -78,6 +112,28 @@ async function subject(
 }
 
 describe("NX-8.5 reporting obligations", () => {
+  it("reads an authorized evidence dossier without reconciling or transitioning", async () => {
+    const operations = await subject("OPERATIONS_MANAGER");
+    await expect(
+      operations.service.dossier(exception.id),
+    ).resolves.toMatchObject({
+      exception: { id: exception.id },
+      context: { siteName: "Site" },
+    });
+    expect(operations.repo.reconciliations).toBe(0);
+    expect(operations.repo.transitions).toHaveLength(0);
+    await expect(operations.service.dossier("unknown")).rejects.toBeInstanceOf(
+      Error,
+    );
+    const client = await subject("CLIENT_USER");
+    await expect(client.service.dossier(exception.id)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+    const leadership = await subject("LEADERSHIP");
+    await expect(
+      leadership.service.dossier(exception.id),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
   it("creates nothing for cancelled/no-work evidence and uses server receipt for delayed correction", () => {
     const base = {
       assignmentId: "assignment-1",

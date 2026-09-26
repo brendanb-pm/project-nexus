@@ -26,7 +26,7 @@ test("Operations and Supervisor manage only their authorized reporting lifecycle
     .filter({ hasText: "activity entry" })
     .first();
   await expect(
-    exception.getByRole("link", { name: "Open canonical report" }),
+    exception.getByRole("link", { name: "Review evidence and history" }),
   ).toBeVisible();
   await exception
     .getByRole("textbox", { name: "Reason for action" })

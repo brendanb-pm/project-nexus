@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { OperationsCenterState } from "@/features/operations/application";
 import type { OperationalRecordCard } from "@/features/operations/contracts";
@@ -229,7 +230,7 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
             obligations without changing canonical reports.
           </p>
         </div>
-        <a
+        <Link
           className={`${panel} hover:border-white/30`}
           href="/operations/reporting-exceptions"
         >
@@ -238,7 +239,7 @@ export function OperationsCenter({ state }: { state: OperationsCenterState }) {
             Authorized Operations users can acknowledge, request correction,
             resolve corrected work, escalate, or waive with a reason.
           </p>
-        </a>
+        </Link>
       </section>
 
       <section className="grid gap-3" aria-labelledby="compliance-heading">

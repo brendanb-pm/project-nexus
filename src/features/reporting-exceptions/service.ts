@@ -36,6 +36,23 @@ export class ReportingExceptionService {
     });
   }
 
+  async dossier(id: string) {
+    this.access.requireOrganization("VIEW_SITE_OPERATIONS");
+    if (
+      !this.access.context.actor.roles.some(
+        (role) =>
+          role === "OPERATIONS_MANAGER" ||
+          role === "ADMIN" ||
+          role === "SUPERVISOR",
+      )
+    )
+      throw new PermissionDeniedError();
+    const dossier = await this.repository.dossier(this.scope(), id);
+    if (!dossier) throw new ResourceNotFoundError("Reporting exception");
+    this.access.requireHierarchical("VIEW_SITE_OPERATIONS", dossier.exception);
+    return dossier;
+  }
+
   lifecycleRole(): "FULL" | "SUPERVISOR" {
     return this.access.context.actor.roles.some(
       (role) => role === "OPERATIONS_MANAGER" || role === "ADMIN",
