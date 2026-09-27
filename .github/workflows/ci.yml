@@ -44,6 +44,7 @@ jobs:
             -d nexus_ci_test \
             -c "CREATE TABLE nexus_local_environment_identity (singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton), marker text NOT NULL CHECK (marker = 'NEXUS_LOCAL_DEMO_V1')); INSERT INTO nexus_local_environment_identity (marker) VALUES ('NEXUS_LOCAL_DEMO_V1');"
       - run: npm run db:demo:reset
+      - run: npm run db:demo:validate
       - name: Check changed-surface formatting
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then

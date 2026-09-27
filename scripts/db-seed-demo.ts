@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { existsSync } from "node:fs";
+import { deriveReportingObligations } from "../src/features/reporting-exceptions/policy";
 
 function localDemoDatabaseUrl() {
   const value = process.env.DATABASE_URL;
@@ -21,10 +22,17 @@ function localDemoDatabaseUrl() {
 const ids = {
   organization: "00000000-0000-4000-8000-000000000001",
   branch: "00000000-0000-4000-8000-000000000010",
+  westBranch: "00000000-0000-4000-8000-000000000011",
   client: "00000000-0000-4000-8000-000000000020",
+  westClient: "00000000-0000-4000-8000-000000000021",
   site: "00000000-0000-4000-8000-000000000030",
+  cedarAnnex: "00000000-0000-4000-8000-000000000031",
+  westSite: "00000000-0000-4000-8000-000000000032",
+  westAnnex: "00000000-0000-4000-8000-000000000033",
   post: "00000000-0000-4000-8000-000000000040",
   incompletePost: "00000000-0000-4000-8000-000000000041",
+  westPost: "00000000-0000-4000-8000-000000000042",
+  annexPost: "00000000-0000-4000-8000-000000000043",
   guardUser: "00000000-0000-4000-8000-000000000050",
   incomingGuardUser: "00000000-0000-4000-8000-000000000051",
   operationsUser: "00000000-0000-4000-8000-000000000052",
@@ -43,6 +51,13 @@ const ids = {
   incomingAssignment: "00000000-0000-4000-8000-000000000094",
   incompleteShift: "00000000-0000-4000-8000-000000000082",
   incompleteAssignment: "00000000-0000-4000-8000-000000000097",
+  westShift: "00000000-0000-4000-8000-000000000083",
+  westAssignment: "00000000-0000-4000-8000-000000000098",
+  westActivity: "00000000-0000-4000-8000-000000000096",
+  westIncident: "00000000-0000-4000-8000-000000000088",
+  westEosr: "00000000-0000-4000-8000-000000000089",
+  lateShift: "00000000-0000-4000-8000-000000000084",
+  lateAssignment: "00000000-0000-4000-8000-000000000086",
   activity: "00000000-0000-4000-8000-000000000091",
   incident: "00000000-0000-4000-8000-000000000092",
   handoff: "00000000-0000-4000-8000-000000000093",
@@ -90,8 +105,11 @@ async function main() {
   const startsAt = new Date(now.valueOf() - 7 * 60 * 60 * 1000);
   const endsAt = new Date(now.valueOf() + 60 * 60 * 1000);
   const incomingEndsAt = new Date(now.valueOf() + 9 * 60 * 60 * 1000);
-  const incompleteStartsAt = new Date(now.valueOf() - 10 * 60 * 60 * 1000);
-  const incompleteEndsAt = new Date(now.valueOf() - 2 * 60 * 60 * 1000);
+  const incompleteStartsAt = new Date(now.valueOf() - 18 * 60 * 60 * 1000);
+  const incompleteEndsAt = new Date(now.valueOf() - 10 * 60 * 60 * 1000);
+  const westStartsAt = new Date(now.valueOf() - 9 * 60 * 60 * 1000);
+  const westEndsAt = new Date(now.valueOf() - 60 * 60 * 1000);
+  const lateEndsAt = new Date(now.valueOf() - 30 * 60 * 1000);
   const southRequirementEndsAt = new Date(now.valueOf() + 4 * 60 * 60 * 1000);
   const upcomingStartsAt = new Date(now.valueOf() + 10 * 60 * 60 * 1000);
   const upcomingEndsAt = new Date(now.valueOf() + 11 * 60 * 60 * 1000);
@@ -122,12 +140,59 @@ async function main() {
       [ids.branch, ids.organization],
     );
     await pool.query(
+      "INSERT INTO branches (id, organization_id, name, timezone, status) VALUES ($1, $2, 'Northstar West', 'America/Los_Angeles', 'active')",
+      [ids.westBranch, ids.organization],
+    );
+    await pool.query(
       "INSERT INTO clients (id, organization_id, branch_id, name, status) VALUES ($1, $2, $3, 'Cedar Plaza', 'active')",
       [ids.client, ids.organization, ids.branch],
     );
     await pool.query(
+      "INSERT INTO clients (id, organization_id, branch_id, name, status) VALUES ($1, $2, $3, 'Harbor Logistics', 'active')",
+      [ids.westClient, ids.organization, ids.westBranch],
+    );
+    await pool.query(
       'INSERT INTO sites (id, client_id, name, address, timezone) VALUES ($1, $2, \'Cedar Plaza North\', \'{"line1":"100 Cedar Plaza Way","city":"Demo City","region":"CA","postalCode":"90001","country":"US"}\'::jsonb, \'America/Los_Angeles\')',
       [ids.site, ids.client],
+    );
+    await pool.query(
+      "INSERT INTO sites (id, client_id, name, address, timezone) VALUES ($1, $2, $3, $4::jsonb, 'America/Los_Angeles')",
+      [
+        ids.cedarAnnex,
+        ids.client,
+        "Cedar Plaza Annex",
+        JSON.stringify({
+          line1: "120 Cedar Plaza Way",
+          city: "Demo City",
+          region: "CA",
+          postalCode: "90001",
+          country: "US",
+        }),
+      ],
+    );
+    await pool.query(
+      "INSERT INTO sites (id, client_id, name, address, timezone) VALUES ($1, $2, $3, $4::jsonb, 'America/Los_Angeles'), ($5, $2, $6, $7::jsonb, 'America/Los_Angeles')",
+      [
+        ids.westSite,
+        ids.westClient,
+        "Harbor Terminal",
+        JSON.stringify({
+          line1: "200 Harbor Road",
+          city: "Demo City",
+          region: "CA",
+          postalCode: "90002",
+          country: "US",
+        }),
+        ids.westAnnex,
+        "Harbor Dispatch",
+        JSON.stringify({
+          line1: "220 Harbor Road",
+          city: "Demo City",
+          region: "CA",
+          postalCode: "90002",
+          country: "US",
+        }),
+      ],
     );
     await pool.query(
       "INSERT INTO posts (id, site_id, name, description, service_type, armed_requirement) VALUES ($1, $2, 'North Lobby', 'Synthetic demo access-control post', 'access_control', 'unarmed')",
@@ -136,6 +201,14 @@ async function main() {
     await pool.query(
       "INSERT INTO posts (id, site_id, name, description, service_type, armed_requirement) VALUES ($1, $2, 'South Gate', 'Synthetic incomplete-close demo post', 'access_control', 'unarmed')",
       [ids.incompletePost, ids.site],
+    );
+    await pool.query(
+      "INSERT INTO posts (id, site_id, name, description, service_type, armed_requirement) VALUES ($1, $2, 'Terminal Desk', 'Synthetic cross-client reporting post', 'access_control', 'unarmed')",
+      [ids.westPost, ids.westSite],
+    );
+    await pool.query(
+      "INSERT INTO posts (id, site_id, name, description, service_type, armed_requirement) VALUES ($1, $2, 'Annex Reception', 'Synthetic late-reporting demo post', 'access_control', 'unarmed')",
+      [ids.annexPost, ids.cedarAnnex],
     );
     const northStart = localDescriptor(startsAt);
     const northEnd = localDescriptor(incomingEndsAt);
@@ -219,6 +292,17 @@ async function main() {
         ids.incomingGuardEmployee,
         ids.branch,
         ids.site,
+      ],
+    );
+    await pool.query(
+      "INSERT INTO employee_roles (employee_id, role, branch_id, site_id) VALUES ($1, 'OPERATIONS_MANAGER', $2, NULL), ($3, 'GUARD', $2, $4), ($3, 'GUARD', $5, $6)",
+      [
+        ids.operationsEmployee,
+        ids.westBranch,
+        ids.incomingGuardEmployee,
+        ids.westSite,
+        ids.branch,
+        ids.cedarAnnex,
       ],
     );
     await pool.query(
@@ -384,6 +468,22 @@ async function main() {
       [ids.incompleteAssignment, ids.incompleteShift, ids.guardEmployee],
     );
     await pool.query(
+      "INSERT INTO shifts (id, post_id, scheduled_start, scheduled_end, status, staffing_requirement, timezone) VALUES ($1, $2, $3, $4, 'COMPLETED', 1, 'America/Los_Angeles')",
+      [ids.westShift, ids.westPost, westStartsAt, westEndsAt],
+    );
+    await pool.query(
+      "INSERT INTO shift_assignments (id, shift_id, employee_id, status, assigned_at) VALUES ($1, $2, $3, 'assigned', NOW())",
+      [ids.westAssignment, ids.westShift, ids.incomingGuardEmployee],
+    );
+    await pool.query(
+      "INSERT INTO shifts (id, post_id, scheduled_start, scheduled_end, status, staffing_requirement, timezone) VALUES ($1, $2, $3, $4, 'COMPLETED', 1, 'America/Los_Angeles')",
+      [ids.lateShift, ids.annexPost, westEndsAt, lateEndsAt],
+    );
+    await pool.query(
+      "INSERT INTO shift_assignments (id, shift_id, employee_id, status, assigned_at) VALUES ($1, $2, $3, 'assigned', NOW())",
+      [ids.lateAssignment, ids.lateShift, ids.incomingGuardEmployee],
+    );
+    await pool.query(
       "INSERT INTO clock_events (id, shift_assignment_id, event_type, occurred_at, effective_at, recorded_by_user_id, verification_status) VALUES ($1, $2, 'CLOCK_IN', $3, $3, $4, 'NORMAL'), ($5, $2, 'CLOCK_OUT', $6, $6, $4, 'NORMAL')",
       [ids.clockIn, ids.assignment, startsAt, ids.guardUser, ids.clockOut, now],
     );
@@ -430,6 +530,42 @@ async function main() {
       ],
     );
     await pool.query(
+      "INSERT INTO clock_events (id, shift_assignment_id, event_type, occurred_at, effective_at, recorded_by_user_id, verification_status) VALUES ('00000000-0000-4000-8000-000000008501', $1, 'CLOCK_IN', $2, $2, $4, 'NORMAL'), ('00000000-0000-4000-8000-000000008502', $1, 'CLOCK_OUT', $3, $3, $4, 'NORMAL')",
+      [ids.westAssignment, westStartsAt, westEndsAt, ids.incomingGuardUser],
+    );
+    await pool.query(
+      "INSERT INTO clock_events (id, shift_assignment_id, event_type, occurred_at, effective_at, recorded_by_user_id, verification_status) VALUES ('00000000-0000-4000-8000-000000008703', $1, 'CLOCK_IN', $2, $2, $4, 'NORMAL'), ('00000000-0000-4000-8000-000000008704', $1, 'CLOCK_OUT', $3, $3, $4, 'NORMAL')",
+      [ids.lateAssignment, westEndsAt, lateEndsAt, ids.incomingGuardUser],
+    );
+    await pool.query(
+      "INSERT INTO activity_entries (id, shift_assignment_id, occurred_at, category, post_id, description, action_taken, follow_up_required, incident_related, incident_gate, submission_key, visibility, status) VALUES ($1, $2, $3, 'REPORTABLE_INCIDENT', $4, $5::jsonb, 'Escalated to operations.', true, true, 'REQUIRED', 'demo-west-activity', 'INTERNAL', 'SUBMITTED')",
+      [
+        ids.westActivity,
+        ids.westAssignment,
+        westStartsAt,
+        ids.westPost,
+        JSON.stringify({
+          narrative: "Synthetic perimeter alarm investigated.",
+          locationContext: "Harbor terminal",
+        }),
+      ],
+    );
+    await pool.query(
+      "INSERT INTO incident_reports (id, site_id, shift_assignment_id, originating_activity_entry_id, reported_by_user_id, incident_number, classification, severity, occurred_at, narrative, actions_taken, emergency_service_involvement, submission_key, status, visibility) VALUES ($1, $2, $3, $4, $5, 'INC-DEMO-0002', 'SAFETY', 'HIGH', $6, 'Synthetic terminal hazard for internal review.', 'Area isolated and operations notified.', false, 'demo-west-incident', 'SUBMITTED', 'INTERNAL')",
+      [
+        ids.westIncident,
+        ids.westSite,
+        ids.westAssignment,
+        ids.westActivity,
+        ids.incomingGuardUser,
+        westStartsAt,
+      ],
+    );
+    await pool.query(
+      "INSERT INTO end_of_shift_reports (id, shift_assignment_id, submitted_by_user_id, summary, unresolved_issues, equipment_access_status, follow_up_items, unusual_conditions, submission_key, submitted_at) VALUES ($1, $2, $3, 'Harbor terminal shift closed after due time.', '[]'::jsonb, 'Radio and keys returned.', '[]'::jsonb, '', 'demo-west-late-eosr', $4)",
+      [ids.westEosr, ids.westAssignment, ids.incomingGuardUser, now],
+    );
+    await pool.query(
       "INSERT INTO handoffs (id, shift_assignment_id, unresolved_issues, equipment_key_status, follow_up_items, submitted_at, submission_key, status, visibility, acknowledged_by_user_id, acknowledged_at) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, 'demo-handoff', 'SUBMITTED', 'INTERNAL', $7, $6)",
       [
         ids.handoff,
@@ -454,6 +590,83 @@ async function main() {
         now,
       ],
     );
+    // Reuse the canonical NX-8.5 timing/obligation policy. Synthetic seed
+    // evidence never replaces the source ActivityEntry/EOSR/Incident records.
+    const seededObligations = [
+      ...deriveReportingObligations(
+        {
+          assignmentId: ids.incompleteAssignment,
+          organizationId: ids.organization,
+          effectiveShiftEndAt: incompleteEndsAt.toISOString(),
+          clockedIn: true,
+          positiveApprovedTimeRecord: false,
+          reportableActivities: [],
+        },
+        now,
+      ),
+      ...deriveReportingObligations(
+        {
+          assignmentId: ids.lateAssignment,
+          organizationId: ids.organization,
+          effectiveShiftEndAt: lateEndsAt.toISOString(),
+          clockedIn: true,
+          positiveApprovedTimeRecord: false,
+          reportableActivities: [],
+        },
+        now,
+      ),
+      ...deriveReportingObligations(
+        {
+          assignmentId: ids.westAssignment,
+          organizationId: ids.organization,
+          effectiveShiftEndAt: westEndsAt.toISOString(),
+          clockedIn: true,
+          positiveApprovedTimeRecord: false,
+          eosrSubmittedAt: now.toISOString(),
+          activitySubmittedAt: now.toISOString(),
+          reportableActivities: [
+            {
+              id: ids.westActivity,
+              submittedAt: now.toISOString(),
+              incidentSubmittedAt: now.toISOString(),
+            },
+          ],
+        },
+        now,
+      ),
+    ];
+    for (const obligation of seededObligations) {
+      const state = obligation.fulfilledAt
+        ? "CORRECTED_PENDING_REVIEW"
+        : "OPEN";
+      const inserted = await pool.query<{ id: string }>(
+        "INSERT INTO reporting_exceptions (organization_id, shift_assignment_id, triggering_activity_entry_id, obligation_key, obligation_type, classification, state, due_at, effective_shift_end_at, first_detected_at, corrected_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
+        [
+          ids.organization,
+          obligation.assignmentId,
+          obligation.triggeringActivityEntryId ?? null,
+          obligation.key,
+          obligation.type,
+          obligation.classification,
+          state,
+          obligation.dueAt,
+          obligation.effectiveShiftEndAt,
+          now,
+          obligation.fulfilledAt ?? null,
+        ],
+      );
+      await pool.query(
+        "INSERT INTO reporting_exception_events (reporting_exception_id, next_state, reason, actor_kind, occurred_at) VALUES ($1, $2, $3, 'SYSTEM', $4)",
+        [
+          inserted.rows[0].id,
+          state,
+          obligation.fulfilledAt
+            ? "Delayed submission detected by canonical reconciliation."
+            : "Reporting obligation detected by canonical reconciliation.",
+          now,
+        ],
+      );
+    }
     await pool.query(
       "INSERT INTO assets (id, organization_id, identifier, asset_type, status, condition, assigned_site_id, inspection_due_on, expires_on) VALUES ('00000000-0000-4000-8000-000000000140', $1, 'VEH-001', 'vehicle', 'active', 'good', $2, CURRENT_DATE + 30, NULL), ('00000000-0000-4000-8000-000000000141', $1, 'RADIO-001', 'radio', 'active', 'fair', $2, CURRENT_DATE + 7, NULL), ('00000000-0000-4000-8000-000000000142', $1, 'KEY-001', 'keys', 'active', 'good', $2, NULL, NULL), ('00000000-0000-4000-8000-000000000143', $1, 'MED-001', 'medical_kit', 'maintenance', 'poor', $2, CURRENT_DATE - 1, NULL), ('00000000-0000-4000-8000-000000000144', $1, 'EQP-001', 'equipment', 'inactive', 'out_of_service', $2, NULL, CURRENT_DATE + 14), ('00000000-0000-4000-8000-000000000145', $1, 'FIR-001', 'firearm', 'active', 'good', $2, CURRENT_DATE + 60, NULL)",
       [ids.organization, ids.site],
