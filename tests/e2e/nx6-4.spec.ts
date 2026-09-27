@@ -10,7 +10,9 @@ test("does not expose leadership analytics to an unauthenticated request", async
   page,
 }) => {
   await page.goto("/leadership").catch(() => undefined);
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Leadership dashboard" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Leadership Operations" }),
   ).toHaveCount(0);
