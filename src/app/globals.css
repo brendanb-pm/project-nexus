@@ -24,3 +24,24 @@ body {
 a {
   color: inherit;
 }
+
+@page client-report {
+  size: A4;
+  margin: 18mm;
+  background: #fff;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    print-color-adjust: exact;
+  }
+
+  .client-report-print {
+    page: client-report;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+}

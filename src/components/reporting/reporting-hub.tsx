@@ -192,6 +192,14 @@ function InternalBrowse({ state }: { state: InternalReportHub }) {
           "/operations/reporting-exceptions",
           "Open exception queue",
         )}
+        {state.canPublishClientReports
+          ? destination(
+              "Client report publication",
+              "Stage, review, and publish client-safe report versions with an explicit confirmation.",
+              "/operations/client-reports",
+              "Open client composition",
+            )
+          : null}
       </section>
     </>
   );
@@ -247,7 +255,7 @@ export function ReportingHub({ state }: { state: ReportHubPageState }) {
       {state.kind === "client"
         ? destination(
             "Client reporting",
-            "View only reports and incidents explicitly approved for your authorized client and sites.",
+            "View only confirmed published report versions for your authorized client and sites.",
             "/portal",
             "Open client portal",
           )
