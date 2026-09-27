@@ -8,7 +8,13 @@ test("keeps published report access usable at mobile width", async ({
   await expect(
     page.getByRole("heading", { name: "Published site reports" }),
   ).toBeVisible();
-  await expect(page.getByText(/No published client reports/)).toBeVisible();
+  // Desktop acceptance may already have published a version in the shared
+  // isolated database; both the empty and published client states are valid.
+  await expect(
+    page
+      .getByText(/No published client reports/)
+      .or(page.getByRole("link", { name: "Open published version" }).first()),
+  ).toBeVisible();
   const scrollWidth = await page
     .locator("body")
     .evaluate((body) => body.scrollWidth);
