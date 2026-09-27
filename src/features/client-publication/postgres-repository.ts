@@ -76,12 +76,14 @@ function draftDto(
 
 function publicationDto(
   row: typeof clientReportPublications.$inferSelect,
+  isCurrent: boolean,
 ): ClientReportPublication {
   return {
     id: row.id,
     clientId: row.clientId,
     siteIds: row.siteIds as string[],
     version: row.version,
+    isCurrent,
     ...(row.supersedesId ? { supersedesId: row.supersedesId } : {}),
     publishedAt: row.publishedAt.toISOString(),
     snapshot: row.snapshot as ClientReportSnapshot,
@@ -564,7 +566,14 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
           ),
         )
         .limit(1);
-      if (replay) return publicationDto(replay);
+      if (replay) {
+        const [successor] = await tx
+          .select({ id: clientReportPublications.id })
+          .from(clientReportPublications)
+          .where(eq(clientReportPublications.supersedesId, replay.id))
+          .limit(1);
+        return publicationDto(replay, !successor);
+      }
       const [previous] = await tx
         .select()
         .from(clientReportPublications)
@@ -618,13 +627,19 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
           sourceIds: snapshot.sources.map((source) => source.id),
         },
       });
-      return publicationDto(row);
+      return publicationDto(row, true);
     });
   }
 
   async listPublished(scope: ReportingScope) {
     const rows = await this.database
-      .select({ publication: clientReportPublications })
+      .select({
+        publication: clientReportPublications,
+        isCurrent: sql<boolean>`not exists (
+          select 1 from client_report_publications successor
+          where successor.supersedes_id = ${clientReportPublications.id}
+        )`,
+      })
       .from(clientReportPublications)
       .innerJoin(clients, eq(clientReportPublications.clientId, clients.id))
       .where(
@@ -638,12 +653,18 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
         desc(clientReportPublications.id),
       )
       .limit(25);
-    return rows.map((row) => publicationDto(row.publication));
+    return rows.map((row) => publicationDto(row.publication, row.isCurrent));
   }
 
   async publication(scope: ReportingScope, id: string) {
     const [row] = await this.database
-      .select({ publication: clientReportPublications })
+      .select({
+        publication: clientReportPublications,
+        isCurrent: sql<boolean>`not exists (
+          select 1 from client_report_publications successor
+          where successor.supersedes_id = ${clientReportPublications.id}
+        )`,
+      })
       .from(clientReportPublications)
       .innerJoin(clients, eq(clientReportPublications.clientId, clients.id))
       .where(
@@ -654,6 +675,6 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
         ),
       )
       .limit(1);
-    return row ? publicationDto(row.publication) : null;
+    return row ? publicationDto(row.publication, row.isCurrent) : null;
   }
 }

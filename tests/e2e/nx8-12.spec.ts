@@ -114,6 +114,8 @@ test("Operations confirms immutable client-safe publication; Client sees only it
   const secondHref = await secondVersion.getAttribute("href");
   await signIn(page, "Client User A");
   await page.goto(secondHref!);
+  await expect(page.getByText("Version status")).toBeVisible();
+  await expect(page.getByText("Current", { exact: true })).toBeVisible();
   await expect(
     page.getByText("Reviewed operational finding 52", { exact: false }),
   ).toBeVisible();
@@ -124,4 +126,6 @@ test("Operations confirms immutable client-safe publication; Client sees only it
     printBackground: true,
   });
   expect(longPdf.byteLength).toBeGreaterThan(pdf.byteLength);
+  await page.goto(publishedHref!);
+  await expect(page.getByText("Superseded historical version")).toBeVisible();
 });

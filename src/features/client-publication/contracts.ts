@@ -58,6 +58,7 @@ export type ClientReportPublication = {
   clientId: string;
   siteIds: readonly string[];
   version: number;
+  isCurrent: boolean;
   supersedesId?: string;
   publishedAt: string;
   snapshot: ClientReportSnapshot;

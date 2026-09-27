@@ -61,6 +61,12 @@ export default async function PublishedClientReportPage({
               </dd>
             </div>
             <div>
+              <dt className="font-semibold">Version status</dt>
+              <dd>
+                {report.isCurrent ? "Current" : "Superseded historical version"}
+              </dd>
+            </div>
+            <div>
               <dt className="font-semibold">Report ID</dt>
               <dd className="break-all">{report.id}</dd>
             </div>

@@ -125,7 +125,17 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
       organizationWide: false,
       siteIds: [randomUUID()],
     };
-    for (const denied of [wrongTenant, wrongSite]) {
+    const wrongClient = {
+      ...scope,
+      organizationWide: false,
+      clientIds: [randomUUID()],
+    };
+    const wrongBranch = {
+      ...scope,
+      organizationWide: false,
+      branchIds: [randomUUID()],
+    };
+    for (const denied of [wrongTenant, wrongSite, wrongClient, wrongBranch]) {
       await expect(
         repository.publish(
           denied,
@@ -348,6 +358,7 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
     );
     const first = outcomes.find((item) => item.status === "fulfilled")!.value;
     expect(first.version).toBe(1);
+    expect(first.isCurrent).toBe(true);
     expect(first.snapshot.sources.map((item) => item.kind)).toEqual([
       "ACTIVITY",
       "INCIDENT",
@@ -381,7 +392,16 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
       audit,
     );
     expect(second.version).toBe(2);
+    expect(second.isCurrent).toBe(true);
     expect(second.supersedesId).toBe(first.id);
+    expect(await repository.publication(scope, first.id)).toMatchObject({
+      id: first.id,
+      isCurrent: false,
+    });
+    expect(await repository.publication(scope, second.id)).toMatchObject({
+      id: second.id,
+      isCurrent: true,
+    });
     const versions = await database
       .select()
       .from(clientReportPublications)

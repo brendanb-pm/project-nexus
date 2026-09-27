@@ -35,6 +35,11 @@ export function ClientPortal({
               <h2 className="text-lg font-semibold">
                 {report.snapshot.clientName} · Version {report.version}
               </h2>
+              <p className="mt-1 text-sm">
+                {report.isCurrent
+                  ? "Current published version"
+                  : "Superseded historical version"}
+              </p>
               <p className="mt-2 text-sm">
                 {report.snapshot.sites.map((site) => site.name).join(", ")}
               </p>
