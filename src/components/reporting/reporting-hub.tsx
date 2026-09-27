@@ -192,6 +192,12 @@ function InternalBrowse({ state }: { state: InternalReportHub }) {
           "/operations/reporting-exceptions",
           "Open exception queue",
         )}
+        {destination(
+          "Reporting analytics",
+          "Compare authorized locations using read-only reporting metrics.",
+          "/reports/analytics",
+          "Open analytics",
+        )}
       </section>
     </>
   );
@@ -252,14 +258,22 @@ export function ReportingHub({ state }: { state: ReportHubPageState }) {
             "Open client portal",
           )
         : null}
-      {state.kind === "leadership"
-        ? destination(
+      {state.kind === "leadership" ? (
+        <section className="grid gap-3 md:grid-cols-2">
+          {destination(
             "Leadership operations",
             "Use the existing aggregate-safe operational dashboard. No employee-level compliance details are exposed here.",
             "/leadership",
             "Open leadership dashboard",
-          )
-        : null}
+          )}
+          {destination(
+            "Reporting analytics",
+            "Compare authorized locations using read-only reporting metrics.",
+            "/reports/analytics",
+            "Open analytics",
+          )}
+        </section>
+      ) : null}
     </main>
   );
 }
