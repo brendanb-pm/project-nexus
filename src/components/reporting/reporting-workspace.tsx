@@ -434,26 +434,30 @@ export function ReportingWorkspace({
           </dl>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <button
-            aria-controls="add-activity"
-            aria-expanded={activityFormOpen}
-            className={`${activityFormOpen || activeTask ? "hidden sm:block" : "fixed sm:static"} inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 min-h-12 rounded-xl bg-[var(--accent-control)] px-4 font-bold text-white shadow-lg shadow-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white`}
-            onClick={openActivity}
-            ref={activityLauncherRef}
-            type="button"
+          <div
+            className={`${activityFormOpen || activeTask ? "hidden sm:contents" : "fixed sm:contents"} inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 grid grid-cols-2 gap-2 rounded-2xl border border-white/15 bg-[var(--card)] p-2 shadow-xl sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none`}
           >
-            + Add activity
-          </button>
-          <button
-            aria-controls="incident"
-            aria-expanded={activeTask === "incident"}
-            className="min-h-12 rounded-xl border border-white/15 px-4 font-bold hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-            onClick={() => fileIncident()}
-            ref={incidentLauncherRef}
-            type="button"
-          >
-            File Security Incident
-          </button>
+            <button
+              aria-controls="add-activity"
+              aria-expanded={activityFormOpen}
+              className="min-h-12 rounded-xl bg-[var(--accent-control)] px-3 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              onClick={openActivity}
+              ref={activityLauncherRef}
+              type="button"
+            >
+              + Add activity
+            </button>
+            <button
+              aria-controls="incident"
+              aria-expanded={activeTask === "incident"}
+              className="min-h-12 rounded-xl border border-white/15 px-3 font-bold hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              onClick={() => fileIncident()}
+              ref={incidentLauncherRef}
+              type="button"
+            >
+              File Security Incident
+            </button>
+          </div>
           <button
             aria-controls="shift-closeout"
             aria-expanded={activeTask === "shift-closeout"}
@@ -489,7 +493,7 @@ export function ReportingWorkspace({
         />
       ) : null}
 
-      <div className="grid min-w-0 gap-5 pb-24 sm:pb-0">
+      <div className="grid min-w-0 gap-5 pb-40 sm:pb-0">
         <ShiftReportTimeline
           entries={timeline}
           hasMore={Boolean(state.timelineHasMore)}

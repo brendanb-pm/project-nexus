@@ -27,6 +27,10 @@ export function EndOfShiftReportForm({
 }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [completed, setCompleted] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [review, setReview] = useState<Record<string, string>>({});
+  const [details, setDetails] = useState<Record<string, boolean>>({});
   const [key] = useState(() => crypto.randomUUID?.() ?? `eosr-${Date.now()}`);
   const formRef = useRef<HTMLFormElement>(null);
   const draft = useReportingDraft({
@@ -59,10 +63,51 @@ export function EndOfShiftReportForm({
         if (field instanceof HTMLTextAreaElement)
           field.value = typeof payload[name] === "string" ? payload[name] : "";
       }
+      setDetails(
+        Object.fromEntries(
+          [
+            "unresolvedIssues",
+            "equipmentAccessStatus",
+            "followUpItems",
+            "unusualConditions",
+          ].map((name) => [name, Boolean(String(payload[name] ?? "").trim())]),
+        ),
+      );
     },
-    clearPayload: () => formRef.current?.reset(),
+    clearPayload: () => {
+      formRef.current?.reset();
+      setDetails({});
+      setReviewing(false);
+    },
   });
+  function chooseDetail(name: string, enabled: boolean) {
+    setDetails((current) => ({ ...current, [name]: enabled }));
+    setReviewing(false);
+    if (draftEnabled) draft.changed();
+  }
+  function openReview() {
+    const form = formRef.current;
+    if (!form || !form.reportValidity()) return;
+    const data = new FormData(form);
+    setReview(
+      Object.fromEntries(
+        [
+          "summary",
+          "unresolvedIssues",
+          "equipmentAccessStatus",
+          "followUpItems",
+          "unusualConditions",
+        ].map((name) => [name, String(data.get(name) ?? "").trim()]),
+      ),
+    );
+    setMessage("");
+    setReviewing(true);
+  }
   async function onSubmit(form: FormData) {
+    if (embedded && !reviewing) {
+      openReview();
+      return;
+    }
     if (busy) return;
     setBusy(true);
     setMessage("Submitting end-of-shift report…");
@@ -73,6 +118,7 @@ export function EndOfShiftReportForm({
           setMessage(
             "End-of-shift report submitted. Your passdown is available to the incoming Guard.",
           );
+          setCompleted(true);
         } else if (result.kind === "already-submitted") {
           window.location.reload();
         } else {
@@ -98,6 +144,7 @@ export function EndOfShiftReportForm({
       setMessage(
         "End-of-shift report submitted. Your passdown is available to the incoming Guard.",
       );
+      setCompleted(true);
     } catch {
       setMessage(
         "Your report was not submitted. Review the required shift summary and try again.",
@@ -119,20 +166,23 @@ export function EndOfShiftReportForm({
             No authorized active assignment is available.
           </p>
         </section>
+      ) : completed ? (
+        <section
+          className="rounded-xl border border-emerald-400/35 bg-emerald-400/10 p-5"
+          role="status"
+        >
+          <h2 className="text-xl font-semibold">Shift Report complete</h2>
+          <p className="mt-2">{message}</p>
+        </section>
       ) : (
         <form
-          action={draftEnabled ? undefined : onSubmit}
           className="grid gap-4 rounded-xl border border-white/10 bg-[var(--card)] p-5"
           onChange={draftEnabled ? draft.changed : undefined}
           onInput={draftEnabled ? draft.changed : undefined}
-          onSubmit={
-            draftEnabled
-              ? (event) => {
-                  event.preventDefault();
-                  void onSubmit(new FormData(event.currentTarget));
-                }
-              : undefined
-          }
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onSubmit(new FormData(event.currentTarget));
+          }}
           ref={formRef}
         >
           <div>
@@ -147,65 +197,229 @@ export function EndOfShiftReportForm({
               separate new Handoff is required.
             </p>
           </div>
-          <label>
-            Assignment
-            <select className={input} name="shiftAssignmentId">
-              {assignments.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.siteName} · {item.postName}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Shift summary
-            <textarea
-              className={input}
-              name="summary"
-              required
-              minLength={3}
-              rows={4}
-            />
-          </label>
-          <fieldset className="grid gap-3 rounded-lg border border-white/10 p-4">
-            <legend className="px-1 font-medium">
-              Passdown for the incoming Guard
-            </legend>
+          {embedded ? (
+            <p className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-[var(--text-muted)]">
+              Your activity timeline is already part of this Shift Report.
+              Summarize material conditions here; do not repeat every entry.
+            </p>
+          ) : null}
+          <div className={reviewing ? "hidden" : "grid gap-4"}>
             <label>
-              Unresolved issues
+              Assignment
+              <select className={input} name="shiftAssignmentId">
+                {assignments.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.siteName} · {item.postName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Shift summary
               <textarea
                 className={input}
-                name="unresolvedIssues"
-                rows={3}
-                placeholder="One item per line"
+                name="summary"
+                required
+                minLength={3}
+                rows={4}
               />
             </label>
-            <label>
-              Equipment or access status
-              <textarea
-                className={input}
-                name="equipmentAccessStatus"
-                rows={2}
-              />
-            </label>
-            <label>
-              Follow-up items
-              <textarea
-                className={input}
-                name="followUpItems"
-                rows={3}
-                placeholder="One item per line"
-              />
-            </label>
-            <label>
-              Unusual conditions
-              <textarea className={input} name="unusualConditions" rows={2} />
-            </label>
-          </fieldset>
+            <fieldset className="grid gap-3 rounded-lg border border-white/10 p-4">
+              <legend className="px-1 font-medium">
+                Passdown for the incoming Guard
+              </legend>
+              <div className="grid gap-2">
+                <span className="font-medium">Unresolved issues</span>
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="Issue state choices"
+                >
+                  <button
+                    aria-pressed={!details.unresolvedIssues}
+                    className="min-h-11 rounded-lg border border-white/20 px-3 aria-pressed:bg-[var(--accent-control)]"
+                    onClick={() => chooseDetail("unresolvedIssues", false)}
+                    type="button"
+                  >
+                    No unresolved issues
+                  </button>
+                  <button
+                    aria-pressed={Boolean(details.unresolvedIssues)}
+                    className="min-h-11 rounded-lg border border-white/20 px-3 aria-pressed:bg-[var(--accent-control)]"
+                    onClick={() => chooseDetail("unresolvedIssues", true)}
+                    type="button"
+                  >
+                    Issues remain
+                  </button>
+                </div>
+              </div>
+              <label className={details.unresolvedIssues ? "" : "hidden"}>
+                Unresolved issues
+                <textarea
+                  className={input}
+                  disabled={!details.unresolvedIssues}
+                  name="unresolvedIssues"
+                  required={Boolean(details.unresolvedIssues)}
+                  rows={3}
+                  placeholder="One item per line"
+                />
+              </label>
+              <div className="grid gap-2">
+                <span className="font-medium">Equipment or access</span>
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="Equipment state choices"
+                >
+                  <button
+                    aria-pressed={!details.equipmentAccessStatus}
+                    className="min-h-11 rounded-lg border border-white/20 px-3 aria-pressed:bg-[var(--accent-control)]"
+                    onClick={() => chooseDetail("equipmentAccessStatus", false)}
+                    type="button"
+                  >
+                    All accounted for
+                  </button>
+                  <button
+                    aria-pressed={Boolean(details.equipmentAccessStatus)}
+                    className="min-h-11 rounded-lg border border-white/20 px-3 aria-pressed:bg-[var(--accent-control)]"
+                    onClick={() => chooseDetail("equipmentAccessStatus", true)}
+                    type="button"
+                  >
+                    Issue or exception
+                  </button>
+                </div>
+              </div>
+              <label className={details.equipmentAccessStatus ? "" : "hidden"}>
+                Equipment or access status
+                <textarea
+                  className={input}
+                  disabled={!details.equipmentAccessStatus}
+                  name="equipmentAccessStatus"
+                  required={Boolean(details.equipmentAccessStatus)}
+                  rows={2}
+                />
+              </label>
+              <div className="grid gap-2">
+                <span className="font-medium">Follow-up items</span>
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="Follow-up status"
+                >
+                  <button
+                    aria-pressed={!details.followUpItems}
+                    className="min-h-11 rounded-lg border border-white/20 px-3 aria-pressed:bg-[var(--accent-control)]"
+                    onClick={() => chooseDetail("followUpItems", false)}
+                    type="button"
+                  >
+                    None required
+                  </button>
+                  <button
+                    aria-pressed={Boolean(details.followUpItems)}
+                    className="min-h-11 rounded-lg border border-white/20 px-3 aria-pressed:bg-[var(--accent-control)]"
+                    onClick={() => chooseDetail("followUpItems", true)}
+                    type="button"
+                  >
+                    Follow-up required
+                  </button>
+                </div>
+              </div>
+              <label className={details.followUpItems ? "" : "hidden"}>
+                Follow-up items
+                <textarea
+                  className={input}
+                  disabled={!details.followUpItems}
+                  name="followUpItems"
+                  required={Boolean(details.followUpItems)}
+                  rows={3}
+                  placeholder="One item per line"
+                />
+              </label>
+              <div className="grid gap-2">
+                <span className="font-medium">Unusual conditions</span>
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="Unusual conditions status"
+                >
+                  <button
+                    aria-pressed={!details.unusualConditions}
+                    className="min-h-11 rounded-lg border border-white/20 px-3 aria-pressed:bg-[var(--accent-control)]"
+                    onClick={() => chooseDetail("unusualConditions", false)}
+                    type="button"
+                  >
+                    None
+                  </button>
+                  <button
+                    aria-pressed={Boolean(details.unusualConditions)}
+                    className="min-h-11 rounded-lg border border-white/20 px-3 aria-pressed:bg-[var(--accent-control)]"
+                    onClick={() => chooseDetail("unusualConditions", true)}
+                    type="button"
+                  >
+                    Document conditions
+                  </button>
+                </div>
+              </div>
+              <label className={details.unusualConditions ? "" : "hidden"}>
+                Unusual conditions
+                <textarea
+                  className={input}
+                  disabled={!details.unusualConditions}
+                  name="unusualConditions"
+                  required={Boolean(details.unusualConditions)}
+                  rows={2}
+                />
+              </label>
+            </fieldset>
+          </div>
           <input type="hidden" name="submissionKey" value={key} />
           {draftEnabled ? <ReportingDraftControls draft={draft} /> : null}
+          {embedded && !reviewing ? (
+            <button
+              className="min-h-12 rounded-lg bg-[var(--accent-control)] px-4 py-3 font-medium text-white"
+              onClick={openReview}
+              type="button"
+            >
+              Review before submitting
+            </button>
+          ) : null}
+          {embedded && reviewing ? (
+            <section
+              aria-label="Closeout review"
+              className="grid gap-3 rounded-lg border border-white/15 p-4"
+            >
+              <h3 className="text-lg font-semibold">Review before submit</h3>
+              <p className="text-sm text-[var(--text-muted)]">
+                Submitting creates the canonical closeout and passdown.
+                Corrections remain auditable.
+              </p>
+              <p>
+                <strong>Shift summary:</strong> {review.summary}
+              </p>
+              {(
+                [
+                  "unresolvedIssues",
+                  "equipmentAccessStatus",
+                  "followUpItems",
+                  "unusualConditions",
+                ] as const
+              ).map((name) => (
+                <p key={name}>
+                  <strong>{name.replace(/([A-Z])/g, " $1")}:</strong>{" "}
+                  {review[name] || "None reported"}
+                </p>
+              ))}
+              <button
+                className="min-h-12 justify-self-start rounded-lg border border-white/20 px-4"
+                onClick={() => setReviewing(false)}
+                type="button"
+              >
+                Edit closeout
+              </button>
+            </section>
+          ) : null}
           <button
-            className="rounded-lg bg-white px-4 py-3 font-medium text-black disabled:opacity-60"
+            className={`${embedded && !reviewing ? "hidden" : ""} rounded-lg bg-white px-4 py-3 font-medium text-black disabled:opacity-60`}
             disabled={
               busy ||
               (draftEnabled &&
