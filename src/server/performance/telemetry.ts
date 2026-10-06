@@ -2,6 +2,12 @@ import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { performance } from "node:perf_hooks";
+import { randomUUID } from "node:crypto";
+import {
+  diagnosticsEnabled,
+  emitDiagnosticEvent,
+  normalizeDiagnosticOperation,
+} from "./diagnostics";
 
 export type RequestPerformanceSample = {
   operation: string;
@@ -19,6 +25,7 @@ type ActiveMeasurement = Omit<
   "requestDurationMs" | "payloadBytes" | "outcome"
 > & {
   startedAt: number;
+  correlationToken: string;
 };
 
 type QueryResult = { rowCount?: number | null };
@@ -32,7 +39,7 @@ const poolDelegationStorage = new AsyncLocalStorage<boolean>();
 const instrumentedClient = Symbol("nexus.performance.instrumented-client");
 
 function telemetryEnabled(): boolean {
-  return process.env.NEXUS_PERFORMANCE_TELEMETRY === "true";
+  return diagnosticsEnabled();
 }
 
 function estimatePayloadBytes(value: unknown): number | undefined {
@@ -45,12 +52,22 @@ function estimatePayloadBytes(value: unknown): number | undefined {
   }
 }
 
-function emit(sample: RequestPerformanceSample): void {
-  if (!telemetryEnabled()) return;
-
-  // This intentionally contains only aggregate timings and counts. Never add
-  // query text, parameters, tenant, actor, request, session, or response data.
-  console.info(JSON.stringify({ event: "nexus.performance", ...sample }));
+function emit(
+  sample: RequestPerformanceSample,
+  correlationToken: string,
+): void {
+  emitDiagnosticEvent({
+    event: "nexus.performance",
+    operation: normalizeDiagnosticOperation(sample.operation),
+    correlationToken,
+    requestDurationMs: sample.requestDurationMs,
+    databaseDurationMs: sample.databaseDurationMs,
+    queryCount: sample.queryCount,
+    slowestQueryDurationMs: sample.slowestQueryDurationMs,
+    rowsReturned: sample.rowsReturned,
+    payloadBytes: sample.payloadBytes,
+    outcome: sample.outcome,
+  });
 }
 
 export async function measureRequest<T>(
@@ -63,6 +80,8 @@ export async function measureRequest<T>(
   const measurement: ActiveMeasurement = {
     operation,
     startedAt: performance.now(),
+    correlationToken:
+      measurementStorage.getStore()?.correlationToken ?? randomUUID(),
     databaseDurationMs: 0,
     queryCount: 0,
     slowestQueryDurationMs: 0,
@@ -92,7 +111,7 @@ export async function measureRequest<T>(
         outcome,
       };
       observer?.(sample);
-      emit(sample);
+      emit(sample, measurement.correlationToken);
     }
   });
 }
@@ -109,14 +128,25 @@ function recordQuery(result: unknown, startedAt: number): void {
   if (!measurement) return;
 
   const durationMs = performance.now() - startedAt;
-  const rowCount = (result as QueryResult | undefined)?.rowCount;
+  let rowCount: unknown;
+  try {
+    if (result !== null && typeof result === "object") {
+      rowCount = Object.getOwnPropertyDescriptor(result, "rowCount")?.value;
+    }
+  } catch {
+    // Malformed driver aggregates must not replace a business result/error.
+  }
   measurement.queryCount += 1;
   measurement.databaseDurationMs += durationMs;
   measurement.slowestQueryDurationMs = Math.max(
     measurement.slowestQueryDurationMs,
     durationMs,
   );
-  if (typeof rowCount === "number" && rowCount > 0) {
+  if (
+    typeof rowCount === "number" &&
+    Number.isSafeInteger(rowCount) &&
+    rowCount > 0
+  ) {
     measurement.rowsReturned += rowCount;
   }
 }
@@ -134,8 +164,10 @@ export function instrumentPgClient<T extends QueryableClient>(
     const startedAt = performance.now();
     const isDelegatedPoolQuery =
       !options.delegatesQueries && poolDelegationStorage.getStore() === true;
+    let finished = false;
     const finish = (result: unknown) => {
-      if (!isDelegatedPoolQuery) {
+      if (!finished && !isDelegatedPoolQuery) {
+        finished = true;
         recordQuery(result, startedAt);
       }
     };

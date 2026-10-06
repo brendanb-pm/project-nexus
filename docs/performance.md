@@ -51,6 +51,14 @@ fetching a global result and filtering it in memory is prohibited.
 
 ## Safe instrumentation
 
+The runtime envelope, finite operation registry, independent diagnostic UUID,
+production gate and retention requirements are defined in
+[observability policy](observability-policy.md). Production emits only when
+`NEXUS_PRODUCTION_DIAGNOSTICS=true`; the legacy flag cannot enable production
+output. Owned diagnostic failures are best effort, while harness observer
+failures remain visible. Outcomes describe Promise completion success/error.
+Protected transactional audit writes are independent of diagnostic flags.
+
 `src/server/performance/telemetry.ts` is the shared server-only measurement
 boundary. The `pg` connection client is instrumented once by
 `src/server/db/client.ts`, so Drizzle reads, writes, and transaction statements
