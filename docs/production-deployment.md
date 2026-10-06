@@ -12,6 +12,16 @@ Store `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `OIDC_CLIENT_SECRET` in the appr
 
 ## Application and operations acceptance
 
+Keep `NEXUS_PRODUCTION_DIAGNOSTICS=false` until separately authorized collector
+acceptance. Follow the [observability policy](observability-policy.md): the
+owner must provide collector configuration, all-copy inventory, access-control
+and production expiry verification for the 14-day correlated and 30-day
+identity-free aggregate/temporary-synthetic-artifact defaults before activation.
+The application provides no collector TTL/deletion guarantee. Framework,
+provider, proxy, host and database logs require separate operator acceptance.
+Diagnostic flags must never disable protected audit writes. Local tests and a
+build are not production retention evidence.
+
 Deploy an immutable reviewed revision through the approved protected process. Record the revision and verify TLS certificate/hostname, HTTPS redirect, application availability, database connectivity, migration version, and an authenticated protected-route smoke test. Never expose a diagnostic endpoint containing configuration, credentials, session data, or database details. Configure access/error logs with secret and report-content redaction, a health/availability monitor, alert recipient, and a tested incident escalation route. The deployment owner must record the observation window and alert test; repository CI is not evidence of deployed monitoring.
 
 Schedule `NEXUS_REPORTING_DRAFT_EXPIRY_JOB=true npm run db:expire:reporting-drafts` in an approved server-side scheduler. It processes at most 1,000 expired payloads per invocation. Choose an interval that satisfies the 30-day draft deletion policy at measured backlog volume; alert on nonzero exit and on backlog that exceeds one run's capacity. Confirm the job uses only the approved database and that its output contains counts, not draft content. See [reporting domain](reporting-domain.md) for expiry authority and privacy constraints.
