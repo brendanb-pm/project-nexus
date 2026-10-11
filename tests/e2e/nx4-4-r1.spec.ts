@@ -65,13 +65,17 @@ test("walks Guard EOSR, incoming passdown, and Operations history through local 
     page.getByRole("heading", { name: "Needs Attention" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Shift close incomplete" }),
+    page.getByRole("heading", { name: "Shift close incomplete" }).first(),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "History / Recent Activity" }),
   ).toBeVisible();
   await expect(page.getByText("North Lobby shift completed.")).toBeVisible();
-  await page.getByRole("link", { name: /open canonical eosr record/i }).click();
+  await page
+    .locator(
+      'a[href="/operations/records/eosr/00000000-0000-4000-8000-000000000095"]',
+    )
+    .click();
   await expect(
     page.getByText(/Door closer service remains pending/),
   ).toBeVisible();
