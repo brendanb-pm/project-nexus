@@ -22,6 +22,103 @@ afterEach(() => {
 });
 
 describe("performance instrumentation", () => {
+  it("preserves synchronous, Promise and callback pg errors without duplicate counts", async () => {
+    const original = Object.assign(
+      new Error("NX79_CANARY_ERROR_MESSAGE_FIXTURE_20261006"),
+      {
+        detail: "NX79_CANARY_DRIVER_FIXTURE_20261006",
+        cause: "NX79_CANARY_CAUSE_FIXTURE_20261006",
+      },
+    );
+    const samples: RequestPerformanceSample[] = [];
+    for (const query of [
+      () => {
+        throw original;
+      },
+      () => Promise.reject(original),
+    ]) {
+      const client = instrumentPgClient({ query });
+      await expect(
+        measureRequest(
+          "client-admin.page",
+          () => client.query() as Promise<unknown>,
+          (sample) => samples.push(sample),
+        ),
+      ).rejects.toBe(original);
+    }
+    const client = instrumentPgClient({
+      query: (...arguments_: unknown[]) => {
+        (arguments_.at(-1) as (error: Error) => void)(original);
+      },
+    });
+    await expect(
+      measureRequest(
+        "client-admin.page",
+        async () => {
+          client.query("NX79_CANARY_SQL_FIXTURE_20261006", () => {
+            throw original;
+          });
+        },
+        (sample) => samples.push(sample),
+      ),
+    ).rejects.toBe(original);
+    expect(samples).toHaveLength(3);
+    expect(
+      samples.every(
+        (sample) => sample.queryCount === 1 && sample.outcome === "error",
+      ),
+    ).toBe(true);
+  });
+
+  it("isolates concurrent and nested query aggregates", async () => {
+    const samples: RequestPerformanceSample[] = [];
+    const client = instrumentPgClient({ query: async () => ({ rowCount: 2 }) });
+    await Promise.all(
+      [1, 3].map((count) =>
+        measureRequest(
+          "client-admin.page",
+          async () => {
+            for (let index = 0; index < count; index++) await client.query();
+            await measureRequest(
+              "people-admin.page",
+              async () => {
+                await client.query();
+              },
+              (sample) => samples.push(sample),
+            );
+          },
+          (sample) => samples.push(sample),
+        ),
+      ),
+    );
+    const outer = samples.filter(
+      (sample) => sample.operation === "client-admin.page",
+    );
+    expect(outer.map((sample) => sample.queryCount).sort()).toEqual([1, 3]);
+    expect(outer.map((sample) => sample.rowsReturned).sort()).toEqual([2, 6]);
+    expect(
+      samples
+        .filter((sample) => sample.operation === "people-admin.page")
+        .every((sample) => sample.queryCount === 1),
+    ).toBe(true);
+  });
+
+  it("omits hostile row-count getters while returning the original driver result", async () => {
+    const getter = vi.fn(() => {
+      throw new Error("synthetic hostile row count");
+    });
+    const result = Object.defineProperty({}, "rowCount", { get: getter });
+    const client = instrumentPgClient({ query: async () => result });
+    const observer = vi.fn();
+    expect(
+      await measureRequest("client-admin.page", () => client.query(), observer),
+    ).toBe(result);
+    expect(observer.mock.calls[0]?.[0]).toMatchObject({
+      queryCount: 1,
+      rowsReturned: 0,
+    });
+    expect(getter).not.toHaveBeenCalled();
+  });
   it("collects request, query, row, and payload aggregates without query values", async () => {
     const samples: RequestPerformanceSample[] = [];
     const client: QueryableClient = {
