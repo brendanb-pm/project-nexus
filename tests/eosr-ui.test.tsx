@@ -120,4 +120,36 @@ describe("EOSR Guard workflow", () => {
       await screen.findByText(/End-of-shift report submitted/),
     ).toBeVisible();
   });
+
+  it("does not claim completion without an explicit server confirmation", async () => {
+    const submit = vi.fn(async () => undefined);
+    const { container } = render(
+      <EndOfShiftReportForm
+        assignments={[
+          {
+            id: "outgoing-1",
+            siteName: "Cedar Plaza",
+            postName: "North Lobby",
+            scheduledStart: "2026-09-01T00:00:00.000Z",
+            scheduledEnd: "2026-09-01T08:00:00.000Z",
+          },
+        ]}
+        embedded
+        submit={submit}
+        setPassdownDismissal={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Shift summary"), {
+      target: { value: "Lobby secured." },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review before submitting" }),
+    );
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("Shift Report complete")).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/Your report was not submitted/),
+    ).toBeVisible();
+  });
 });

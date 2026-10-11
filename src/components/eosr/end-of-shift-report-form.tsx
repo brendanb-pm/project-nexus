@@ -132,10 +132,10 @@ export function EndOfShiftReportForm({
       const outcome =
         result && typeof result === "object" && "kind" in result
           ? (result as { kind?: unknown; message?: unknown })
-          : { kind: "confirmed" };
-      if (outcome.kind !== "confirmed") {
+          : null;
+      if (outcome?.kind !== "confirmed") {
         setMessage(
-          typeof outcome.message === "string"
+          typeof outcome?.message === "string"
             ? outcome.message
             : "Your report was not submitted. Review the required shift summary and try again.",
         );
