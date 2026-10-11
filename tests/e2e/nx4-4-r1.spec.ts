@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
 async function signIn(page: Page, name: string) {
@@ -33,12 +34,31 @@ test("walks Guard EOSR, incoming passdown, and Operations history through local 
   await page.getByRole("button", { name: "Follow-up required" }).click();
   await page.getByLabel("Follow-up items").fill("Confirm maintenance arrival.");
   await page.getByRole("button", { name: "Review before submitting" }).click();
-  await page
-    .getByRole("button", { name: "Submit end-of-shift report" })
-    .click();
   await expect(
-    page.getByText(/Your saved closeout needs attention/),
+    page.getByRole("alert").filter({ hasText: /may already be submitted/ }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Submit end-of-shift report" }),
+  ).toBeDisabled();
+  await expect(page.getByText("Shift Report complete")).toHaveCount(0);
+  if (process.env.NX810_SCREENSHOT_DIR) {
+    await page.screenshot({
+      path: join(
+        process.env.NX810_SCREENSHOT_DIR,
+        "closeout-conflict-desktop.png",
+      ),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: join(
+        process.env.NX810_SCREENSHOT_DIR,
+        "closeout-conflict-mobile.png",
+      ),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
   await expect(page.getByLabel("Shift summary")).toHaveValue(
     "North Lobby shift completed.",
   );

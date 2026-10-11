@@ -374,6 +374,13 @@ export function EndOfShiftReportForm({
           </div>
           <input type="hidden" name="submissionKey" value={key} />
           {draftEnabled ? <ReportingDraftControls draft={draft} /> : null}
+          {draftEnabled && draft.status === "conflict" ? (
+            <p role="alert">
+              This closeout changed or may already be submitted. Refresh the
+              Shift Report to review the authoritative record before trying
+              again.
+            </p>
+          ) : null}
           {embedded && !reviewing ? (
             <button
               className="min-h-12 rounded-lg bg-[var(--accent-control)] px-4 py-3 font-medium text-white"
