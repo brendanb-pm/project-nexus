@@ -68,9 +68,9 @@ export function ReportingExceptionQueue({
               </div>
               <a
                 className="min-h-11 rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold"
-                href={item.sourceHref}
+                href={`/operations/reporting-exceptions/${item.id}`}
               >
-                Open canonical report
+                Review evidence and history
               </a>
             </div>
             <form

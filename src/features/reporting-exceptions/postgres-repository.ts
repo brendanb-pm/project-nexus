@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { NexusDatabase } from "@/server/db/client";
 import {
   activityEntries,
@@ -416,6 +416,157 @@ export class PostgresReportingExceptionRepository implements ReportingExceptionR
           : {}),
         occurredAt: event.occurredAt.toISOString(),
       })),
+    };
+  }
+
+  async dossier(scope: ReportingExceptionScope, id: string) {
+    // Resolve the exception through the tenant/hierarchy predicate before any
+    // assignment evidence is loaded. None of these reads reconcile obligations.
+    const detail = await this.detail(scope, id);
+    if (!detail) return null;
+    const contextRows = await this.database
+      .select({
+        clientName: clients.name,
+        siteName: sites.name,
+        siteTimezone: sites.timezone,
+        postName: posts.name,
+        employeeNumber: employees.employeeNumber,
+        employeeEmail: users.email,
+        scheduledStart: shifts.scheduledStart,
+        scheduledEnd: shifts.scheduledEnd,
+        assignmentStatus: shiftAssignments.status,
+      })
+      .from(reportingExceptions)
+      .innerJoin(
+        shiftAssignments,
+        eq(reportingExceptions.shiftAssignmentId, shiftAssignments.id),
+      )
+      .innerJoin(employees, eq(shiftAssignments.employeeId, employees.id))
+      .leftJoin(users, eq(employees.userId, users.id))
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .innerJoin(posts, eq(shifts.postId, posts.id))
+      .innerJoin(sites, eq(posts.siteId, sites.id))
+      .innerJoin(clients, eq(sites.clientId, clients.id))
+      .where(and(scopePredicate(scope), eq(reportingExceptions.id, id)))
+      .limit(1);
+    const context = contextRows[0];
+    if (!context) return null;
+    const assignmentId = detail.exception.assignmentId;
+    const [activities, incidents, closeouts, clockOuts] = await Promise.all([
+      this.database
+        .select({
+          id: activityEntries.id,
+          category: activityEntries.category,
+          occurredAt: activityEntries.occurredAt,
+          incidentGate: activityEntries.incidentGate,
+        })
+        .from(activityEntries)
+        .where(
+          and(
+            eq(activityEntries.shiftAssignmentId, assignmentId),
+            eq(activityEntries.status, "SUBMITTED"),
+          ),
+        )
+        .orderBy(desc(activityEntries.occurredAt), desc(activityEntries.id))
+        .limit(21),
+      this.database
+        .select({
+          id: incidentReports.id,
+          incidentNumber: incidentReports.incidentNumber,
+          occurredAt: incidentReports.occurredAt,
+          classification: incidentReports.classification,
+          severity: incidentReports.severity,
+        })
+        .from(incidentReports)
+        .where(
+          and(
+            eq(incidentReports.shiftAssignmentId, assignmentId),
+            eq(incidentReports.status, "SUBMITTED"),
+          ),
+        )
+        .orderBy(desc(incidentReports.occurredAt), desc(incidentReports.id))
+        .limit(21),
+      this.database
+        .select({
+          id: endOfShiftReports.id,
+          submittedAt: endOfShiftReports.submittedAt,
+        })
+        .from(endOfShiftReports)
+        .where(eq(endOfShiftReports.shiftAssignmentId, assignmentId))
+        .limit(1),
+      this.database
+        .select({ effectiveAt: clockEvents.effectiveAt })
+        .from(clockEvents)
+        .where(
+          and(
+            eq(clockEvents.shiftAssignmentId, assignmentId),
+            eq(clockEvents.eventType, "CLOCK_OUT"),
+          ),
+        )
+        .orderBy(desc(clockEvents.effectiveAt), desc(clockEvents.id))
+        .limit(1),
+    ]);
+    const actorIds = [
+      ...new Set(
+        [
+          detail.exception.assigneeUserId,
+          ...detail.history.flatMap((event) => [
+            event.actorUserId,
+            event.assigneeUserId,
+          ]),
+        ].filter((value): value is string => Boolean(value)),
+      ),
+    ];
+    const actorRows = actorIds.length
+      ? await this.database
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(
+            and(
+              eq(users.organizationId, scope.organizationId),
+              inArray(users.id, actorIds),
+            ),
+          )
+      : [];
+    return {
+      ...detail,
+      context: {
+        clientName: context.clientName,
+        siteName: context.siteName,
+        siteTimezone: context.siteTimezone,
+        postName: context.postName,
+        employeeNumber: context.employeeNumber,
+        ...(context.employeeEmail
+          ? { employeeEmail: context.employeeEmail }
+          : {}),
+        scheduledStart: context.scheduledStart.toISOString(),
+        scheduledEnd: context.scheduledEnd.toISOString(),
+        assignmentStatus: context.assignmentStatus,
+      },
+      evidence: {
+        activities: activities.slice(0, 20).map((entry) => ({
+          ...entry,
+          occurredAt: entry.occurredAt.toISOString(),
+        })),
+        incidents: incidents.slice(0, 20).map((incident) => ({
+          ...incident,
+          occurredAt: incident.occurredAt.toISOString(),
+        })),
+        ...(closeouts[0]
+          ? {
+              closeout: {
+                id: closeouts[0].id,
+                submittedAt: closeouts[0].submittedAt.toISOString(),
+              },
+            }
+          : {}),
+        ...(clockOuts[0]
+          ? { clockOutAt: clockOuts[0].effectiveAt.toISOString() }
+          : {}),
+        activityHasMore: activities.length > 20,
+        incidentHasMore: incidents.length > 20,
+      },
+      actors: Object.fromEntries(actorRows.map((row) => [row.id, row.email])),
     };
   }
 

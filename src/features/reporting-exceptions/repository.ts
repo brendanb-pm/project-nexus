@@ -1,6 +1,7 @@
 import type { AuditContext } from "@/server/request/boundary";
 import type { ReportingScope } from "@/features/reporting/repository";
 import type {
+  ReportingExceptionDossier,
   ReportingExceptionDetail,
   ReportingExceptionSummary,
   ReportingExceptionTransition,
@@ -18,6 +19,10 @@ export interface ReportingExceptionRepository {
     scope: ReportingExceptionScope,
     id: string,
   ): Promise<ReportingExceptionDetail | null>;
+  dossier(
+    scope: ReportingExceptionScope,
+    id: string,
+  ): Promise<ReportingExceptionDossier | null>;
   transition(
     scope: ReportingExceptionScope,
     input: ReportingExceptionTransition,
