@@ -7,6 +7,7 @@ afterEach(cleanup);
 
 const internal: ReportHubPageState = {
   kind: "internal",
+  canPublishClientReports: false,
   scopeLabel: "Authorized portfolio",
   sites: [{ id: "00000000-0000-4000-8000-000000008607", name: "Harbor Site" }],
   sitesLimited: false,
