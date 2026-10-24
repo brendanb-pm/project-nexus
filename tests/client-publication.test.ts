@@ -1,3 +1,4 @@
+import { roleCapabilities } from "@/auth/authorization";
 import { describe, expect, it, vi } from "vitest";
 import { AuthorizedDataAccess } from "@/server/request/boundary";
 import { createAuthenticatedRequestContext } from "@/server/request/context";
@@ -74,6 +75,13 @@ async function subject(
 }
 
 describe("NX-8.12 publication authority", () => {
+  it("CP-09 retains the current report/incident capability invariant", () => {
+    for (const capabilities of Object.values(roleCapabilities)) {
+      if (capabilities.has("VIEW_CLIENT_REPORTS"))
+        expect(capabilities.has("VIEW_CLIENT_INCIDENTS")).toBe(true);
+    }
+  });
+
   it("bounds draft content and rejects invalid or duplicate source selection", () => {
     expect(validateDraft(draft).scopeKey).toHaveLength(64);
     expect(() =>

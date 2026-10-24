@@ -46,7 +46,16 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
   let draft: Awaited<ReturnType<typeof repository.saveDraft>>;
 
   beforeAll(async () => {
-    if (!process.env.DATABASE_URL?.endsWith("/nexus_oct1_publication_test"))
+    if (
+      process.env.NEXUS_ISOLATED_TEST_DATABASE !== "true" ||
+      !process.env.DATABASE_URL ||
+      !/^\/nexus_(oct1_publication|ci)_test$/.test(
+        new URL(process.env.DATABASE_URL).pathname,
+      ) ||
+      !["127.0.0.1", "localhost"].includes(
+        new URL(process.env.DATABASE_URL).hostname,
+      )
+    )
       throw new Error(
         "NX-8.12 tests require the exact isolated publication database.",
       );
@@ -163,7 +172,12 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
     const beforeAudit = await database
       .select()
       .from(auditEvents)
-      .where(eq(auditEvents.action, "client-report.published"));
+      .where(
+        and(
+          eq(auditEvents.action, "client-report.published"),
+          eq(auditEvents.requestId, audit.requestId),
+        ),
+      );
     await expect(
       repository.publish(
         scope,
@@ -177,31 +191,20 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
         audit,
       ),
     ).rejects.toThrow(/changed/);
-    const bad = await repository.saveDraft(
-      scope,
-      validateDraft({
-        ...draft,
-        selectedSources: [
-          {
-            kind: "ACTIVITY",
-            id: randomUUID(),
-            clientSummary: "Unavailable source.",
-          },
-        ],
-        expectedRevision: draft.revision,
-      }),
-      audit,
-    );
     await expect(
-      repository.publish(
+      repository.saveDraft(
         scope,
-        {
-          draftId: bad.id,
-          expectedDraftRevision: bad.revision,
-          expectedVersion: 0,
-          confirmationKey: randomUUID(),
-          confirmed: true,
-        },
+        validateDraft({
+          ...draft,
+          selectedSources: [
+            {
+              kind: "ACTIVITY",
+              id: randomUUID(),
+              clientSummary: "Unavailable source.",
+            },
+          ],
+          expectedRevision: draft.revision,
+        }),
         audit,
       ),
     ).rejects.toThrow(/selected source/);
@@ -215,12 +218,17 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
       await database
         .select()
         .from(auditEvents)
-        .where(eq(auditEvents.action, "client-report.published")),
+        .where(
+          and(
+            eq(auditEvents.action, "client-report.published"),
+            eq(auditEvents.requestId, audit.requestId),
+          ),
+        ),
     ).toEqual(beforeAudit);
     draft = await repository.saveDraft(
       scope,
       validateDraft({
-        ...bad,
+        ...draft,
         selectedSources: [
           {
             kind: "ACTIVITY",
@@ -233,7 +241,7 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
             clientSummary: "Incident response reviewed.",
           },
         ],
-        expectedRevision: bad.revision,
+        expectedRevision: draft.revision,
       }),
       audit,
     );
@@ -267,9 +275,14 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
     const beforeAudits = await database
       .select()
       .from(auditEvents)
-      .where(eq(auditEvents.action, "client-report.published"));
+      .where(
+        and(
+          eq(auditEvents.action, "client-report.published"),
+          eq(auditEvents.requestId, audit.requestId),
+        ),
+      );
     await pool.query(`create or replace function nx812_test_reject_audit() returns trigger language plpgsql as $$
-      begin if new.action = 'client-report.published' then raise exception 'controlled audit failure'; end if; return new; end $$`);
+      begin if new.action = 'client-report.published' and new.request_id = 'nx812-postgres-test' then raise exception 'controlled audit failure'; end if; return new; end $$`);
     await pool.query(
       "create trigger nx812_test_reject_audit before insert on audit_events for each row execute function nx812_test_reject_audit()",
     );
@@ -304,7 +317,12 @@ suite("NX-8.12 PostgreSQL publication invariants", () => {
         await database
           .select()
           .from(auditEvents)
-          .where(eq(auditEvents.action, "client-report.published")),
+          .where(
+            and(
+              eq(auditEvents.action, "client-report.published"),
+              eq(auditEvents.requestId, audit.requestId),
+            ),
+          ),
       ).toEqual(beforeAudits);
     } finally {
       await pool.query("drop trigger nx812_test_reject_audit on audit_events");

@@ -20,6 +20,7 @@ export type ClientReportDraft = ClientReportDraftInput & {
   id: string;
   revision: number;
   latestVersion: number;
+  reviewedSnapshot?: ClientReportSnapshot;
 };
 
 export type ClientReportSnapshot = {

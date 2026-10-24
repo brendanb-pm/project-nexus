@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import "server-only";
 
 import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
@@ -26,6 +27,41 @@ import type {
   PublishClientReportInput,
 } from "./contracts";
 import type { ClientPublicationRepository, ValidatedDraft } from "./repository";
+
+// Canonical object-key order allows a stored JSONB snapshot hash to be
+// reconstructed after a database round trip; array order remains meaningful.
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([key, item]) => [key, canonical(item)]),
+    );
+  return value;
+}
+
+function fingerprint(value: unknown) {
+  return createHash("sha256")
+    .update(JSON.stringify(canonical(value)))
+    .digest("hex");
+}
+
+async function retryAbortedTransaction<T>(work: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await work();
+    } catch (error) {
+      const failure = error as { code?: string; cause?: { code?: string } };
+      const code = failure.cause?.code ?? failure.code;
+      if (attempt >= 2 || !code || !["40001", "40P01"].includes(code))
+        throw error;
+      // These PostgreSQL errors abort the transaction: bounded retry cannot
+      // duplicate a publication/audit that committed successfully.
+      await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+    }
+  }
+}
 
 function scopeFilter(
   scope: ReportingScope,
@@ -71,6 +107,9 @@ function draftDto(
     selectedSources: parseSources(row.selectedSources),
     revision: row.revision,
     latestVersion,
+    ...(row.reviewedSnapshot
+      ? { reviewedSnapshot: row.reviewedSnapshot as ClientReportSnapshot }
+      : {}),
   };
 }
 
@@ -245,7 +284,9 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
           inArray(sites.id, [...siteIds]),
           grants.length ? or(...grants) : sql`false`,
         ),
-      );
+      )
+      .orderBy(sites.id)
+      .for("share", { of: [sites, clients] });
     if (rows.length !== siteIds.length)
       throw new Error(
         "A selected client or site is not in your authorized scope.",
@@ -274,83 +315,98 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
       input.clientId,
       input.siteIds,
     );
-    const result = await this.database.transaction(async (tx) => {
-      const where = and(
-        eq(clientReportDrafts.organizationId, scope.organizationId),
-        eq(clientReportDrafts.clientId, input.clientId),
-        eq(clientReportDrafts.scopeKey, input.scopeKey),
-        eq(clientReportDrafts.periodStart, new Date(input.periodStart)),
-        eq(clientReportDrafts.periodEnd, new Date(input.periodEnd)),
-      );
-      const [current] = await tx
-        .select()
-        .from(clientReportDrafts)
-        .where(where)
-        .limit(1);
-      let row: typeof clientReportDrafts.$inferSelect | undefined;
-      if (current) {
-        if (input.expectedRevision !== current.revision)
-          throw new Error(
-            "This client report draft changed. Refresh and try again.",
-          );
-        [row] = await tx
-          .update(clientReportDrafts)
-          .set({
-            executiveSummary: input.executiveSummary,
-            completionSummary: input.completionSummary,
-            followUps: [...input.followUps],
-            selectedSources: [...input.selectedSources],
-            revision: current.revision + 1,
-            updatedByUserId: audit.actorUserId,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(clientReportDrafts.id, current.id),
-              eq(clientReportDrafts.revision, current.revision),
-            ),
-          )
-          .returning();
-      } else {
-        if (input.expectedRevision && input.expectedRevision !== 0)
-          throw new Error(
-            "This client report draft changed. Refresh and try again.",
-          );
-        [row] = await tx
-          .insert(clientReportDrafts)
-          .values({
-            organizationId: scope.organizationId,
-            clientId: input.clientId,
-            scopeKey: input.scopeKey,
-            siteIds: [...input.siteIds],
+    const result = await retryAbortedTransaction(() =>
+      this.database.transaction(async (tx) => {
+        const reviewed = await this.reviewedContent(
+          tx as NexusDatabase,
+          scope,
+          {
+            ...input,
             periodStart: new Date(input.periodStart),
             periodEnd: new Date(input.periodEnd),
-            executiveSummary: input.executiveSummary,
-            completionSummary: input.completionSummary,
-            followUps: [...input.followUps],
-            selectedSources: [...input.selectedSources],
-            createdByUserId: audit.actorUserId,
-            updatedByUserId: audit.actorUserId,
-          })
-          .onConflictDoNothing()
-          .returning();
-      }
-      if (!row)
-        throw new Error(
-          "This client report draft changed. Refresh and try again.",
+          },
         );
-      await tx.insert(auditEvents).values({
-        organizationId: audit.organizationId,
-        actorUserId: audit.actorUserId,
-        action: "client-report.draft-saved",
-        entityType: "ClientReportDraft",
-        entityId: row.id,
-        requestId: audit.requestId,
-        ...(audit.sessionId ? { sessionId: audit.sessionId } : {}),
-        metadata: { revision: row.revision, clientId: row.clientId },
-      });
-      return row;
-    });
+        const where = and(
+          eq(clientReportDrafts.organizationId, scope.organizationId),
+          eq(clientReportDrafts.clientId, input.clientId),
+          eq(clientReportDrafts.scopeKey, input.scopeKey),
+          eq(clientReportDrafts.periodStart, new Date(input.periodStart)),
+          eq(clientReportDrafts.periodEnd, new Date(input.periodEnd)),
+        );
+        const [current] = await tx
+          .select()
+          .from(clientReportDrafts)
+          .where(where)
+          .limit(1);
+        let row: typeof clientReportDrafts.$inferSelect | undefined;
+        if (current) {
+          if (input.expectedRevision !== current.revision)
+            throw new Error(
+              "This client report draft changed. Refresh and try again.",
+            );
+          [row] = await tx
+            .update(clientReportDrafts)
+            .set({
+              executiveSummary: input.executiveSummary,
+              completionSummary: input.completionSummary,
+              followUps: [...input.followUps],
+              selectedSources: [...input.selectedSources],
+              reviewedSnapshot: reviewed.snapshot,
+              sourceFingerprint: reviewed.fingerprint,
+              revision: current.revision + 1,
+              updatedByUserId: audit.actorUserId,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(clientReportDrafts.id, current.id),
+                eq(clientReportDrafts.revision, current.revision),
+              ),
+            )
+            .returning();
+        } else {
+          if (input.expectedRevision && input.expectedRevision !== 0)
+            throw new Error(
+              "This client report draft changed. Refresh and try again.",
+            );
+          [row] = await tx
+            .insert(clientReportDrafts)
+            .values({
+              organizationId: scope.organizationId,
+              clientId: input.clientId,
+              scopeKey: input.scopeKey,
+              siteIds: [...input.siteIds],
+              periodStart: new Date(input.periodStart),
+              periodEnd: new Date(input.periodEnd),
+              executiveSummary: input.executiveSummary,
+              completionSummary: input.completionSummary,
+              followUps: [...input.followUps],
+              selectedSources: [...input.selectedSources],
+              reviewedSnapshot: reviewed.snapshot,
+              sourceFingerprint: reviewed.fingerprint,
+              createdByUserId: audit.actorUserId,
+              updatedByUserId: audit.actorUserId,
+            })
+            .onConflictDoNothing()
+            .returning();
+        }
+        if (!row)
+          throw new Error(
+            "This client report draft changed. Refresh and try again.",
+          );
+        await tx.insert(auditEvents).values({
+          organizationId: audit.organizationId,
+          actorUserId: audit.actorUserId,
+          action: "client-report.draft-saved",
+          entityType: "ClientReportDraft",
+          entityId: row.id,
+          requestId: audit.requestId,
+          ...(audit.sessionId ? { sessionId: audit.sessionId } : {}),
+          metadata: { revision: row.revision, clientId: row.clientId },
+        });
+        return row;
+      }),
+    );
     return draftDto(result, await this.latestVersion(result.id));
   }
 
@@ -399,11 +455,21 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
     return row ? draftDto(row.draft, await this.latestVersion(id)) : null;
   }
 
-  private async validatedSnapshot(
+  private async reviewedContent(
     database: NexusDatabase,
     scope: ReportingScope,
-    draft: typeof clientReportDrafts.$inferSelect,
-  ): Promise<ClientReportSnapshot> {
+    draft: Pick<
+      typeof clientReportDrafts.$inferSelect,
+      | "clientId"
+      | "siteIds"
+      | "selectedSources"
+      | "periodStart"
+      | "periodEnd"
+      | "executiveSummary"
+      | "completionSummary"
+      | "followUps"
+    >,
+  ) {
     const siteIds = draft.siteIds as string[];
     const sitesInScope = await this.authorizedSites(
       database,
@@ -426,6 +492,7 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
               siteId: sites.id,
               occurredAt: activityEntries.occurredAt,
               category: activityEntries.category,
+              sourceState: sql<unknown>`to_jsonb(${activityEntries})`,
             })
             .from(activityEntries)
             .innerJoin(
@@ -453,6 +520,8 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
                 lt(activityEntries.occurredAt, draft.periodEnd),
               ),
             )
+            .orderBy(activityEntries.id)
+            .for("share", { of: activityEntries })
         : Promise.resolve([]),
       incidentIds.length
         ? database
@@ -463,6 +532,7 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
               incidentNumber: incidentReports.incidentNumber,
               classification: incidentReports.classification,
               severity: incidentReports.severity,
+              sourceState: sql<unknown>`to_jsonb(${incidentReports})`,
             })
             .from(incidentReports)
             .innerJoin(sites, eq(incidentReports.siteId, sites.id))
@@ -484,6 +554,8 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
                 lt(incidentReports.occurredAt, draft.periodEnd),
               ),
             )
+            .orderBy(incidentReports.id)
+            .for("share", { of: incidentReports })
         : Promise.resolve([]),
     ]);
     if (
@@ -495,7 +567,7 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
       );
     const activityById = new Map(activities.map((row) => [row.id, row]));
     const incidentById = new Map(incidents.map((row) => [row.id, row]));
-    return {
+    const snapshot: ClientReportSnapshot = {
       clientId: draft.clientId,
       clientName: sitesInScope[0].clientName,
       sites: sitesInScope
@@ -531,6 +603,14 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
         };
       }),
     };
+    return {
+      snapshot,
+      fingerprint: fingerprint({
+        snapshot,
+        activities: activities.map((row) => row.sourceState),
+        incidents: incidents.map((row) => row.sourceState),
+      }),
+    };
   }
 
   async publish(
@@ -538,97 +618,127 @@ export class PostgresClientPublicationRepository implements ClientPublicationRep
     input: PublishClientReportInput,
     audit: AuditContext,
   ) {
-    return this.database.transaction(async (tx) => {
-      await tx.execute(sql`select id from client_report_drafts
+    return retryAbortedTransaction(() =>
+      this.database.transaction(async (tx) => {
+        await tx.execute(sql`select id from client_report_drafts
         where id=${input.draftId} and organization_id=${scope.organizationId}
         for update`);
-      const [result] = await tx
-        .select({ draft: clientReportDrafts })
-        .from(clientReportDrafts)
-        .innerJoin(clients, eq(clientReportDrafts.clientId, clients.id))
-        .where(
-          and(
-            scopeFilter(scope, clientReportDrafts.siteIds),
-            eq(clientReportDrafts.id, input.draftId),
-          ),
-        )
-        .limit(1);
-      if (!result)
-        throw new Error("Client report draft not found in authorized scope.");
-      const draft = result.draft;
-      const [replay] = await tx
-        .select()
-        .from(clientReportPublications)
-        .where(
-          and(
-            eq(clientReportPublications.draftId, draft.id),
-            eq(clientReportPublications.confirmationKey, input.confirmationKey),
-          ),
-        )
-        .limit(1);
-      if (replay) {
-        const [successor] = await tx
-          .select({ id: clientReportPublications.id })
-          .from(clientReportPublications)
-          .where(eq(clientReportPublications.supersedesId, replay.id))
+        const [result] = await tx
+          .select({ draft: clientReportDrafts })
+          .from(clientReportDrafts)
+          .innerJoin(clients, eq(clientReportDrafts.clientId, clients.id))
+          .where(
+            and(
+              scopeFilter(scope, clientReportDrafts.siteIds),
+              eq(clientReportDrafts.id, input.draftId),
+            ),
+          )
           .limit(1);
-        return publicationDto(replay, !successor);
-      }
-      const [previous] = await tx
-        .select()
-        .from(clientReportPublications)
-        .where(eq(clientReportPublications.draftId, draft.id))
-        .orderBy(desc(clientReportPublications.version))
-        .limit(1);
-      if (
-        draft.revision !== input.expectedDraftRevision ||
-        (previous?.version ?? 0) !== input.expectedVersion
-      )
-        throw new Error(
-          "This client report changed. Refresh and review before publishing.",
+        if (!result)
+          throw new Error("Client report draft not found in authorized scope.");
+        const draft = result.draft;
+        const [replay] = await tx
+          .select()
+          .from(clientReportPublications)
+          .where(
+            and(
+              eq(clientReportPublications.draftId, draft.id),
+              eq(
+                clientReportPublications.confirmationKey,
+                input.confirmationKey,
+              ),
+            ),
+          )
+          .limit(1);
+        if (replay) {
+          if (
+            replay.confirmedDraftRevision !== input.expectedDraftRevision ||
+            replay.version !== input.expectedVersion + 1 ||
+            !replay.snapshotHash
+          )
+            throw new Error(
+              "This client report confirmation does not match the published revision. Refresh and review before publishing.",
+            );
+          const [successor] = await tx
+            .select({ id: clientReportPublications.id })
+            .from(clientReportPublications)
+            .where(eq(clientReportPublications.supersedesId, replay.id))
+            .limit(1);
+          return publicationDto(replay, !successor);
+        }
+        const [previous] = await tx
+          .select()
+          .from(clientReportPublications)
+          .where(eq(clientReportPublications.draftId, draft.id))
+          .orderBy(desc(clientReportPublications.version))
+          .limit(1);
+        if (
+          draft.revision !== input.expectedDraftRevision ||
+          (previous?.version ?? 0) !== input.expectedVersion
+        )
+          throw new Error(
+            "This client report changed. Refresh and review before publishing.",
+          );
+        const reviewed = await this.reviewedContent(
+          tx as NexusDatabase,
+          scope,
+          draft,
         );
-      const snapshot = await this.validatedSnapshot(
-        tx as NexusDatabase,
-        scope,
-        draft,
-      );
-      const publishedAt = new Date();
-      const [row] = await tx
-        .insert(clientReportPublications)
-        .values({
-          draftId: draft.id,
-          organizationId: scope.organizationId,
-          clientId: draft.clientId,
-          siteIds: draft.siteIds,
-          periodStart: draft.periodStart,
-          periodEnd: draft.periodEnd,
-          version: input.expectedVersion + 1,
-          ...(previous ? { supersedesId: previous.id } : {}),
-          confirmationKey: input.confirmationKey,
-          snapshot,
-          publishedByUserId: audit.actorUserId,
-          publishedAt,
-        })
-        .returning();
-      await tx.insert(auditEvents).values({
-        organizationId: audit.organizationId,
-        actorUserId: audit.actorUserId,
-        action: "client-report.published",
-        entityType: "ClientReportPublication",
-        entityId: row.id,
-        occurredAt: publishedAt,
-        requestId: audit.requestId,
-        ...(audit.sessionId ? { sessionId: audit.sessionId } : {}),
-        metadata: {
-          clientId: draft.clientId,
-          siteIds: draft.siteIds,
-          version: row.version,
-          supersedesId: previous?.id ?? null,
-          sourceIds: snapshot.sources.map((source) => source.id),
-        },
-      });
-      return publicationDto(row, true);
-    });
+        if (
+          !draft.sourceFingerprint ||
+          !draft.reviewedSnapshot ||
+          draft.sourceFingerprint !== reviewed.fingerprint
+        )
+          throw new Error(
+            "A selected source or reviewed report changed. Save and review the current content before publishing.",
+          );
+        const snapshot = reviewed.snapshot;
+        const snapshotHash = fingerprint(snapshot);
+        const publishedAt = new Date();
+        const [row] = await tx
+          .insert(clientReportPublications)
+          .values({
+            draftId: draft.id,
+            organizationId: scope.organizationId,
+            clientId: draft.clientId,
+            siteIds: draft.siteIds,
+            periodStart: draft.periodStart,
+            periodEnd: draft.periodEnd,
+            version: input.expectedVersion + 1,
+            ...(previous ? { supersedesId: previous.id } : {}),
+            confirmationKey: input.confirmationKey,
+            confirmedDraftRevision: input.expectedDraftRevision,
+            sourceFingerprint: reviewed.fingerprint,
+            snapshotHash,
+            snapshot,
+            publishedByUserId: audit.actorUserId,
+            publishedAt,
+          })
+          .returning();
+        await tx.insert(auditEvents).values({
+          organizationId: audit.organizationId,
+          actorUserId: audit.actorUserId,
+          action: "client-report.published",
+          entityType: "ClientReportPublication",
+          entityId: row.id,
+          occurredAt: publishedAt,
+          requestId: audit.requestId,
+          ...(audit.sessionId ? { sessionId: audit.sessionId } : {}),
+          metadata: {
+            confirmationKey: input.confirmationKey,
+            confirmedDraftRevision: input.expectedDraftRevision,
+            sourceFingerprint: reviewed.fingerprint,
+            snapshotHash,
+            clientId: draft.clientId,
+            siteIds: draft.siteIds,
+            version: row.version,
+            supersedesId: previous?.id ?? null,
+            sourceIds: snapshot.sources.map((source) => source.id),
+          },
+        });
+        return publicationDto(row, true);
+      }),
+    );
   }
 
   async listPublished(scope: ReportingScope) {

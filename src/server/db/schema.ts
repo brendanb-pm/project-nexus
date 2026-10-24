@@ -1046,6 +1046,8 @@ export const clientReportDrafts = pgTable(
     completionSummary: text("completion_summary").notNull().default(""),
     followUps: jsonb("follow_ups").notNull().default([]),
     selectedSources: jsonb("selected_sources").notNull().default([]),
+    reviewedSnapshot: jsonb("reviewed_snapshot"),
+    sourceFingerprint: text("source_fingerprint"),
     revision: integer("revision").notNull().default(0),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
@@ -1112,6 +1114,9 @@ export const clientReportPublications = pgTable(
       (): AnyPgColumn => clientReportPublications.id,
     ),
     confirmationKey: text("confirmation_key").notNull(),
+    confirmedDraftRevision: integer("confirmed_draft_revision"),
+    sourceFingerprint: text("source_fingerprint"),
+    snapshotHash: text("snapshot_hash"),
     snapshot: jsonb("snapshot").notNull(),
     publishedByUserId: uuid("published_by_user_id")
       .notNull()

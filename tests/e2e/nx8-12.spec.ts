@@ -8,7 +8,7 @@ async function signIn(page: Page, persona: string) {
 
 test("Operations confirms immutable client-safe publication; Client sees only its printed version", async ({
   page,
-}) => {
+}, testInfo) => {
   test.setTimeout(120000);
   await signIn(page, "Operations Manager B");
   await page.goto("/operations/client-reports");
@@ -38,6 +38,15 @@ test("Operations confirms immutable client-safe publication; Client sees only it
   await expect(
     page.getByRole("status").filter({ hasText: /Draft saved/ }),
   ).toBeVisible();
+  await page
+    .getByText("Review client-safe content before confirmation")
+    .first()
+    .click();
+  await expect(page.getByText("Client: Cedar Plaza")).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("review-confirmation.png"),
+    fullPage: true,
+  });
   const draftHref = await page
     .getByRole("link", { name: "Review or revise" })
     .first()
@@ -76,6 +85,17 @@ test("Operations confirms immutable client-safe publication; Client sees only it
   await expect(
     page.getByRole("button", { name: "Print / Save as PDF" }),
   ).toBeVisible();
+  const clientResponse = await page.request.get(publishedHref!);
+  expect(clientResponse.headers()["cache-control"]).toMatch(
+    /no-cache|no-store/i,
+  );
+  expect(await clientResponse.text()).not.toMatch(
+    /Synthetic demo access-control concern for review|Routine north lobby access-control patrol completed|sourceState|sourceFingerprint/,
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("published-short.png"),
+    fullPage: true,
+  });
   const pdf = await page.pdf({
     path: process.env.NX812_PRINT_PDF,
     format: "A4",
@@ -126,6 +146,39 @@ test("Operations confirms immutable client-safe publication; Client sees only it
     printBackground: true,
   });
   expect(longPdf.byteLength).toBeGreaterThan(pdf.byteLength);
+  await testInfo.attach("short-report.pdf", {
+    body: pdf,
+    contentType: "application/pdf",
+  });
+  await testInfo.attach("long-report.pdf", {
+    body: longPdf,
+    contentType: "application/pdf",
+  });
+  await page.screenshot({
+    path: testInfo.outputPath("published-long.png"),
+    fullPage: true,
+  });
   await page.goto(publishedHref!);
   await expect(page.getByText("Superseded historical version")).toBeVisible();
+  await signIn(page, "Guard A");
+  await page.goto(publishedHref!);
+  await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+  const deniedResponse = await page.request.get(publishedHref!, {
+    headers: {
+      "If-None-Match":
+        clientResponse.headers()["etag"] ?? "nx812-no-shared-cache",
+    },
+  });
+  // Next.js streamed notFound responses can carry status 200. Verify the
+  // actual unauthorized response body and prohibit cached 304 reuse.
+  expect(deniedResponse.status()).not.toBe(304);
+  const deniedBody = await deniedResponse.text();
+  expect(deniedBody).toMatch(/404|not found/i);
+  expect(deniedBody).not.toContain(
+    "Client-safe period summary for Cedar Plaza.",
+  );
+  expect(deniedBody).not.toContain("Reviewed client-safe source evidence.");
+  await expect(
+    page.getByText("Client-safe period summary for Cedar Plaza."),
+  ).toHaveCount(0);
 });

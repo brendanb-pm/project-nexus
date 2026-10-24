@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("client publication and internal composition reflow at 390×844", async ({
   page,
-}) => {
+}, testInfo) => {
   await page.goto("/sign-in");
   await page
     .getByRole("button", { name: "Sign in as Operations Manager B" })
@@ -15,6 +15,10 @@ test("client publication and internal composition reflow at 390×844", async ({
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
+  await page.screenshot({
+    path: testInfo.outputPath("composition-mobile.png"),
+    fullPage: true,
+  });
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Sign in as Client User A" }).click();
   await expect(page).toHaveURL(/\/portal$/);
@@ -24,4 +28,8 @@ test("client publication and internal composition reflow at 390×844", async ({
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
+  await page.screenshot({
+    path: testInfo.outputPath("client-mobile.png"),
+    fullPage: true,
+  });
 });

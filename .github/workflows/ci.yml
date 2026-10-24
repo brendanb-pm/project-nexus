@@ -58,6 +58,8 @@ jobs:
       - run: NEXUS_POSTGRES_TEST=true npm run test:postgres
       - run: NEXUS_POSTGRES_TEST=true npx vitest run tests/reporting-drafts-postgres.integration.test.ts
       - run: NEXUS_POSTGRES_TEST=true npx vitest run tests/asset-custody-postgres.integration.test.ts
+      - name: Verify publication confirmation and source-race boundaries
+        run: NEXUS_POSTGRES_TEST=true npx vitest run tests/client-publication-postgres.integration.test.ts tests/client-publication-security.postgres.integration.test.ts --fileParallelism=false
       - run: npm run db:check
       - run: npm run db:seed:validate
       - run: npm run build
