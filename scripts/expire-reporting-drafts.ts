@@ -1,6 +1,11 @@
 import { existsSync } from "node:fs";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { randomUUID } from "node:crypto";
+import {
+  emitDiagnosticEvent,
+  projectDiagnosticError,
+} from "../src/server/performance/diagnostics";
 import * as schema from "../src/server/db/schema";
 import { PostgresReportingDraftRepository } from "../src/features/reporting-drafts/postgres-repository";
 
@@ -28,6 +33,12 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  emitDiagnosticEvent({
+    event: "nexus.diagnostic.error",
+    operation: "expire-reporting-drafts",
+    correlationToken: randomUUID(),
+    outcome: "error",
+    errorCode: projectDiagnosticError(error),
+  });
   process.exitCode = 1;
 });

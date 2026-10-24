@@ -2,6 +2,11 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+  emitDiagnosticEvent,
+  projectDiagnosticError,
+} from "../src/server/performance/diagnostics";
 
 async function main() {
   if (existsSync(".env.local")) process.loadEnvFile(".env.local");
@@ -17,6 +22,12 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  emitDiagnosticEvent({
+    event: "nexus.diagnostic.error",
+    operation: "db-migrate",
+    correlationToken: randomUUID(),
+    outcome: "error",
+    errorCode: projectDiagnosticError(error),
+  });
   process.exitCode = 1;
 });
